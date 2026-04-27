@@ -1,0 +1,44 @@
+$btn-padding-y: 0.5rem;
+$input-padding-y: 0.5rem;
+$primary: #c62828; // Primary color: deep red
+
+@import "bootstrap/scss/bootstrap";
+@import "bootstrap-icons/font/bootstrap-icons.css";
+@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+
+:root {
+  --bs-font-sans-serif: "Roboto", sans-serif;
+}
+
+.kcFormHeaderClass h1 {
+  font-size: $font-size-base * 1.75 !important; // h3 equivalent
+}
+
+.kcLoginClass {
+  max-width: 500px;
+}
+
+.btn:not(:last-child) {
+  margin-bottom: 0.5rem; // mt-2 equivalent
+}
+
+.opacity-85 {
+  opacity: 0.85;
+}
+
+.opacity-90 {
+  opacity: 0.9;
+}
+
+.opacity-95 {
+  opacity: 0.95;
+}
+
+.kcFormCardClass {
+  min-width: 450px;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: rgb(var(--bs-link-color-rgb));
+  --bs-btn-border-color: rgb(var(--bs-link-color-rgb));
+}

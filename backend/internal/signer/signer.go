@@ -1,0 +1,320 @@
+/*
+Copyright 2025 KeyAuthority.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package signer
+
+import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"math/big"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	capi "k8s.io/api/certificates/v1beta1"
+)
+
+type IgnoreCAChainErrors bool
+
+type PKIXName struct {
+	CommonName         string   `json:"commonName,omitempty"`
+	Country            []string `json:"country,omitempty"`
+	Organization       []string `json:"organization,omitempty"`
+	OrganizationalUnit []string `json:"organizationalUnit,omitempty"`
+	Locality           []string `json:"locality,omitempty"`
+	Province           []string `json:"province,omitempty"`
+	StreetAddress      []string `json:"streetAddress,omitempty"`
+	PostalCode         []string `json:"postalCode,omitempty"`
+}
+
+type CATemplate struct {
+	Subject *PKIXName `json:"subject"`
+}
+
+type SignerConfig struct {
+	// CA Template
+	CATemplate *CATemplate `json:"caTemplate"`
+
+	// Certificate Template
+	CDP  []string `json:"cdp,omitempty"`
+	IsCA bool     `json:"isCA,omitempty"`
+
+	// Signing Policy
+	MaxTTL           string          `json:"maxTTL,omitempty"`
+	AllowedKeyUsages []capi.KeyUsage `json:"allowedKeyUsages,omitempty"`
+	AllowedDomains   []string        `json:"allowedDomains,omitempty"`
+
+	// Authorization required for non-trivial requests
+	AuthzRequired bool `json:"authzRequired,omitempty"`
+}
+
+type Signer struct {
+	CAChain       []string
+	CATemplate    *CATemplate
+	CA            *CertificateAuthority
+	SigningPolicy *PermissiveSigningPolicy
+	CRL           []byte
+}
+
+func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain, crl []byte, args ...any) (*Signer, error) {
+	maxTTL, err := time.ParseDuration(cfg.MaxTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	allowedDomains := make([]*regexp.Regexp, len(cfg.AllowedDomains))
+	for i, allowedDomain := range cfg.AllowedDomains {
+		if allowedDomains[i], err = regexp.Compile(allowedDomain); err != nil {
+			return nil, err
+		}
+	}
+
+	s := &Signer{
+		CA: &CertificateAuthority{
+			PrivateKey: privKey,
+			Backdate:   time.Minute * 5,
+			// Now:        time.Now,
+		},
+		CATemplate: cfg.CATemplate,
+		SigningPolicy: &PermissiveSigningPolicy{
+			MaxTTL:         maxTTL,
+			AllowedUsages:  cfg.AllowedKeyUsages,
+			IsCA:           cfg.IsCA,
+			CDP:            cfg.CDP,
+			AllowedDomains: allowedDomains,
+		},
+		CRL: crl,
+	}
+
+	if err := s.SetCAChain(caChain); err != nil && len(args) > 0 {
+		for _, arg := range args {
+			if ignoreError, ok := arg.(IgnoreCAChainErrors); ok && !bool(ignoreError) {
+				return nil, fmt.Errorf("set CA chain: %w", err)
+			}
+		}
+	}
+
+	return s, nil
+}
+
+func (s *Signer) CreateCSR() ([]byte, error) {
+	cr, err := s.CA.CreateCSR(s.CATemplate)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: cr.Raw,
+	}), nil
+}
+
+func (s *Signer) ClearCAChain() {
+	s.CA.Certificate = nil
+	s.CAChain = nil
+}
+
+func (s *Signer) SetCAChain(data []byte) error {
+	var caChain []string
+	var firstCert *x509.Certificate
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			break
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("parse certificate in CA chain: %w", err)
+		}
+		if cert.IsCA == false {
+			return fmt.Errorf("non-CA certificate found in CA chain")
+		}
+
+		caChain = append(caChain, strings.TrimSpace(string(pem.EncodeToMemory(
+			&pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: cert.Raw,
+			}))))
+
+		if firstCert == nil {
+			firstCert = cert
+		}
+	}
+	if len(caChain) == 0 {
+		return fmt.Errorf("empty chain")
+	}
+	if !s.ValidateCACertificate(firstCert) {
+		return fmt.Errorf("certificate does not match private key")
+	}
+
+	s.CA.Certificate = firstCert
+	s.CAChain = caChain
+	return nil
+}
+
+func (s *Signer) ValidateCACertificate(cert *x509.Certificate) bool {
+	if cert == nil || s.CA.PrivateKey == nil {
+		return false
+	}
+
+	switch caKey := s.CA.PrivateKey.(type) {
+	case *rsa.PrivateKey:
+		pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
+		if !ok {
+			return false
+		}
+		return pubKey.N.Cmp(caKey.PublicKey.N) == 0
+
+	case *ecdsa.PrivateKey:
+		pubKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+		if !ok {
+			return false
+		}
+		return pubKey.X.Cmp(caKey.PublicKey.X) == 0 && pubKey.Y.Cmp(caKey.PublicKey.Y) == 0
+
+	case ed25519.PrivateKey:
+		pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
+		if !ok {
+			return false
+		}
+		return bytes.Equal(pubKey, caKey.Public().(ed25519.PublicKey))
+
+	default:
+		return true // it's probably a valid HSM key
+	}
+}
+
+func (s *Signer) Sign(cr *x509.CertificateRequest, ttl time.Duration) (*x509.Certificate, []string, error) {
+	tmpl := certRequestToTemplate(cr)
+	certDER, err := s.CA.Sign(tmpl, ttl, s.SigningPolicy)
+	if err != nil {
+		return nil, nil, fmt.Errorf("sign certificate: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse signed certificate: %w", err)
+	}
+
+	certPEM := strings.TrimSpace(string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	})))
+
+	return cert, append([]string{certPEM}, s.CAChain...), nil
+}
+
+func (s *Signer) SignCRL(additionalSerials []string) ([]byte, error) {
+	if s.CA.Certificate == nil {
+		return nil, errors.New("missing CA certificate")
+	}
+	revokedEntries := []x509.RevocationListEntry{}
+
+	if len(s.CRL) > 0 {
+		crl, err := x509.ParseRevocationList(s.CRL)
+		if err != nil {
+			return nil, fmt.Errorf("parse existing CRL: %w", err)
+		}
+		revokedEntries = crl.RevokedCertificateEntries
+	}
+
+	now := time.Now()
+	for _, serial := range additionalSerials {
+		i, err := StringToBigInt(serial)
+		if err != nil {
+			return nil, err
+		}
+		revokedEntries = append(revokedEntries, x509.RevocationListEntry{
+			SerialNumber:   i,
+			ReasonCode:     0,
+			RevocationTime: now,
+		})
+	}
+
+	newCRL, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		// SignatureAlgorithm:        s.CA.Certificate.SignatureAlgorithm,
+		RevokedCertificateEntries: revokedEntries,
+		Number:                    big.NewInt(now.Unix()), // or track a counter
+		ThisUpdate:                now,
+		NextUpdate:                now.Add(72 * time.Hour),
+	}, s.CA.Certificate, s.CA.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("create CRL: %w", err)
+	}
+
+	s.CRL = newCRL
+	return newCRL, nil
+}
+
+func (s *Signer) SignPDF(pdf []byte, ttl time.Duration) ([]byte, error) {
+	var chain []*x509.Certificate
+	// chain = append(chain, s.CA.Certificate) # chain should not include leaf cert
+	for _, pemStr := range s.CAChain {
+		block, _ := pem.Decode([]byte(pemStr))
+		if block == nil {
+			return nil, fmt.Errorf("failed to parse PEM in CA chain")
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse certificate in CA chain: %w", err)
+		}
+		chain = append(chain, cert)
+	}
+
+	id := uuid.New()
+	inputPath := fmt.Sprintf("/tmp/keyauthority-input-%s.pdf", id)
+	outputPath := fmt.Sprintf("/tmp/keyauthority-signed-%s.pdf", id)
+
+	if err := os.WriteFile(inputPath, pdf, 0600); err != nil {
+		return nil, fmt.Errorf("write input pdf: %w", err)
+	}
+	defer os.Remove(inputPath)
+	defer os.Remove(outputPath)
+
+	// Sign the PDF
+	if err := SignPDF(
+		s.CA.PrivateKey,
+		s.CA.Certificate,
+		chain,
+		SigningOptions{
+			InputFile:   inputPath,
+			OutputFile:  outputPath,
+			Signer:      s.CA.Certificate.Subject.CommonName,
+			Reason:      "Document signed by KeyAuthority",
+			Location:    "KeyAuthority",
+			ContactInfo: "https://keyauthority.net",
+			TSA:         "https://freetsa.org/tsr",
+			HashAlgo:    "SHA256",
+		}); err != nil {
+		return nil, fmt.Errorf("sign pdf: %w", err)
+	}
+
+	signedPDF, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("read signed pdf: %w", err)
+	}
+	return signedPDF, nil
+}

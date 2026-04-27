@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# node
+node_modules
+npm-debug.log
+
+# Git
+.git
+.gitignore

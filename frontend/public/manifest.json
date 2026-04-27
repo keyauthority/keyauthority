@@ -1,0 +1,14 @@
+{
+  "short_name": "KeyAuthority",
+  "name": "KeyAuthority",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#c62828",
+  "background_color": "#ffffff"
+}

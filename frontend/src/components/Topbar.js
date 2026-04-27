@@ -1,0 +1,146 @@
+import {
+  Navbar,
+  Dropdown,
+  ButtonGroup,
+  Modal,
+  Button,
+  Container,
+} from "react-bootstrap";
+import { Link } from "react-router-dom";
+import { useState } from "react";
+import { copyToClipboard, getRoles } from "../utils/utils";
+import { getKeycloak } from "../keycloak";
+import KeyValueTable from "./KeyValueTable";
+
+export default function Topbar() {
+  const [showProfile, setShowProfile] = useState(false);
+  const keycloak = getKeycloak();
+
+  const user =
+    keycloak?.tokenParsed?.preferred_username ||
+    keycloak?.tokenParsed?.email ||
+    "";
+
+  const handleLogout = () => {
+    keycloak.logout({ redirectUri: window.location.origin });
+  };
+
+  const handleKeycloakAction = (kcAction) => {
+    const kcBaseUrl = keycloak?.authServerUrl;
+    const realm = keycloak?.realm;
+    const clientId = keycloak?.clientId;
+    const redirectUri = window.location.origin;
+
+    const url = `${kcBaseUrl}/realms/${realm}/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&kc_action=${kcAction}`;
+
+    window.location.href = url;
+  };
+
+  return (
+    <>
+      <ProfileModal
+        show={showProfile}
+        onHide={() => setShowProfile(false)}
+        keycloak={keycloak}
+      />
+      <Navbar data-bs-theme="dark" className="px-1">
+        <Container fluid>
+          <Navbar.Brand as={Link} to="/" className="fw-semibold">
+            <img
+              src="/favicon.png"
+              alt="Logo"
+              width="38"
+              height="38"
+              className="d-inline-block align-text-top me-2"
+            />
+          </Navbar.Brand>
+
+          <Dropdown as={ButtonGroup}>
+            <Dropdown.Toggle
+              id="user-dropdown"
+              as={Button}
+              variant="outline-secondary"
+            >
+              <i className="bi bi-person-fill"></i>
+            </Dropdown.Toggle>
+            <Dropdown.Menu align="end">
+              <Dropdown.Item disabled>{user}</Dropdown.Item>
+              <Dropdown.Divider />
+              <Dropdown.Item onClick={() => setShowProfile(true)}>
+                <i className="bi bi-person"></i> View Profile
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={() => handleKeycloakAction("UPDATE_PASSWORD")}
+              >
+                <i className="bi bi-three-dots"></i> Change Password
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={() => handleKeycloakAction("CONFIGURE_TOTP")}
+              >
+                <i className="bi bi-qr-code-scan"></i> Add 2FA Device
+              </Dropdown.Item>
+              <Dropdown.Divider />
+              <Dropdown.Item onClick={handleLogout}>
+                <i className="bi bi-box-arrow-right"></i> Logout
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+        </Container>
+      </Navbar>
+    </>
+  );
+}
+
+const ProfileModal = ({ show, onHide, keycloak }) => {
+  const token = keycloak?.tokenParsed || {};
+  const roles = getRoles(token);
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>Profile</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <KeyValueTable
+          body={{
+            User: token.preferred_username || "-",
+            Roles:
+              roles?.length > 0 ? (
+                <>
+                  {roles.map((role, index) => (
+                    <div key={index}>{role}</div>
+                  ))}
+                </>
+              ) : (
+                "No roles assigned, please contact your administrator."
+              ),
+            Token: (
+              <div className="d-flex justify-content-between align-items-start gap-3">
+                <span>
+                  {keycloak?.token
+                    ? `${keycloak.token.substring(0, 16)}...`
+                    : null}
+                </span>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => {
+                    copyToClipboard(keycloak?.token || "", "Token copied!");
+                  }}
+                  title="Copy to clipboard"
+                >
+                  <i className="bi bi-clipboard"></i>
+                </Button>
+              </div>
+            ),
+          }}
+        />
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Close
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};

@@ -1,0 +1,49 @@
+$btn-padding-y: 0.5rem;
+$input-padding-y: 0.5rem;
+$primary: #c62828; // Primary color: deep red
+
+@import "bootstrap/scss/bootstrap";
+@import "bootstrap-icons/font/bootstrap-icons.css";
+@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+
+:root {
+  --bs-font-sans-serif: "Roboto", sans-serif;
+}
+
+.fw-bolder {
+  font-weight: 500 !important;
+}
+
+.card-header {
+  //font-weight: 500;
+  border: none;
+}
+
+.form-label {
+  margin-bottom: 0.15rem;
+}
+
+.no-wrap-first-col th:first-child,
+.no-wrap-first-col td:first-child {
+  white-space: nowrap;
+}
+
+th,
+td {
+  color: var(--bs-body-color) !important;
+}
+
+// last row border removal for key-value table
+.keyvalue-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.keyvalue-table tbody tr td:first-child {
+  white-space: nowrap;
+  width: 1px; // so that column only takes as much space as needed by content
+}
+
+.btn-outline-primary {
+  --bs-btn-color: rgb(var(--bs-link-color-rgb));
+  --bs-btn-border-color: rgb(var(--bs-link-color-rgb));
+}

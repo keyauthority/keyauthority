@@ -1,0 +1,1561 @@
+---
+openapi: 3.1.1
+info:
+  title: KeyAuthority
+  version: 1.4.15
+  description: |
+    Welcome to the **KeyAuthority REST API** documentation.
+
+    KeyAuthority is a production-grade PKI and secret management system designed 
+    for seamless integration with Kubernetes, cloud-native environments, and modern security architectures. 
+    This documentation provides a complete reference for most endpoints, 
+    including PKI operations, secret management, and health checks.
+
+    We document here only the status error code 400 for simplicity. In practice, the API may return other status codes such as 428 for actions requiring additional authorization, 401 for unauthorized access, 403 for forbidden actions, and 500 for internal server errors. The error response will include a JSON body with an "errors" field describing the error messages.
+
+    **Features:**
+    - Full support for X.509 CA operations
+    - Native integration with [cert-manager](https://cert-manager.io)
+    - Secret storage and decryption compatible with widely used tools like HashiCorp Vault
+    - HSM-backed signing and key management
+
+    **Disclaimer:** This product partially implements a HashiCorp Vault-compatible API. HashiCorp Vault, Vault Agent (injector), and the `vault` CLI are trademarks of HashiCorp, Inc. This project is not affiliated with or endorsed by HashiCorp.
+servers:
+  - url: /
+tags:
+  - name: Keys
+    description: Manage keys.
+  - name: Signers
+    description: Manage signers and signing operations.
+  - name: Secrets
+    description: Store and retrieve secrets.
+  - name: Certificates
+    description: Retrieve certificates and their information.
+  - name: Pending Requests
+    description: Manage pending requests.
+  - name: Miscellaneous
+    description: Miscellaneous operations.
+paths:
+  ### Keys ###
+  /v1/keys:
+    get:
+      summary: Get keys
+      description: |
+        Get the accessible keys.
+      tags:
+        - Keys
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Key"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    post:
+      summary: Create key
+      description: |
+        Create a new key with the specified configuration.
+      tags:
+        - Keys
+      parameters:
+        - name: environment
+          example: production
+          required: true
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeyConfig"
+      responses:
+        "201":
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: uuid
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/keys/{id}:
+    get:
+      summary: Get key
+      description: Get the key with the specified ID.
+      tags:
+        - Keys
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Key"
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Delete key
+      description: Delete the key with the specified ID.
+      tags:
+        - Keys
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  ### Signers ###
+  /v1/signers:
+    get:
+      summary: Get signers
+      description: |
+        Get the accessible signers with optional filtering and pagination.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: privateKeyID
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Signer"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}:
+    post:
+      summary: Create signer
+      description: Create a new signer with the specified name, private key ID, and configuration.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: privateKeyID
+          required: true
+          in: query
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignerConfig"
+      responses:
+        "201":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Delete signer
+      description: Delete the signer with the specified name.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/private-key:
+    get:
+      summary: Get signer private key ID
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: uuid
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/config:
+    get:
+      summary: Get signer configuration
+      description: Get the configuration of the signer with the specified name.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignerConfig"
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    put:
+      summary: Update signer configuration
+      description: Update the configuration of the signer with the specified name.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignerConfig"
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/ca-chain:
+    get:
+      summary: Get signer CA chain
+      description: Get the CA chain of the signer with the specified name.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    put:
+      summary: Update signer CA chain
+      description: Update the CA chain of the signer with the specified name.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/ca-csr:
+    get:
+      summary: Get signer CA CSR
+      description: Create a Certificate Signing Request (CSR) for the specified signer.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/sign:
+    post:
+      summary: Sign CSR
+      description: |
+        Sign a Certificate Signing Request (CSR) with the specified signer.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: output
+          in: query
+          schema:
+            type: string
+            enum: [json, pem]
+            default: json
+          description: Output format of the certificate chain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificate:
+                    type: string
+                  issuing_ca:
+                    type: string
+                  ca_chain:
+                    type: string
+            application/x-pem-file:
+              schema:
+                type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/sign-document:
+    post:
+      summary: Sign document
+      description: Sign an arbitrary document with the specified signer.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+        # - name: ttl
+        #   in: query
+        #   schema:
+        #     type: string
+        #   description: TTL for the signed document.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Success
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/revoke:
+    post:
+      summary: Revoke certificate
+      description: Revoke the certificate with the specified serial.
+      tags:
+        - Signers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serial:
+                  type: string
+                  format: hex
+                  description: Serial number of the certificate to revoke.
+              required:
+                - serial
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/acme/directory:
+    get:
+      summary: Get ACME directory
+      description: |
+        Get the ACME directory for the specified signer.
+        This endpoint provides the necessary information for ACME clients to interact with the signer.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  newAccount:
+                    type: string
+                  newNonce:
+                    type: string
+                  newOrder:
+                    type: string
+                  finalize:
+                    type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  ### Secrets ###
+  /v1/secrets:
+    get:
+      summary: Get secrets
+      tags:
+        - Secrets
+      description: |
+        Get the accessible secrets with optional filtering and pagination.
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: encryptionKeyID
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - type: object
+                          properties:
+                            name:
+                              type: string
+                            environment:
+                              type: string
+                        - $ref: "#/components/schemas/SecretMetadata"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/secrets/{name}:
+    get:
+      summary: Get secret
+      description: |
+        Get the secret with the specified name.
+        The output format can be specified as either JSON (default) or shell.
+      tags:
+        - Secrets
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: output
+          in: query
+          schema:
+            type: string
+            enum: [json, shell]
+            default: json
+          description: The output format.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secret"
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  export USERNAME='myuser'
+                  export PASSWORD='mypassword'
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    put:
+      summary: Insert secret
+      description: |
+        Insert a new secret with the specified name and data.
+      tags:
+        - Secrets
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: encryptionKeyID
+          in: query
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecretData"
+      responses:
+        "201":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    post:
+      summary: Update secret
+      description: |
+        Update the data values of an existing secret. 
+        All existing keys will be replaced with the new values.
+      tags:
+        - Secrets
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecretData"
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    patch:
+      summary: Patch secret
+      description: |
+        Update the data values of an existing secret. 
+        Only the specified keys will be updated, and the other existing keys will be preserved.
+      tags:
+        - Secrets
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecretData"
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Delete secret
+      description: |
+        Delete the secret with the specified name.
+        If the secret does not exist, the request is still successful.
+      tags:
+        - Secrets
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  ### Certificates ###
+  /v1/certs:
+    get:
+      summary: Get certificates
+      description: |
+        Get the certificates signed by accessible signers with optional filtering and pagination.
+      tags:
+        - Certificates
+      parameters:
+        - name: serial
+          in: query
+          schema:
+            type: string
+        - name: signerName
+          in: query
+          schema:
+            type: string
+        - name: cn
+          in: query
+          schema:
+            type: string
+        - name: san
+          in: query
+          schema:
+            type: string
+        - name: notBeforeFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: notBeforeTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: notAfterFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: notAfterTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: revoked
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Certificate"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/certs/{serial}/pem:
+    get:
+      summary: Get certificate PEM
+      description: Get the PEM-encoded certificate with the specified serial number.
+      tags:
+        - Certificates
+      parameters:
+        - name: serial
+          required: true
+          in: path
+          schema:
+            type: string
+            format: hex
+      responses:
+        "200":
+          description: Success
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  ### Pending Requests ###
+  /v1/pending-requests:
+    get:
+      summary: Get pending requests
+      description: |
+        Get the pending requests with optional filtering and pagination.
+      tags:
+        - Pending Requests
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: url
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PendingRequest"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/pending-requests/{id}:
+    post:
+      summary: Authorize pending request
+      description: |
+        Authorize the pending request with the specified ID. 
+        The authorizer can choose to use their own token or the requester's token when executing the pending request.
+      tags:
+        - Pending Requests
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+        - name: useOwnToken
+          in: query
+          schema:
+            type: boolean
+          description: Whether to use the authorizer's own token when executing the pending request.
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Reject pending request
+      description: Reject the pending request with the specified ID.
+      tags:
+        - Pending Requests
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/pending-requests/{id}/body:
+    get:
+      summary: Get pending request body
+      description: |
+        Get the body of a pending request.
+        For example, a pending request for signing a certificate will have a body to review, hence its body is not private and can be disclosed for review.
+        On the other hand, updating a secret will not have a body to review, as it is considered private.
+      tags:
+        - Pending Requests
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  ### Miscellaneous ###
+  /v1/logs:
+    get:
+      summary: Get logs
+      description: |
+        Get application logs with optional filtering and pagination.
+      tags:
+        - Miscellaneous
+      parameters:
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: msg
+          in: query
+          schema:
+            type: string
+        - name: url
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LogEntry"
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/token:
+    post:
+      summary: Get token
+      description: |
+        Exchange credentials such as username and password for a Bearer token to authenticate future requests.
+      tags:
+        - Miscellaneous
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth:
+                    type: object
+                    properties:
+                      client_token:
+                        type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/health:
+    get:
+      summary: Get health status
+      tags:
+        - Miscellaneous
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enterprise:
+                    type: boolean
+                  initialized:
+                    type: boolean
+                  sealed:
+                    type: boolean
+                  server_time_utc:
+                    type: integer
+                    format: int64
+                    example: 1735552800
+                  version:
+                    type: string
+                    format: semver
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    KeyConfig:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [RSA, ECDSA, Ed25519, AES]
+          description: Type of key
+        bits:
+          type: integer
+          # example: 2048
+          description: Key size in bits
+        curve:
+          type: string
+          enum: [P-224, P-256, P-384, P-521]
+          description: Elliptic curve for ECDSA keys
+        mode:
+          type: string
+          enum: [GCM]
+          description: Cipher mode for AES keys
+        pkcs11URI:
+          type: string
+          description: PKCS#11 URI for HSM keys
+        pkcs11KeyURI:
+          type: string
+          description: PKCS#11 key URI for HSM keys
+      example:
+        type: RSA
+        bits: 2048
+        pkcs11URI: pkcs11:module-path=/usr/lib64/pkcs11/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin
+        pkcs11KeyURI: pkcs11:id=17629ea8924cf716be8e97da23ab621b;object=keyauthority
+
+    Key:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        config:
+          $ref: "#/components/schemas/KeyConfig"
+
+    SignerConfig:
+      type: object
+      properties:
+        caTemplate:
+          type: object
+          properties:
+            subject:
+              type: object
+              properties:
+                commonName:
+                  type: string
+                organization:
+                  type: array
+                  items:
+                    type: string
+                organizationalUnit:
+                  type: array
+                  items:
+                    type: string
+                country:
+                  type: array
+                  items:
+                    type: string
+                province:
+                  type: array
+                  items:
+                    type: string
+                locality:
+                  type: array
+                  items:
+                    type: string
+          description: CA certificate template
+        cdp:
+          type: array
+          items:
+            type: string
+            format: uri
+            example: http://crl.staging.keyauthority.net/v1/crl/mysigner
+          description: CRL Distribution Points
+        isCA:
+          type: boolean
+          description: Whether it signs CA certificates
+          default: false
+        maxTTL:
+          type: string
+          example: 8760h
+          description: Maximum time-to-live for issued certificates
+        allowdKeyUsages:
+          type: array
+          items:
+            type: string
+            enum:
+              [
+                "cert sign",
+                "crl sign",
+                "digital signature",
+                "key encipherment",
+                "server auth",
+                "client auth",
+              ]
+          description: Allowed key usages for issued certificates
+        allowedDomains:
+          type: array
+          items:
+            type: string
+          description: Allowed domains for issued certificates
+        authzRequired:
+          type: boolean
+          description: Whether additional authorization is required for non-trivial operations
+
+    Signer:
+      type: object
+      properties:
+        name:
+          type: string
+        environment:
+          type: string
+        privateKeyID:
+          type: string
+          format: uuid
+          description: The ID of the private key used for signing
+        updatedAt:
+          type: string
+          format: date-time
+          description: The last update time of the signer
+        config:
+          $ref: "#/components/schemas/SignerConfig"
+
+    CertificateRequest:
+      type: object
+      properties:
+        csr:
+          type: string
+          example: "-----BEGIN CERTIFICATE REQUEST-----\nMIIBVzCBuAIBADAUMRIwEAYDVQQDDAl0ZXN0LWNlcnQwggEiMA0GCSqGSIb3DQEB\nAQUAA4IBDwAwggEKAoIBAQDF7KX1c0m1Zp3Yh7n7c7Yk3+H3F5j1Z5r6v3K8X5Z5+\n...\n-----END CERTIFICATE REQUEST-----"
+        ttl:
+          type: string
+          example: 720h
+      required:
+        - csr
+
+    Certificate:
+      type: object
+      properties:
+        serial:
+          type: string
+          format: hex
+          description: Certificate serial number
+        signerName:
+          type: string
+          description: Name of the signer that issued this certificate
+        cn:
+          type: string
+          description: Common Name from certificate subject
+        sans:
+          type: array
+          items:
+            type: string
+          description: Subject Alternative Names
+        notBefore:
+          type: string
+          format: date-time
+          description: Certificate validity start time
+        notAfter:
+          type: string
+          format: date-time
+          description: Certificate validity end time
+        revoked:
+          type: boolean
+          description: Whether the certificate has been revoked
+
+    SecretMetadata:
+      type: object
+      properties:
+        name:
+          type: string
+        environment:
+          type: string
+        encryptionKeyID:
+          type: string
+          format: uuid
+          description: The ID of the key used to encrypt the secret
+        updatedAt:
+          type: string
+          format: date-time
+          description: The last update time of the secret
+
+    SecretData:
+      type: object
+      description: The actual secret data, represented as key-value pairs
+      example:
+        USERNAME: myuser
+        PASSWORD: mypassword
+
+    Secret:
+      allOf:
+        - $ref: "#/components/schemas/SecretMetadata"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/SecretData"
+
+    PendingRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE]
+        url:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        tokenInfo:
+          type: object
+          properties:
+            user:
+              type: string
+            issuer:
+              type: string
+              format: uri
+
+    LogEntry:
+      type: object
+      example:
+        config:
+          bits: 2048
+          type: RSA
+        keyID: b6cb4d63-bc46-489a-8ddf-94b9441e645b
+        level: INFO
+        method: POST
+        msg: key created
+        time: 2025-11-04T08:12:40.943207+01:00
+        url: /v1/keys
+        token:
+          issuer: https://auth.staging.keyauthority.net/realms/staging
+          user: user@keyauthority.net
+
+    OIDCProvider:
+      type: object
+      properties:
+        clientID:
+          type: string
+          description: Keycloak Client ID of the OIDC provider
+        issuer:
+          type: string
+          format: uri
+          required: true
+          description: Issuer URL of the OIDC provider
+        verificationOpts:
+          type: object
+          properties:
+            skipIssuerCheck:
+              type: boolean
+              description: Whether to skip issuer check during token verification
+            requiredClaims:
+              type: object
+              description: Claims that the token must have for successful verification
+              example:
+                email: example@keyauthority.net
+                project: keyauthority/dev
+        overrideRoles:
+          type: array
+          items:
+            type: string
+          description: Roles to override for tokens issued by this provider
+          example:
+            [KEYAUTHORITY_PKI_OPERATOR_dev, KEYAUTHORITY_SECRETS_OPERATOR_prod]
+
+    TokenRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          example: myuser
+        role_id:
+          type: string
+          example: myuser
+          description: |
+            Used for Vault AppRole authentication. 
+            Treated same as username.
+        password:
+          type: string
+          example: S3cureP@ssw0rd!
+        secret_id:
+          type: string
+          example: S3cureP@ssw0rd!
+          description: |
+            Used for Vault AppRole authentication. 
+            Treated same as password.
+        jwt:
+          type: string
+          description: |
+            A token, possibly external, such as a JWT issued by an OIDC provider. 
+            This token will not be verified at this endpoint, instead the API will return it as-is.
+            Verification will be handled in future requests.
+
+    Error:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: string
+          description: Error messages
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
