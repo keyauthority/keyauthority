@@ -240,7 +240,7 @@ export default function SecretModal({
                     />
                     <Form.Control
                       as="textarea"
-                      rows={1}
+                      rows={3}
                       placeholder="Value"
                       value={entry.value}
                       onChange={(e) => {

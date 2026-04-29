@@ -64,24 +64,30 @@ export default function Topbar() {
               <i className="bi bi-person-fill"></i>
             </Dropdown.Toggle>
             <Dropdown.Menu align="end">
-              <Dropdown.Item disabled>{user}</Dropdown.Item>
+              <Dropdown.Item
+                disabled
+                className="text-truncate"
+                style={{ maxWidth: "12rem" }}
+              >
+                {user}
+              </Dropdown.Item>
               <Dropdown.Divider />
               <Dropdown.Item onClick={() => setShowProfile(true)}>
-                <i className="bi bi-person"></i> View Profile
+                <i className="bi bi-person me-1"></i> View Profile
               </Dropdown.Item>
               <Dropdown.Item
                 onClick={() => handleKeycloakAction("UPDATE_PASSWORD")}
               >
-                <i className="bi bi-three-dots"></i> Change Password
+                <i className="bi bi-three-dots me-1"></i> Change Password
               </Dropdown.Item>
               <Dropdown.Item
                 onClick={() => handleKeycloakAction("CONFIGURE_TOTP")}
               >
-                <i className="bi bi-qr-code-scan"></i> Add 2FA Device
+                <i className="bi bi-qr-code-scan me-1"></i> Enroll 2FA Device
               </Dropdown.Item>
               <Dropdown.Divider />
               <Dropdown.Item onClick={handleLogout}>
-                <i className="bi bi-box-arrow-right"></i> Logout
+                <i className="bi bi-box-arrow-right me-1"></i> Logout
               </Dropdown.Item>
             </Dropdown.Menu>
           </Dropdown>

@@ -211,6 +211,8 @@ export default function Main() {
   };
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
     for (const section of sidebarSections) {
       const foundItem = section.items?.find(
         (item) =>
