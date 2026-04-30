@@ -64,9 +64,16 @@ export default function SignerModal({
 
   const api = getApi();
 
-  //const baseURL = new URL("https://api.staging.keyauthority.net");
   const baseURL = new URL(api.defaults.baseURL);
-  const defaultCDPBaseURL = "http://" + baseURL.hostname + "/v1/crl/";
+  let defaultCDPBaseURL = "";
+  // if baseURL is not localhost or an IP,
+  // we can assume that the CRL will be hosted at http://crl.<baseURL.hostname>/v1/crl/<signerName>
+  if (
+    !["localhost", "127.0.0.1"].includes(baseURL.hostname) &&
+    !/^\d{1,3}(\.\d{1,3}){3}$/.test(baseURL.hostname)
+  ) {
+    defaultCDPBaseURL = "http://crl." + baseURL.hostname + "/v1/crl/";
+  }
 
   const toHours = (durationStr) => {
     if (!durationStr) return 0;
