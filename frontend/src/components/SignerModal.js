@@ -64,12 +64,9 @@ export default function SignerModal({
 
   const api = getApi();
 
-  const baseURL = new URL(api.defaults.baseURL).origin;
-  const defaultCDPBaseUrlHTTP = baseURL + "/v1/crl/";
-  const defaultCDPBaseUrlHTTPS =
-    "http://crl." +
-    baseURL.replace(/^https?:\/\//, "").replace(/^api\./, "") +
-    "/v1/crl/";
+  //const baseURL = new URL("https://api.staging.keyauthority.net");
+  const baseURL = new URL(api.defaults.baseURL);
+  const defaultCDPBaseURL = "http://" + baseURL.hostname + "/v1/crl/";
 
   const toHours = (durationStr) => {
     if (!durationStr) return 0;
@@ -295,12 +292,8 @@ export default function SignerModal({
                 const value = e.target.value;
                 if (regex.test(value)) {
                   setSignerName(value);
-                  if (!isCDPManuallyEdited) {
-                    if (baseURL.startsWith("https://")) {
-                      setCDP(defaultCDPBaseUrlHTTPS + value);
-                    } else {
-                      setCDP(defaultCDPBaseUrlHTTP + value);
-                    }
+                  if (!isCDPManuallyEdited && defaultCDPBaseURL !== "") {
+                    setCDP(defaultCDPBaseURL + value);
                   }
                 }
               }}

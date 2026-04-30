@@ -76,33 +76,24 @@ function SignerDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
           />
         </Tab>
 
-        {/* CA Chain Tab */}
+        {/* CA CSR & Chain Tab */}
         <Tab
           eventKey="chain"
           title={
             <div>
-              CA Chain{" "}
+              CA CSR & Chain{" "}
               {hasWarnings && (
                 <i className="bi bi-exclamation-triangle ms-1"></i>
               )}
             </div>
           }
         >
-          <ChainTab
+          <CSRAndChainTab
             signerName={signerName}
             isLoading={isLoading}
             setIsLoading={setIsLoading}
             setHasWarnings={setHasWarnings}
             setCanSign={setCanSign}
-          />
-        </Tab>
-
-        {/* CA CSR Tab */}
-        <Tab eventKey="csr" title="CA CSR">
-          <CSRTab
-            signerName={signerName}
-            isLoading={isLoading}
-            setIsLoading={setIsLoading}
           />
         </Tab>
 
@@ -381,13 +372,14 @@ function ConfigTab({
   );
 }
 
-function ChainTab({
+function CSRAndChainTab({
   signerName,
   isLoading,
   setIsLoading,
   setHasWarnings,
   setCanSign,
 }) {
+  const [caCSR, setCACSR] = useState(null);
   const [caChain, setCAChain] = useState(null);
   const [signerConfig, setSignerConfig] = useState(null);
   const [newChain, setNewChain] = useState("");
@@ -448,12 +440,12 @@ function ChainTab({
       canSign = false;
       if (signerConfig?.isCA) {
         warns.push(
-          "No CA chain found, so can only sign certificates for self.",
+          "No CA chain found, thus can only sign certificates for self.",
         );
         canSign = true; // allow self-signing but with warning
       } else
         warns.push(
-          "No CA chain found and signer is not configured as CA signer, so cannot sign any certificates.",
+          "No CA chain found and signer is not a CA signer, thus cannot sign any certificates.",
         );
     }
 
@@ -510,6 +502,19 @@ function ChainTab({
     createWarnings();
   }, [createWarnings]);
 
+  const handleCreateCSR = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get(`/signers/${signerName}/ca-csr`);
+      setCACSR(response.data);
+      // showToast("success", "CA CSR created!");
+    } catch (err) {
+      showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Row>
       {/* Show warnings if any */}
@@ -519,6 +524,15 @@ function ChainTab({
         </Col>
       ))}
 
+      {/* Create CA CSR */}
+      <Col md={12} className="mb-3">
+        <Button onClick={() => handleCreateCSR()} disabled={isLoading}>
+          Create CA CSR
+        </Button>
+        {caCSR &&
+          downloadOrCopy("CA CSR created!", caCSR, "ca-csr.pem", "mt-3 mb-0")}
+      </Col>
+
       {/* Show CA Chain */}
       {caChain?.length > 0 && (
         <Col md={6} className="mb-3">
@@ -526,7 +540,7 @@ function ChainTab({
             return (
               <Card className="mb-3" key={index}>
                 <Card.Header>
-                  Certificate {index + 1}:{" "}
+                  Certificate {index + 1} -{" "}
                   {cert.subject === cert.issuer ? "Root" : "Intermediate"}
                 </Card.Header>
                 <Card.Body>
@@ -580,38 +594,6 @@ function ChainTab({
         </div>
       </Col>
     </Row>
-  );
-}
-
-function CSRTab({ signerName, isLoading, setIsLoading }) {
-  const [caCSR, setCACSR] = useState(null);
-
-  const api = getApi();
-
-  const handleCreateCSR = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.get(`/signers/${signerName}/ca-csr`);
-      setCACSR(response.data);
-      // showToast("success", "CA CSR created!");
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="d-flex gap-2 mb-3">
-        <Button onClick={() => handleCreateCSR()} disabled={isLoading}>
-          Create
-        </Button>
-      </div>
-
-      {/* {caCSR && prettyCode("pem", caCSR)} */}
-      {caCSR && downloadOrCopy("CA CSR created!", caCSR, "ca-csr.pem")}
-    </>
   );
 }
 
@@ -718,7 +700,16 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
   return (
     <Form>
       <Form.Group>
-        <Form.Label>Certificate Serial</Form.Label>
+        <Form.Label className="d-flex justify-content-between align-items-center">
+          <span>Certificate Serial</span>
+          <a
+            href={`${api.defaults.baseURL}/crl/${encodeURIComponent(signerName)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download CRL
+          </a>
+        </Form.Label>
         <Form.Control
           type="text"
           value={serial}
@@ -730,7 +721,7 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
           hexadecimal format
         </Form.Text>
       </Form.Group>
-      <div className="d-flex justify-content-end mb-3">
+      <div className="d-flex justify-content-end gap-2 mb-3">
         <Button variant="danger" onClick={handleRevoke} disabled={!serial}>
           Revoke Certificate
         </Button>

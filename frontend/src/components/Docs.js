@@ -27,21 +27,16 @@ export function Administration() {
 
   const apiUrl = new URL(getApi().defaults.baseURL);
   const apiRootUrl = apiUrl.href.replace(/\/v1\/?$/, "");
-  const swaggerUrl = apiRootUrl + "/swagger/";
 
   return (
     <>
       <p>
-        KeyAuthority provides a comprehensive{" "}
-        <a href={swaggerUrl} target="_blank" rel="noopener noreferrer">
-          REST API
-        </a>{" "}
-        for managing certificates, signers, secrets, and cryptographic
-        operations. User authentication, authorization, and role-based access
-        control are managed through the integrated Keycloak identity provider.
-        This design ensures that KeyAuthority focuses on cryptographic
-        operations while delegating identity management to a proven,
-        enterprise-grade solution.
+        KeyAuthority provides a comprehensive API and web interface for managing
+        certificates, signers, secrets, and cryptographic operations. User
+        authentication, authorization, and role-based access control are managed
+        through the integrated Keycloak identity provider. This design ensures
+        that KeyAuthority focuses on cryptographic operations while delegating
+        identity management to a proven, enterprise-grade solution.
       </p>
       <p>
         This section guides you through the essential administrative tasks
@@ -590,7 +585,7 @@ spec:
   tls:
     - hosts:
         - my-app.example.com
-      name: my-app-tls
+      secretName: my-app-tls
   rules:
     - host: my-app.example.com
       http:
@@ -619,7 +614,7 @@ kind: Certificate
 metadata:
   name: my-app-cert
 spec:
-  name: my-app-tls
+  secretName: my-app-tls
   issuerRef:
     name: ${signerName}
     kind: Issuer # or ClusterIssuer
@@ -717,6 +712,7 @@ spec:
   vault:
     path: signers/${signerName}/sign
     server: "${apiRootUrl}"
+    caBundle: "..." # optional, base64-encoded CA cert of '${apiRootUrl}'
     auth:
       kubernetes:
         role: ${signerName}-role
@@ -752,6 +748,7 @@ spec:
   acme:
     server: "${apiRootUrl}/v1/signers/${signerName}/acme/directory"
     email: ${validEmail} # or your actual email
+    caBundle: "..." # optional, base64-encoded CA cert of '${apiRootUrl}'
     privateKeySecretRef:
       name: ${signerName}-acme-key
     solvers:

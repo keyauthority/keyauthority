@@ -90,13 +90,6 @@ export function Certificates({ isLoading, setIsLoading }) {
         setFilters={setFilters}
         filtersTemplate={[
           {
-            key: "signerName",
-            type: "text",
-            label: "Signer",
-            value: filters.signerName,
-            placeholder: "e.g. signer1",
-          },
-          {
             key: "serial",
             type: "text",
             label: "Serial",
@@ -140,28 +133,30 @@ export function Certificates({ isLoading, setIsLoading }) {
               { value: "false", label: "No" },
             ],
           },
+          {
+            key: "signerName",
+            type: "text",
+            label: "Signer",
+            value: filters.signerName,
+            placeholder: "e.g. signer1",
+          },
         ]}
       />
 
       <Table hover responsive striped>
         <thead>
           <tr>
-            <th>Signer</th>
             <th>Serial</th>
             <th>CN/SAN</th>
             <th>Valid From</th>
             <th>Valid To</th>
+            <th>Signer</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
-              <td>
-                <Link to={`/signers/${encodeURIComponent(cert.signerName)}`}>
-                  {cert.signerName}
-                </Link>
-              </td>
               <td>{cert.serial.substr(0, 10)}...</td>
               <td
                 className={cert.revoked ? "text-decoration-line-through" : ""}
@@ -170,6 +165,11 @@ export function Certificates({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(cert.notBefore)}</td>
               <td>{prettyTime(cert.notAfter)}</td>
+              <td>
+                <Link to={`/signers/${encodeURIComponent(cert.signerName)}`}>
+                  {cert.signerName}
+                </Link>
+              </td>
               <td>
                 <div className="d-flex gap-1">
                   <Button

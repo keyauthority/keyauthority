@@ -81,7 +81,7 @@ export default function Signers({ isLoading, setIsLoading }) {
             <th>Name</th>
             <th>Environment</th>
             <th>Common Name</th>
-            {/* <th>Is Root</th> */}
+            <th>Is Root</th>
             <th>Private Key ID</th>
             <th>Last Updated</th>
           </tr>
@@ -99,7 +99,7 @@ export default function Signers({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyEnv(signer.environment)}</td>
               <td>{signer.config.caTemplate?.subject?.commonName || "-"}</td>
-              {/* <td>
+              <td>
                 {signer.config.isCA ? (
                   <>
                     <i className="bi bi-check-circle me-1"></i>Yes
@@ -109,7 +109,7 @@ export default function Signers({ isLoading, setIsLoading }) {
                     <i className="bi bi-x-circle me-1"></i>No
                   </>
                 )}
-              </td> */}
+              </td>
               {/* <td>{shortUUID(signer.privateKeyID)}</td> */}
               <td>{signer.privateKeyID}</td>
               <td>{prettyTime(signer.updatedAt)}</td>

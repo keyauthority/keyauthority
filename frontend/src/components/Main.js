@@ -65,6 +65,10 @@ export default function Main() {
   const navigate = useNavigate();
   const api = getApi();
 
+  const apiUrl = new URL(getApi().defaults.baseURL);
+  const apiRootUrl = apiUrl.href.replace(/\/v1\/?$/, "");
+  const swaggerUrl = apiRootUrl + "/swagger/";
+
   const sidebarSections = [
     {
       key: "activity",
@@ -131,6 +135,11 @@ export default function Main() {
           subtitle: "Learn how to manage access for your KeyAuthority users",
           to: "/docs/admin",
           icon: "bi-gear",
+        },
+        {
+          title: "Rest API",
+          to: swaggerUrl,
+          icon: "bi-braces",
         },
         {
           title: "Build a PKI",
@@ -211,7 +220,7 @@ export default function Main() {
   };
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
 
     for (const section of sidebarSections) {
       const foundItem = section.items?.find(

@@ -128,18 +128,22 @@ export function breakLines(text, maxLineLength) {
   return text.match(regex).join("\n");
 }
 
-export function downloadOrCopy(successMsg, data, filename) {
+export function downloadOrCopy(successMsg, data, filename, classes = "") {
   const dataIsEmpty = !data || data.length === 0;
   const dataIsBlob = data && data instanceof Blob;
 
   if (dataIsEmpty || dataIsBlob) {
-    return <Alert variant="success">{successMsg}</Alert>;
+    return (
+      <Alert variant="success" className={classes}>
+        {successMsg}
+      </Alert>
+    );
   }
 
   return (
     <Alert
       variant="success"
-      className="d-flex justify-content-between align-items-center"
+      className={`d-flex justify-content-between align-items-center ${classes}`}
     >
       <span>{successMsg}</span>
       <div>
