@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { Button, Alert, Tab, Table } from "react-bootstrap";
 import { X509Certificate } from "@peculiar/x509";
@@ -16,10 +16,8 @@ SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("yaml", yaml);
 SyntaxHighlighter.registerLanguage("bash", bash);
 
-export const isDarkMode =
-  window.matchMedia &&
-  window.matchMedia("(prefers-color-scheme: dark)").matches;
-const syntaxTheme = isDarkMode ? atomOneDark : atomOneLight;
+export const isDarkMode = () =>
+  document.documentElement.getAttribute("data-bs-theme") === "dark";
 
 /*export function showLoadingToast(content) {
   const id = "loading-toast"; // new Date().getTime();
@@ -72,7 +70,7 @@ export function showToast(type, content, autoClose = "auto", options = {}) {
   }
 
   toast[type](content, {
-    theme: isDarkMode ? "dark" : "light",
+    theme: isDarkMode() ? "dark" : "light",
     autoClose: calculatedAutoClose,
     ...options,
   });
@@ -238,6 +236,20 @@ export function prettyCode(language, code, copyButton = true) {
       codeString = code;
     }
   }
+
+  const [syntaxTheme, setSyntaxTheme] = useState(
+    isDarkMode() ? atomOneDark : atomOneLight,
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setSyntaxTheme(isDarkMode() ? atomOneDark : atomOneLight);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-bs-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="position-relative">

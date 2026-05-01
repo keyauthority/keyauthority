@@ -21,6 +21,12 @@
         Learn how to configure a non-root public URL by running `npm run build`.
       -->
     <title>KeyAuthority</title>
+    <script>
+      (() => {
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute("data-bs-theme", dark ? "dark" : "light");
+      })();
+    </script>
   </head>
 
   <body>
