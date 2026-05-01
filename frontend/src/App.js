@@ -7,21 +7,6 @@ function App() {
   const keycloak = getKeycloak();
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const apply = () => {
-      document.documentElement.setAttribute(
-        "data-bs-theme",
-        media.matches ? "dark" : "light",
-      );
-    };
-
-    apply(); // initial
-    media.addEventListener("change", apply); // react to OS theme changes
-    return () => media.removeEventListener("change", apply);
-  }, []);
-
-  useEffect(() => {
     // document title
     document.title =
       keycloak.realm.charAt(0).toUpperCase() +

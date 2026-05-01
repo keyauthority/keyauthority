@@ -16,7 +16,7 @@ SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("yaml", yaml);
 SyntaxHighlighter.registerLanguage("bash", bash);
 
-export const isDarkMode = () =>
+export const isDarkMode =
   document.documentElement.getAttribute("data-bs-theme") === "dark";
 
 /*export function showLoadingToast(content) {
@@ -70,7 +70,7 @@ export function showToast(type, content, autoClose = "auto", options = {}) {
   }
 
   toast[type](content, {
-    theme: isDarkMode() ? "dark" : "light",
+    theme: isDarkMode ? "dark" : "light",
     autoClose: calculatedAutoClose,
     ...options,
   });
@@ -237,25 +237,11 @@ export function prettyCode(language, code, copyButton = true) {
     }
   }
 
-  const [syntaxTheme, setSyntaxTheme] = useState(
-    isDarkMode() ? atomOneDark : atomOneLight,
-  );
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setSyntaxTheme(isDarkMode() ? atomOneDark : atomOneLight);
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-bs-theme"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div className="position-relative">
       <SyntaxHighlighter
         language={language}
-        style={syntaxTheme}
+        style={isDarkMode ? atomOneDark : atomOneLight}
         className="rounded p-2"
       >
         {codeString}
