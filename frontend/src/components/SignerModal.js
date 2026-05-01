@@ -51,7 +51,7 @@ export default function SignerModal({
   const [cdp, setCDP] = useState("");
   const [isCA, setIsCA] = useState(false);
 
-  // Signing Policy
+  // Policy
   const [allowedDomains, setAllowedDomains] = useState("");
   const [maxTTL, setMaxTTL] = useState(720);
   const [authzRequired, setAuthzRequired] = useState(false);
@@ -475,7 +475,7 @@ export default function SignerModal({
         {/* Policy Section */}
         <Card className="mb-3">
           <Card.Header className="d-flex justify-content-between align-items-center gap-1">
-            <div>Signing Policy</div>
+            <div>Policy</div>
             <div className="text-muted small fw-normal">
               Restrictions applied when using this signer
             </div>

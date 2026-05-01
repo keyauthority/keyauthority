@@ -332,7 +332,7 @@ function ConfigTab({
           {/* Policy Section */}
           <Col md={6} className="mb-3">
             <Card>
-              <Card.Header>Signing Policy</Card.Header>
+              <Card.Header>Policy</Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
@@ -355,10 +355,7 @@ function ConfigTab({
                         Required for non-trivial requests
                       </>
                     ) : (
-                      <>
-                        <i className="bi bi-check-circle me-1"></i>
-                        Not required
-                      </>
+                      <>Not required</>
                     ),
                   }}
                   keysClass="fw-bold"

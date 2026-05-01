@@ -88,6 +88,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
+        colsPerRow={3}
         filtersTemplate={[
           {
             key: "serial",
@@ -273,7 +274,7 @@ export function Logs({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 3 }}
+        colsPerRow={3}
         filtersTemplate={[
           {
             key: "level",
@@ -287,13 +288,6 @@ export function Logs({ isLoading, setIsLoading }) {
               { value: "INFO", label: "INFO" },
               // { value: "DEBUG", label: "DEBUG" },
             ],
-          },
-          {
-            key: "msg",
-            type: "text",
-            label: "Message",
-            placeholder: "e.g. secret read",
-            value: filters.msg,
           },
           {
             key: "user",
@@ -327,6 +321,13 @@ export function Logs({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
+          },
+          {
+            key: "msg",
+            type: "text",
+            label: "Message",
+            placeholder: "e.g. secret read",
+            value: filters.msg,
           },
         ]}
       />
@@ -530,7 +531,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 4 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",
@@ -538,13 +539,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
-          },
-          {
-            key: "user",
-            type: "text",
-            label: "Requester",
-            placeholder: "e.g. alice@keyauthority.net",
-            value: filters.user,
           },
           {
             key: "url",
@@ -564,6 +558,13 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
+          },
+          {
+            key: "user",
+            type: "text",
+            label: "Requester",
+            placeholder: "e.g. alice@keyauthority.net",
+            value: filters.user,
           },
         ]}
       />
