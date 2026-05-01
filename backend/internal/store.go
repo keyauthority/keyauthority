@@ -228,23 +228,6 @@ func applyPagination(query string, args []any, idx int, filters url.Values) (str
 	return query, args, idx, limit, offset
 }
 
-func (s *Store) GetEnvironments(ctx context.Context) ([]string, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT environment FROM keys`)
-	if err != nil {
-		return nil, fmt.Errorf("query environments: %w", err)
-	}
-	defer rows.Close()
-	envs := []string{}
-	for rows.Next() {
-		var env string
-		if err := rows.Scan(&env); err != nil {
-			return nil, fmt.Errorf("scan environment: %w", err)
-		}
-		envs = append(envs, env)
-	}
-	return envs, nil
-}
-
 /*****************************************************/
 /*             Key Management Functions              */
 /*****************************************************/

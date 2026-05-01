@@ -631,11 +631,11 @@ func requiresAuthorization(r *http.Request) bool {
 		return false
 	}
 
-	if environment, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
+	/*if environment, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
 		if isProtectedEnvironment(environment) {
 			return isUpdateSecretRequest(r) || isUpdateSignerRequest(r)
 		}
-	}
+	}*/
 
 	if isUpdateSignerRequest(r) || isSigningRequest(r) {
 		cfg, err := store.GetSignerConfig(r.Context(), mux.Vars(r)["name"])
@@ -719,12 +719,6 @@ func getEnvironment(r *http.Request) (string, error) {
 		}
 	}
 	return environment, nil
-}
-
-func isProtectedEnvironment(environment string) bool {
-	/*env := strings.ToLower(environment)
-	return strings.Contains(env, "prod") || strings.Contains(env, "production") || strings.Contains(env, "prd")*/
-	return false
 }
 
 /******************************/

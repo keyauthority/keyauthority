@@ -44,11 +44,11 @@ const (
 	envKeycloakDiscoveryClientID     = "KEYCLOAK_DISCOVERY_CLIENT_ID"
 	envKeycloakDiscoveryClientSecret = "KEYCLOAK_DISCOVERY_CLIENT_SECRET"
 
-	RoleAny Role = 0 // No roles
-	//RoleAdmin      uint64 = (1 << 60) - 1 // 1...1111 (60 bits set to 1)
+	RoleAny        Role = 0       // No roles
 	RoleOperator   Role = 1 << 0  // bit 0 set
 	RoleAuditor    Role = 1 << 15 // bit 15 set
 	RoleAuthorizer Role = 1 << 30 // bit 30 set
+	//RoleAdmin      uint64 = (1 << 60) - 1 // 1...1111 (60 bits set to 1)
 )
 
 var (
@@ -437,10 +437,6 @@ func (a *Authenticator) GetProviderIssuer(idx int) string {
 
 func HasAllRoles(userRoles, required Role) bool {
 	return (userRoles & required) == required
-}
-
-func HasAnyRole(userRoles, required Role) bool {
-	return (userRoles & required) != 0
 }
 
 //------ Helpers ------//
