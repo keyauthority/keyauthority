@@ -110,7 +110,7 @@ type provider struct {
 	// Issuer URL
 	Issuer string `json:"issuer"`
 	// Required claims for tokens
-	VerificationOpts verificationOps `json:"verificationOpts,omitempty"`
+	VerificationOpts verificationOps `json:"verificationOpts"`
 	// Override roles for tokens from this provider
 	OverrideRoles []string `json:"overrideRoles,omitempty"`
 }
