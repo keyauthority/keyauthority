@@ -15,7 +15,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/pkg/errors v0.9.1
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.77.7
+	go.step.sm/crypto v0.77.9
 	k8s.io/api v0.37.0-alpha.0
 )
 
@@ -56,7 +56,7 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.1 // indirect
+	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
@@ -73,7 +73,7 @@ require (
 	k8s.io/client-go v0.37.0-alpha.0 // indirect
 	k8s.io/component-base v0.36.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260414162039-ec9c827d403f // indirect
+	k8s.io/kube-openapi v0.0.0-20260430154526-c903c4073796 // indirect
 	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5 // indirect
 	sigs.k8s.io/gateway-api v1.5.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect

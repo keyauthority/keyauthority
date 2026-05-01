@@ -276,21 +276,24 @@ func applyKeyFilters(query string, args []any, idx int, filters url.Values) (str
 	return query, args, idx
 }
 
-func (s *Store) GetKeys(ctx context.Context, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
+func (s *Store) GetKeys(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
 	query := `SELECT id, environment, config, created_at FROM keys WHERE 1=1`
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return []map[string]any{}, 0, 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return []map[string]any{}, 0, 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+
+		query += fmt.Sprintf(" AND environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applyKeyFilters(query, args, idx, filters)
 
@@ -330,22 +333,24 @@ func (s *Store) GetKeys(ctx context.Context, accessibleEnvs []string, filters ur
 	return keys, limit, offset, nil
 }
 
-func (s *Store) CountKeys(ctx context.Context, accessibleEnvs []string, filters url.Values) (int, error) {
+func (s *Store) CountKeys(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
 	query := `SELECT COUNT(id) FROM keys WHERE 1=1`
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return 0, nil
-	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
 
-	query += fmt.Sprintf(" AND environment IN (%s)", strings.Join(placeholders, ", "))
+		query += fmt.Sprintf(" AND environment IN (%s)", strings.Join(placeholders, ", "))
+	}
 
 	query, args, idx = applyKeyFilters(query, args, idx, filters)
 
@@ -514,21 +519,23 @@ func applySignerFilters(query string, args []any, idx int, filters url.Values) (
 	return query, args, idx
 }
 
-func (s *Store) GetSigners(ctx context.Context, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
+func (s *Store) GetSigners(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
 	query := `SELECT keys.environment, signers.name, signers.private_key_id, signers.config, signers.updated_at FROM signers JOIN keys ON signers.private_key_id = keys.id WHERE 1=1`
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return []map[string]any{}, 0, 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return []map[string]any{}, 0, 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applySignerFilters(query, args, idx, filters)
 
@@ -568,20 +575,23 @@ func (s *Store) GetSigners(ctx context.Context, accessibleEnvs []string, filters
 	return signers, limit, offset, nil
 }
 
-func (s *Store) CountSigners(ctx context.Context, accessibleEnvs []string, filters url.Values) (int, error) {
+func (s *Store) CountSigners(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
 	query := `SELECT COUNT(signers.name) FROM signers JOIN keys ON signers.private_key_id = keys.id WHERE 1=1`
 	args := []any{}
 	idx := 1
-	if len(accessibleEnvs) == 0 {
-		return 0, nil
+
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applySignerFilters(query, args, idx, filters)
 
@@ -813,21 +823,23 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 	return query, args, idx
 }
 
-func (s *Store) GetCerts(ctx context.Context, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
+func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
 	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, keys.environment FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return []map[string]any{}, 0, 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return []map[string]any{}, 0, 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applyCertFilters(query, args, idx, filters)
 
@@ -870,21 +882,23 @@ func (s *Store) GetCerts(ctx context.Context, accessibleEnvs []string, filters u
 	return certs, limit, offset, nil
 }
 
-func (s *Store) CountCerts(ctx context.Context, accessibleEnvs []string, filters url.Values) (int, error) {
+func (s *Store) CountCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
 	query := `SELECT COUNT(certs.serial) FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applyCertFilters(query, args, idx, filters)
 
@@ -983,21 +997,23 @@ func (s *Store) GetEncryptionKeyID(ctx context.Context, name string) (uuid.UUID,
 	return id, nil
 }
 
-func (s *Store) GetSecrets(ctx context.Context, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
+func (s *Store) GetSecrets(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
 	query := "SELECT keys.environment, secrets.name, secrets.encryption_key_id, secrets.updated_at FROM secrets JOIN keys ON secrets.encryption_key_id = keys.id WHERE 1=1"
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return []map[string]any{}, 0, 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return []map[string]any{}, 0, 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applySecretFilters(query, args, idx, filters)
 
@@ -1032,21 +1048,23 @@ func (s *Store) GetSecrets(ctx context.Context, accessibleEnvs []string, filters
 	return secrets, limit, offset, nil
 }
 
-func (s *Store) CountSecrets(ctx context.Context, accessibleEnvs []string, filters url.Values) (int, error) {
+func (s *Store) CountSecrets(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
 	query := "SELECT COUNT(secrets.name) FROM secrets JOIN keys ON secrets.encryption_key_id = keys.id WHERE 1=1"
 	args := []any{}
 	idx := 1
 
-	if len(accessibleEnvs) == 0 {
-		return 0, nil
+	if !hasAccessToAllEnvs {
+		if len(accessibleEnvs) == 0 {
+			return 0, nil
+		}
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, e := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, e)
+			idx++
+		}
+		query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 	}
-	placeholders := make([]string, len(accessibleEnvs))
-	for i, e := range accessibleEnvs {
-		placeholders[i] = fmt.Sprintf("$%d", idx)
-		args = append(args, e)
-		idx++
-	}
-	query += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ", "))
 
 	query, args, idx = applySecretFilters(query, args, idx, filters)
 
