@@ -88,14 +88,8 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
+        colsPerRow={3}
         filtersTemplate={[
-          {
-            key: "signerName",
-            type: "text",
-            label: "Signer",
-            value: filters.signerName,
-            placeholder: "e.g. signer1",
-          },
           {
             key: "serial",
             type: "text",
@@ -140,28 +134,30 @@ export function Certificates({ isLoading, setIsLoading }) {
               { value: "false", label: "No" },
             ],
           },
+          {
+            key: "signerName",
+            type: "text",
+            label: "Signer",
+            value: filters.signerName,
+            placeholder: "e.g. signer1",
+          },
         ]}
       />
 
       <Table hover responsive striped>
         <thead>
           <tr>
-            <th>Signer</th>
             <th>Serial</th>
             <th>CN/SAN</th>
             <th>Valid From</th>
             <th>Valid To</th>
+            <th>Signer</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
-              <td>
-                <Link to={`/signers/${encodeURIComponent(cert.signerName)}`}>
-                  {cert.signerName}
-                </Link>
-              </td>
               <td>{cert.serial.substr(0, 10)}...</td>
               <td
                 className={cert.revoked ? "text-decoration-line-through" : ""}
@@ -170,6 +166,11 @@ export function Certificates({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(cert.notBefore)}</td>
               <td>{prettyTime(cert.notAfter)}</td>
+              <td>
+                <Link to={`/signers/${encodeURIComponent(cert.signerName)}`}>
+                  {cert.signerName}
+                </Link>
+              </td>
               <td>
                 <div className="d-flex gap-1">
                   <Button
@@ -273,7 +274,7 @@ export function Logs({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 3 }}
+        colsPerRow={3}
         filtersTemplate={[
           {
             key: "level",
@@ -287,13 +288,6 @@ export function Logs({ isLoading, setIsLoading }) {
               { value: "INFO", label: "INFO" },
               // { value: "DEBUG", label: "DEBUG" },
             ],
-          },
-          {
-            key: "msg",
-            type: "text",
-            label: "Message",
-            placeholder: "e.g. secret read",
-            value: filters.msg,
           },
           {
             key: "user",
@@ -327,6 +321,13 @@ export function Logs({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
+          },
+          {
+            key: "msg",
+            type: "text",
+            label: "Message",
+            placeholder: "e.g. secret read",
+            value: filters.msg,
           },
         ]}
       />
@@ -530,7 +531,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 4 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",
@@ -538,13 +539,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
-          },
-          {
-            key: "user",
-            type: "text",
-            label: "Requester",
-            placeholder: "e.g. alice@keyauthority.net",
-            value: filters.user,
           },
           {
             key: "url",
@@ -564,6 +558,13 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
+          },
+          {
+            key: "user",
+            type: "text",
+            label: "Requester",
+            placeholder: "e.g. alice@keyauthority.net",
+            value: filters.user,
           },
         ]}
       />

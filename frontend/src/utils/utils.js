@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { Button, Alert, Tab, Table } from "react-bootstrap";
 import { X509Certificate } from "@peculiar/x509";
@@ -17,9 +17,7 @@ SyntaxHighlighter.registerLanguage("yaml", yaml);
 SyntaxHighlighter.registerLanguage("bash", bash);
 
 export const isDarkMode =
-  window.matchMedia &&
-  window.matchMedia("(prefers-color-scheme: dark)").matches;
-const syntaxTheme = isDarkMode ? atomOneDark : atomOneLight;
+  document.documentElement.getAttribute("data-bs-theme") === "dark";
 
 /*export function showLoadingToast(content) {
   const id = "loading-toast"; // new Date().getTime();
@@ -128,18 +126,22 @@ export function breakLines(text, maxLineLength) {
   return text.match(regex).join("\n");
 }
 
-export function downloadOrCopy(successMsg, data, filename) {
+export function downloadOrCopy(successMsg, data, filename, classes = "") {
   const dataIsEmpty = !data || data.length === 0;
   const dataIsBlob = data && data instanceof Blob;
 
   if (dataIsEmpty || dataIsBlob) {
-    return <Alert variant="success">{successMsg}</Alert>;
+    return (
+      <Alert variant="success" className={classes}>
+        {successMsg}
+      </Alert>
+    );
   }
 
   return (
     <Alert
       variant="success"
-      className="d-flex justify-content-between align-items-center"
+      className={`d-flex justify-content-between align-items-center ${classes}`}
     >
       <span>{successMsg}</span>
       <div>
@@ -239,7 +241,7 @@ export function prettyCode(language, code, copyButton = true) {
     <div className="position-relative">
       <SyntaxHighlighter
         language={language}
-        style={syntaxTheme}
+        style={isDarkMode ? atomOneDark : atomOneLight}
         className="rounded p-2"
       >
         {codeString}

@@ -121,23 +121,16 @@ const ProfileModal = ({ show, onHide, keycloak }) => {
                 "No roles assigned, please contact your administrator."
               ),
             Token: (
-              <div className="d-flex justify-content-between align-items-start gap-3">
-                <span>
-                  {keycloak?.token
-                    ? `${keycloak.token.substring(0, 16)}...`
-                    : null}
-                </span>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => {
-                    copyToClipboard(keycloak?.token || "", "Token copied!");
-                  }}
-                  title="Copy to clipboard"
-                >
-                  <i className="bi bi-clipboard"></i>
-                </Button>
-              </div>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={() => {
+                  copyToClipboard(keycloak?.token || "", "Token copied!");
+                }}
+                title="Copy to clipboard"
+              >
+                <i className="bi bi-clipboard"></i>
+              </Button>
             ),
           }}
         />

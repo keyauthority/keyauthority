@@ -51,7 +51,7 @@ export default function SignerModal({
   const [cdp, setCDP] = useState("");
   const [isCA, setIsCA] = useState(false);
 
-  // Signing Policy
+  // Policy
   const [allowedDomains, setAllowedDomains] = useState("");
   const [maxTTL, setMaxTTL] = useState(720);
   const [authzRequired, setAuthzRequired] = useState(false);
@@ -64,12 +64,16 @@ export default function SignerModal({
 
   const api = getApi();
 
-  const baseURL = new URL(api.defaults.baseURL).origin;
-  const defaultCDPBaseUrlHTTP = baseURL + "/v1/crl/";
-  const defaultCDPBaseUrlHTTPS =
-    "http://crl." +
-    baseURL.replace(/^https?:\/\//, "").replace(/^api\./, "") +
-    "/v1/crl/";
+  const baseURL = new URL(api.defaults.baseURL);
+  let defaultCDPBaseURL = "";
+  // if baseURL is not localhost or an IP,
+  // we can assume that the CRL will be hosted at http://crl.<baseURL.hostname>/v1/crl/<signerName>
+  if (
+    !["localhost", "127.0.0.1"].includes(baseURL.hostname) &&
+    !/^\d{1,3}(\.\d{1,3}){3}$/.test(baseURL.hostname)
+  ) {
+    defaultCDPBaseURL = "http://crl." + baseURL.hostname + "/v1/crl/";
+  }
 
   const toHours = (durationStr) => {
     if (!durationStr) return 0;
@@ -295,12 +299,8 @@ export default function SignerModal({
                 const value = e.target.value;
                 if (regex.test(value)) {
                   setSignerName(value);
-                  if (!isCDPManuallyEdited) {
-                    if (baseURL.startsWith("https://")) {
-                      setCDP(defaultCDPBaseUrlHTTPS + value);
-                    } else {
-                      setCDP(defaultCDPBaseUrlHTTP + value);
-                    }
+                  if (!isCDPManuallyEdited && defaultCDPBaseURL !== "") {
+                    setCDP(defaultCDPBaseURL + value);
                   }
                 }
               }}
@@ -475,7 +475,7 @@ export default function SignerModal({
         {/* Policy Section */}
         <Card className="mb-3">
           <Card.Header className="d-flex justify-content-between align-items-center gap-1">
-            <div>Signing Policy</div>
+            <div>Policy</div>
             <div className="text-muted small fw-normal">
               Restrictions applied when using this signer
             </div>

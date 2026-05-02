@@ -5,6 +5,7 @@ import Main from "./components/Main";
 
 function App() {
   const keycloak = getKeycloak();
+
   useEffect(() => {
     // document title
     document.title =
