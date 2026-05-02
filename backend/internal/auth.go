@@ -36,17 +36,19 @@ import (
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 )
 
+type Role uint64
+
 const (
 	envKeycloakURL                   = "KEYCLOAK_URL"
 	envKeycloakRealm                 = "KEYCLOAK_REALM"
 	envKeycloakDiscoveryClientID     = "KEYCLOAK_DISCOVERY_CLIENT_ID"
 	envKeycloakDiscoveryClientSecret = "KEYCLOAK_DISCOVERY_CLIENT_SECRET"
 
-	RoleNone uint64 = 0 // No roles
+	RoleAny        Role = 0       // No roles
+	RoleOperator   Role = 1 << 0  // bit 0 set
+	RoleAuditor    Role = 1 << 15 // bit 15 set
+	RoleAuthorizer Role = 1 << 30 // bit 30 set
 	//RoleAdmin      uint64 = (1 << 60) - 1 // 1...1111 (60 bits set to 1)
-	RoleOperator   uint64 = 1 << 0  // bit 0 set
-	RoleAuditor    uint64 = 1 << 15 // bit 15 set
-	RoleAuthorizer uint64 = 1 << 30 // bit 30 set
 )
 
 var (
@@ -62,7 +64,7 @@ var (
 	ErrUnauthorized error = errors.New("unauthorized")
 	ErrForbidden    error = errors.New("forbidden request")
 
-	Roles map[string]uint64 = map[string]uint64{
+	RoleMap map[string]Role = map[string]Role{
 		"KEYAUTHORITY_OPERATOR":   RoleOperator,
 		"KEYAUTHORITY_AUDITOR":    RoleAuditor,
 		"KEYAUTHORITY_AUTHORIZER": RoleAuthorizer,
@@ -108,7 +110,7 @@ type provider struct {
 	// Issuer URL
 	Issuer string `json:"issuer"`
 	// Required claims for tokens
-	VerificationOpts verificationOps `json:"verificationOpts,omitempty"`
+	VerificationOpts verificationOps `json:"verificationOpts"`
 	// Override roles for tokens from this provider
 	OverrideRoles []string `json:"overrideRoles,omitempty"`
 }
@@ -353,7 +355,7 @@ func (a *Authenticator) getToken(client *clientDetail, reqBody *TokenRequest) (s
 	return resp.AccessToken, nil
 }
 
-func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]uint64) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
+func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]Role) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
 	authHeader := r.Header.Get("Authorization")
 	vaultToken := r.Header.Get("X-Vault-Token")
 	if authHeader == "" && vaultToken == "" {
@@ -370,22 +372,37 @@ func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]u
 		return nil, logEntries, -1, fmt.Errorf("%w: invalid token", ErrUnauthorized)
 	}
 
-	// get env from context for role extraction, if any
-	environment := ""
-	if env, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
-		environment = env
-	}
-
 	if len(requiredRoles) > 0 {
-		required := requiredRoles[r.Method]
-		if !HasAllRoles(a.ExtractRoles(idToken, providerIDx, environment), required) {
-			return idToken, logEntries, providerIDx, ErrForbidden
+		if requiredRole, ok := requiredRoles[r.Method]; ok {
+			// get env from context for role extraction, if any
+			environment := ""
+			if env, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
+				environment = env
+			}
+			assigned := a.ExtractRoles(idToken, providerIDx)
+			roleVal := RoleAny
+			for _, r := range assigned {
+				if rv, ok := RoleMap[r]; ok {
+					roleVal |= rv
+				}
+				if after, ok1 := strings.CutSuffix(r, "_"+environment); ok1 {
+					if rv, ok := RoleMap[after]; environment != "" && ok {
+						roleVal |= rv
+					}
+				}
+			}
+			if !HasAllRoles(roleVal, requiredRole) {
+				return idToken, logEntries, providerIDx,
+					fmt.Errorf("%w: missing required role %d", ErrForbidden, requiredRole)
+			}
+
+			return idToken, logEntries, providerIDx, nil
 		}
 	}
 	return idToken, logEntries, providerIDx, nil
 }
 
-func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int, environment string) uint64 {
+func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int) []string {
 	roles := []string{}
 	if len(a.Providers[providerIDx].OverrideRoles) > 0 {
 		// override roles
@@ -401,27 +418,14 @@ func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int, env
 			} `json:"resource_access"`
 		}
 		if err := idToken.Claims(&claims); err != nil {
-			return RoleNone
+			return []string{}
 		}
 		roles = claims.RealmAccess.Roles
 		for _, ra := range claims.ResourceAccess {
 			roles = append(roles, ra.Roles...)
 		}
 	}
-
-	r := RoleNone
-	for _, role := range roles {
-		if roleInt, ok := Roles[role]; ok {
-			r |= roleInt
-		}
-		if environment != "" {
-			role = strings.TrimSuffix(role, "_"+environment)
-			if roleInt, ok := Roles[role]; ok {
-				r |= roleInt
-			}
-		}
-	}
-	return r
+	return roles
 }
 
 func (a *Authenticator) GetProviderIssuer(idx int) string {
@@ -431,12 +435,8 @@ func (a *Authenticator) GetProviderIssuer(idx int) string {
 	return a.Providers[idx].Issuer
 }
 
-func HasAllRoles(userRoles, required uint64) bool {
+func HasAllRoles(userRoles, required Role) bool {
 	return (userRoles & required) == required
-}
-
-func HasAnyRole(userRoles, required uint64) bool {
-	return (userRoles & required) != 0
 }
 
 //------ Helpers ------//

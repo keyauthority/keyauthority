@@ -113,86 +113,86 @@ func main() {
 
 	// ---------- Keys ---------- //
 	router.Handle("/v1/keys", withAuth(
-		map[string]uint64{
-			http.MethodGet:  internalpkg.RoleNone,     // get keys
+		map[string]internalpkg.Role{
+			http.MethodGet:  internalpkg.RoleAny,      // get keys
 			http.MethodPost: internalpkg.RoleOperator, // create key
 		},
 		keysHandler))
 
 	router.Handle("/v1/keys/{id}", withAuth(
-		map[string]uint64{
-			http.MethodGet:    internalpkg.RoleNone,     // get key
+		map[string]internalpkg.Role{
+			http.MethodGet:    internalpkg.RoleAny,      // get key
 			http.MethodDelete: internalpkg.RoleOperator, // delete key
 		},
 		keyHandler))
 
 	// ---------- Certificates ---------- //
 	router.Handle("/v1/certs", withAuth(
-		map[string]uint64{
-			http.MethodGet: internalpkg.RoleNone, // get certs
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get certs
 		},
 		certsHandler))
 
 	router.Handle("/v1/certs/{serial}/pem", withAuth(
-		map[string]uint64{
-			http.MethodGet: internalpkg.RoleNone, // get cert PEM
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get cert PEM
 		},
 		certHandler))
 
 	// ------------ Signers ------------ //
 	router.Handle("/v1/signers", withAuth(
-		map[string]uint64{
-			http.MethodGet: internalpkg.RoleNone, // get signers
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get signers
 		},
 		signersHandler))
 
 	router.Handle("/v1/signers/{name}", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodPost:   internalpkg.RoleOperator, // create signer
 			http.MethodDelete: internalpkg.RoleOperator, // delete signer
 		},
 		signerHandler))
 
 	router.Handle("/v1/signers/{name}/private-key", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // get private key ID
 		},
 		signerPrivateKeyHandler))
 
 	router.Handle("/v1/signers/{name}/config", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // get signer config
 			http.MethodPut: internalpkg.RoleOperator, // update signer config
 		},
 		signerConfigHandler))
 
 	router.Handle("/v1/signers/{name}/ca-chain", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // get CA chain
 			http.MethodPut: internalpkg.RoleOperator, // update CA chain
 		},
 		signerCAChainHandler))
 
 	router.Handle("/v1/signers/{name}/ca-csr", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // create CA CSR
 		},
 		signerCSRHandler))
 
 	router.Handle("/v1/signers/{name}/sign", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodPost: internalpkg.RoleOperator, // sign certificate
 		},
 		signerSignHandler))
 
 	router.Handle("/v1/signers/{name}/sign-document", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodPost: internalpkg.RoleOperator, // sign document
 		},
 		signerSignDocumentHandler))
 
 	router.Handle("/v1/signers/{name}/revoke", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodPost: internalpkg.RoleOperator, // revoke certificate
 		},
 		signerRevokeHandler))
@@ -204,19 +204,19 @@ func main() {
 
 	// ------------ Secrets ------------ //
 	router.Handle("/v1/secrets", withAuth(
-		map[string]uint64{
-			http.MethodGet: internalpkg.RoleNone, // get secrets
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get secrets
 		},
 		secretsHandler))
 
 	router.Handle("/v1/secrets/data/{name:.+}", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
 		},
 		secretHandler))
 
 	router.Handle("/v1/secrets/{name:.+}", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet:    internalpkg.RoleOperator, // get secret
 			http.MethodPut:    internalpkg.RoleOperator, // insert secret
 			http.MethodPost:   internalpkg.RoleOperator, // update secret
@@ -227,27 +227,27 @@ func main() {
 
 	// ------------ Pending Requests ------------ //
 	router.Handle("/v1/pending-requests", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleAuthorizer, // get pending requests
 		},
 		pendingRequestsHandler))
 
 	router.Handle("/v1/pending-requests/{id}", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodPost:   internalpkg.RoleAuthorizer, // approve pending request
 			http.MethodDelete: internalpkg.RoleAuthorizer, // reject pending request
 		},
 		pendingRequestHandler))
 
 	router.Handle("/v1/pending-requests/{id}/body", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleAuthorizer, // get pending request body
 		},
 		pendingRequestBodyHandler))
 
 	// ------------ Miscellaneous ------------ //
 	router.Handle("/v1/logs", withAuth(
-		map[string]uint64{
+		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleAuditor, // get logs
 		},
 		logsHandler))
@@ -454,11 +454,7 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate) error {
 
 func recreateAllCRLs() error {
 	ctx := context.Background()
-	allEnvs, err := store.GetEnvironments(ctx)
-	if err != nil {
-		return fmt.Errorf("couldn't get environments: %w", err)
-	}
-	signers, _, _, err := store.GetSigners(ctx, allEnvs, url.Values{})
+	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
 	if err != nil {
 		return err
 	}
@@ -487,50 +483,45 @@ func recreateAllCRLs() error {
 	return nil
 }
 
-func isEnvAccessible(ctx context.Context, environment string) bool {
+func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
 	if token, ok := ctx.Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
-		if providerIDx, ok := ctx.Value(loggingpkg.CtxKeyProviderIndex).(int); ok {
-			userRoles := authenticator.ExtractRoles(token, providerIDx, environment)
-			return internalpkg.HasAllRoles(userRoles, internalpkg.RoleOperator)
+		if providerIdx, ok := ctx.Value(loggingpkg.CtxKeyProviderIndex).(int); ok {
+			roles := authenticator.ExtractRoles(token, providerIdx)
+			envs := []string{}
+			for _, role := range roles {
+				if role == "KEYAUTHORITY_OPERATOR" {
+					return true, nil, nil // has access to all environments
+				}
+				if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
+					envs = append(envs, after)
+				}
+			}
+			return false, envs, nil
 		}
 	}
-	return false
-}
-
-func getAccessibleEnvs(ctx context.Context) ([]string, error) {
-	allEnvs, err := store.GetEnvironments(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get environments: %w", err)
-	}
-	var accessibleEnvs []string
-	for _, environment := range allEnvs {
-		if isEnvAccessible(ctx, environment) {
-			accessibleEnvs = append(accessibleEnvs, environment)
-		}
-	}
-	return accessibleEnvs, nil
+	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token or provider index")
 }
 
 func getPaginatedListWithAccessibleEnvs(
 	r *http.Request,
 	w http.ResponseWriter,
-	getFunc func(ctx context.Context, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error),
-	countFunc func(ctx context.Context, accessibleEnvs []string, filters url.Values) (int, error),
+	getFunc func(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error),
+	countFunc func(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error),
 ) {
-	accessibleEnvs, err := getAccessibleEnvs(r.Context())
+	hasAccessToAllEnvs, accessibleEnvs, err := getAccessibleEnvs(r.Context())
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get accessible environments", err)
 		return
 	}
 
 	filters := r.URL.Query()
-	items, limit, offset, err := getFunc(r.Context(), accessibleEnvs, filters)
+	items, limit, offset, err := getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
 		return
 	}
 
-	totalCount, err := countFunc(r.Context(), accessibleEnvs, filters)
+	totalCount, err := countFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get total count", err)
 		return
@@ -640,13 +631,13 @@ func requiresAuthorization(r *http.Request) bool {
 		return false
 	}
 
-	if environment, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
+	/*if environment, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
 		if isProtectedEnvironment(environment) {
 			return isUpdateSecretRequest(r) || isUpdateSignerRequest(r)
 		}
-	}
+	}*/
 
-	if isSigningRequest(r) {
+	if isUpdateSignerRequest(r) || isSigningRequest(r) {
 		cfg, err := store.GetSignerConfig(r.Context(), mux.Vars(r)["name"])
 		if err != nil {
 			return false
@@ -730,12 +721,6 @@ func getEnvironment(r *http.Request) (string, error) {
 	return environment, nil
 }
 
-func isProtectedEnvironment(environment string) bool {
-	/*env := strings.ToLower(environment)
-	return strings.Contains(env, "prod") || strings.Contains(env, "production") || strings.Contains(env, "prd")*/
-	return false
-}
-
 /******************************/
 /*         Middlewares        */
 /******************************/
@@ -756,7 +741,7 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-func withAuth(requiredRoles map[string]uint64, next http.Handler) http.Handler {
+func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(requiredRoles) > 0 {
 			if _, ok := requiredRoles[r.Method]; !ok {
