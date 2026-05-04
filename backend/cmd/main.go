@@ -69,6 +69,9 @@ var (
 
 	// cache environments for paths, to avoid hitting the store on every request
 	envCache = make(map[string]string)
+
+	// hash of signer names to signer names
+	signerNameHashes = make(map[string]string)
 )
 
 func main() {
@@ -200,7 +203,7 @@ func main() {
 	router.PathPrefix("/v1/signers/{name}/acme").Handler(
 		signerACMEHandler)
 
-	router.Handle("/v1/crl/{name}", signerCRLHandler)
+	router.Handle("/v1/crl/{hashOfSignerName}", signerCRLHandler)
 
 	// ------------ Secrets ------------ //
 	router.Handle("/v1/secrets", withAuth(
@@ -276,6 +279,17 @@ func main() {
 	router.PathPrefix("/swagger/").Handler(
 		http.StripPrefix("/swagger/", http.FileServer(http.FS(swagger.Files))))
 
+	// ----- Start Periodic Tasks ----- //
+	startPeriodicTasks()
+
+	// ------------ Start server ------------ //
+	logger.InfoWithContext(context.Background(), false, "server started",
+		"port", port, "version", version, "enterprise", enterprise)
+
+	http.ListenAndServe(":"+port, withCORS(router))
+}
+
+func startPeriodicTasks() {
 	// ------- Periodic CRL Creation ------- //
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
@@ -320,12 +334,6 @@ func main() {
 			<-ticker.C
 		}
 	}()
-
-	// ------------ Start server ------------ //
-	logger.InfoWithContext(context.Background(), false, "server started",
-		"port", port, "version", version, "enterprise", enterprise)
-
-	http.ListenAndServe(":"+port, withCORS(router))
 }
 
 func setupAuthenticator() error {
@@ -461,6 +469,12 @@ func recreateAllCRLs() error {
 
 	for _, s := range signers {
 		signerName := s["name"].(string)
+
+		// store hash of signer name to signer name, to be able to serve CRL requests
+		hash := sha256.Sum256([]byte(signerName))
+		hashStr := hex.EncodeToString(hash[:])
+		signerNameHashes[hashStr] = signerName
+
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
 			logger.WarnWithContext(ctx, false, "couldn't load signer", "signer", signerName, "error", err)
@@ -1236,7 +1250,12 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 })
 
 var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	signerName := mux.Vars(r)["name"]
+	signerName, ok := signerNameHashes[mux.Vars(r)["hashOfSignerName"]]
+	if !ok {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't find signer by hash", nil)
+		return
+	}
+
 	crl, err := store.GetSignerCRL(r.Context(), signerName)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get signer CRL", err)
