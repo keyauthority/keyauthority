@@ -83,7 +83,7 @@ export default function Topbar() {
               <Dropdown.Item
                 onClick={() => handleKeycloakAction("CONFIGURE_TOTP")}
               >
-                <i className="bi bi-qr-code-scan me-1"></i> Enroll 2FA Device
+                <i className="bi bi-qr-code-scan me-1"></i> Configure 2FA
               </Dropdown.Item>
               <Dropdown.Divider />
               <Dropdown.Item onClick={handleLogout}>

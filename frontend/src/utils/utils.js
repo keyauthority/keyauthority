@@ -319,40 +319,17 @@ const copyToClipboardFallback = (text) => {
   );
 };
 
-/*export function prettyEnv(env) {
-  const envLower = env.toLowerCase();
-  let color = "secondary";
-  if (
-    envLower.includes("production") ||
-    envLower.includes("prod") ||
-    envLower.includes("prd")
-  )
-    color = "danger";
-  else if (envLower.includes("staging") || envLower.includes("stag"))
-    color = "warning";
-  //else if (envLower.includes("qa") || envLower.includes("test") || envLower.includes("uat") || envLower.includes("quality") || envLower.includes("testing")) color = "primary";
-  else if (envLower.includes("dev") || envLower.includes("development"))
-    color = "info";
-
-  return (
-    <Alert
-      variant={color}
-      className="d-inline-block px-2 py-0 text-truncate"
-      style={{ maxWidth: "12rem" }}
-    >
-      {env}
-    </Alert>
-  );
-}*/
-
 export const prettyEnv = (env) => boxedContent(env);
 
-export const boxedContent = (content) => (
-  <div className="border rounded bg-secondary-subtle px-2 py-0 m-0 d-inline-block text-truncate">
+export const boxedContent = (content, variant = "secondary") => (
+  <Alert
+    variant={variant}
+    className="px-2 py-0 m-0 d-inline-block text-truncate"
+    style={{ maxWidth: "12rem" }}
+  >
     {content}
-  </div>
+  </Alert>
 );
-//export const boxedContent = (content) => <Alert variant="secondary" className="px-2 py-0 m-0 d-inline-block text-truncate">{content}</Alert>;
 
 export const decryptData = async (encryptedData, password) => {
   // AES GCM decryption

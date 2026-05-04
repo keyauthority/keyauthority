@@ -7,6 +7,7 @@ import {
   prettyTime,
   copyToClipboard,
   prettyEnv,
+  boxedContent,
 } from "../utils/utils";
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
@@ -348,12 +349,10 @@ export function Logs({ isLoading, setIsLoading }) {
           {logs.map((log, index) => (
             <tr key={index}>
               <td>
-                <Alert
-                  variant={levelVariant[log.level.toUpperCase()] || "secondary"}
-                  className="d-inline-block px-2 py-0 m-0"
-                >
-                  {log.level}
-                </Alert>
+                {boxedContent(
+                  log.level,
+                  levelVariant[log.level] || "secondary",
+                )}
               </td>
               <td>{log.msg}</td>
               <td>{log.token?.user || "-"}</td>

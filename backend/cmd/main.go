@@ -121,7 +121,7 @@ func main() {
 
 	router.Handle("/v1/keys/{id}", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodGet:    internalpkg.RoleAny,      // get key
+			http.MethodGet:    internalpkg.RoleOperator, // get key
 			http.MethodDelete: internalpkg.RoleOperator, // delete key
 		},
 		keyHandler))

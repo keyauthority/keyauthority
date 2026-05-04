@@ -822,6 +822,8 @@ csi:
   enabled: false
 injector:
   enabled: true
+  extraEnvironmentVars:
+    AGENT_INJECT_VAULT_CACERT_BYTES: "..." # optional, PEM-encoded CA cert of '${apiRootUrl}'
   namespaceSelector:
     matchExpressions: 
       - key: kubernetes.io/metadata.name
@@ -887,11 +889,11 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
         `# add the Hashicorp Helm repository
 helm repo add hashicorp https://helm.releases.hashicorp.com
 # install/upgrade the Vault Injector
-helm upgrade --install injector hashicorp/vault -f injector-values.yaml`,
+helm upgrade --install injector hashicorp/vault -f values.yaml`,
       )}
 
       <p>
-        where <code>injector-values.yaml</code> contains:
+        where <code>values.yaml</code> contains:
       </p>
 
       {prettyCode("yaml", k8sVaultInjectorValuesYaml(apiRootUrl))}
