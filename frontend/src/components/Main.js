@@ -77,7 +77,7 @@ export default function Main() {
       items: [
         {
           title: "Certificates",
-          subtitle: "View issued certificates",
+          subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
           icon: "bi-award",
         },
@@ -148,8 +148,8 @@ export default function Main() {
           icon: "bi-code-slash",
         },
         {
-          title: "Deliver Secrets",
-          subtitle: "Learn how to deliver secrets to your applications",
+          title: "Use Secrets",
+          subtitle: "Learn how your applications can access secrets",
           to: "/docs/secrets",
           icon: "bi-code-slash",
         },

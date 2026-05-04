@@ -1,4 +1,4 @@
-import "./main.scss";
+import "../main.scss";
 import { Suspense, lazy } from "react";
 import type { ClassKey } from "keycloakify/login";
 import type { KcContext } from "./KcContext";
@@ -123,7 +123,7 @@ const classes = {
     "bg-body border border-top-0 rounded-3 rounded-top-0 p-5 pt-0",
   kcLocaleMainClass: "d-none",
 
-  kcFormHeaderClass: "opacity-90 pb-3",
+  kcFormHeaderClass: "opacity-85 pb-3",
   //kcInputWrapperClass: "",
   kcInputClass: "form-control",
   kcInputErrorMessageClass: "text-danger",

@@ -21,6 +21,8 @@ export default function LoginConfigTotp(
 
   const { msg, msgStr, advancedMsg } = i18n;
 
+  let idx = 1;
+
   return (
     <Template
       kcContext={kcContext}
@@ -33,7 +35,7 @@ export default function LoginConfigTotp(
       <>
         <div id="kc-totp-settings" className="mb-3">
           <div className="mb-3">
-            1. {msg("loginTotpStep1")}
+            {idx++}. {msg("loginTotpStep1")}
             <ul id="kc-totp-supported-apps" className="mt-1">
               {totp.supportedApplications.map((app) => (
                 <li key={app}>{advancedMsg(app)}</li>
@@ -44,7 +46,7 @@ export default function LoginConfigTotp(
           {mode == "manual" ? (
             <>
               <div className="mb-3">
-                2. {msg("loginTotpManualStep2")}
+                {idx++}. {msg("loginTotpManualStep2")}
                 <p className="my-1">
                   <div
                     className="text-center border bg-light-subtle rounded p-1"
@@ -60,7 +62,7 @@ export default function LoginConfigTotp(
                 </p>
               </div>
               <div className="mb-3">
-                3. {msg("loginTotpManualStep3")}
+                {idx++}. {msg("loginTotpManualStep3")}
                 <ul className="mt-1">
                   <li id="kc-totp-type">
                     {msg("loginTotpType")}:{" "}
@@ -86,7 +88,7 @@ export default function LoginConfigTotp(
             </>
           ) : (
             <div className="mb-3">
-              2. {msg("loginTotpStep2")}
+              {idx++}. {msg("loginTotpStep2")}
               <div className="mx-auto py-2" style={{ width: "fit-content" }}>
                 <img
                   style={{ width: "200px", height: "200px" }}
@@ -103,7 +105,9 @@ export default function LoginConfigTotp(
             </div>
           )}
           <div className="mb-3">
-            <p>3. {msg("loginTotpStep3")}</p>
+            <p>
+              {idx++}. {msg("loginTotpStep3")}
+            </p>
             <p>{msg("loginTotpStep3DeviceName")}</p>
           </div>
         </div>

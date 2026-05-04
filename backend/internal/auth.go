@@ -379,18 +379,19 @@ func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]R
 			if env, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
 				environment = env
 			}
+
 			assigned := a.ExtractRoles(idToken, providerIDx)
 			roleVal := RoleAny
 			for _, r := range assigned {
 				if rv, ok := RoleMap[r]; ok {
 					roleVal |= rv
-				}
-				if after, ok1 := strings.CutSuffix(r, "_"+environment); ok1 {
-					if rv, ok := RoleMap[after]; environment != "" && ok {
+				} else if after, ok := strings.CutSuffix(r, "_"+environment); ok {
+					if rv, ok1 := RoleMap[after]; ok1 {
 						roleVal |= rv
 					}
 				}
 			}
+
 			if !HasAllRoles(roleVal, requiredRole) {
 				return idToken, logEntries, providerIDx,
 					fmt.Errorf("%w: missing required role %d", ErrForbidden, requiredRole)
