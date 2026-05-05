@@ -290,6 +290,22 @@ func main() {
 	http.ListenAndServe(":"+port, withCORS(router))
 }
 
+func saveSignerNameHash(signerName string) {
+	hash := sha256.Sum256([]byte(signerName))
+	hashStr := base64.URLEncoding.EncodeToString(hash[:])
+	signerNameHashes.Set(hashStr[:32], signerName)
+	logger.DebugWithContext(context.Background(),
+		"stored hash of signer name for CRL access",
+		"signerName", signerName, "hash", hashStr[:32])
+}
+
+func getSignerNameFromHash(hash string) string {
+	if signerName, exists := signerNameHashes.Get(hash); exists {
+		return signerName.(string)
+	}
+	return ""
+}
+
 func startPeriodicTasks() {
 	// ------- Periodic CRL Creation ------- //
 	go func() {
@@ -470,14 +486,7 @@ func recreateAllCRLs() error {
 
 	for _, s := range signers {
 		signerName := s["name"].(string)
-
-		// store hash of signer name to signer name, to be able to serve CRL requests
-		hash := sha256.Sum256([]byte(signerName))
-		hashStr := base64.URLEncoding.EncodeToString(hash[:])
-		signerNameHashes.Set(hashStr[:32], signerName)
-
-		logger.DebugWithContext(ctx, "recreating CRL for signer",
-			"signer", signerName, "hash", hashStr[:32])
+		saveSignerNameHash(signerName)
 
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
@@ -993,6 +1002,8 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't create signer", err)
 			return
 		}
+
+		saveSignerNameHash(signerName)
 		logger.Info(r, true, "signer created", "keyID", keyID, "config", cfg)
 		writeHTTP(w, http.StatusCreated, nil)
 
@@ -1257,8 +1268,9 @@ var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 	var crl []byte
 
 	hash := mux.Vars(r)["hashOfSignerName"]
-	if signerName, exists := signerNameHashes.Get(hash); exists {
-		if crl1, err := store.GetSignerCRL(r.Context(), signerName.(string)); err == nil {
+	signerName := getSignerNameFromHash(hash)
+	if signerName != "" {
+		if crl1, err := store.GetSignerCRL(r.Context(), signerName); err == nil {
 			crl = crl1
 		}
 	}
