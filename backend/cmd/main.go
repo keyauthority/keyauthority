@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -68,7 +69,10 @@ var (
 	router = mux.NewRouter()
 
 	// cache environments for paths, to avoid hitting the store on every request
-	envCache = make(map[string]string)
+	envCache = internalpkg.NewCache(make(map[string]any))
+
+	// hash of signer names to signer names
+	signerNameHashes = internalpkg.NewCache(make(map[string]any))
 )
 
 func main() {
@@ -200,7 +204,7 @@ func main() {
 	router.PathPrefix("/v1/signers/{name}/acme").Handler(
 		signerACMEHandler)
 
-	router.Handle("/v1/crl/{name}", signerCRLHandler)
+	router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 
 	// ------------ Secrets ------------ //
 	router.Handle("/v1/secrets", withAuth(
@@ -276,6 +280,33 @@ func main() {
 	router.PathPrefix("/swagger/").Handler(
 		http.StripPrefix("/swagger/", http.FileServer(http.FS(swagger.Files))))
 
+	// ----- Start Periodic Tasks ----- //
+	startPeriodicTasks()
+
+	// ------------ Start server ------------ //
+	logger.InfoWithContext(context.Background(), false, "server started",
+		"port", port, "version", version, "enterprise", enterprise)
+
+	http.ListenAndServe(":"+port, withCORS(router))
+}
+
+func saveSignerNameHash(signerName string) {
+	hash := sha256.Sum256([]byte(signerName))
+	hashStr := base64.URLEncoding.EncodeToString(hash[:])
+	signerNameHashes.Set(hashStr[:32], signerName)
+	logger.DebugWithContext(context.Background(),
+		"stored hash of signer name for CRL access",
+		"signerName", signerName, "hash", hashStr[:32])
+}
+
+func getSignerNameFromHash(hash string) string {
+	if signerName, exists := signerNameHashes.Get(hash); exists {
+		return signerName.(string)
+	}
+	return ""
+}
+
+func startPeriodicTasks() {
 	// ------- Periodic CRL Creation ------- //
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
@@ -320,12 +351,6 @@ func main() {
 			<-ticker.C
 		}
 	}()
-
-	// ------------ Start server ------------ //
-	logger.InfoWithContext(context.Background(), false, "server started",
-		"port", port, "version", version, "enterprise", enterprise)
-
-	http.ListenAndServe(":"+port, withCORS(router))
 }
 
 func setupAuthenticator() error {
@@ -461,6 +486,8 @@ func recreateAllCRLs() error {
 
 	for _, s := range signers {
 		signerName := s["name"].(string)
+		saveSignerNameHash(signerName)
+
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
 			logger.WarnWithContext(ctx, false, "couldn't load signer", "signer", signerName, "error", err)
@@ -653,8 +680,8 @@ func getEnvironment(r *http.Request) (string, error) {
 	// if it's a create key request, get environment from query parameter
 	// for other requests, get key ID from path or store, and then get environment from store using key ID
 	environment := ""
-	if env, ok := envCache[r.URL.Path]; ok {
-		environment = env
+	if env, exists := envCache.Get(r.URL.Path); exists {
+		environment = env.(string)
 	} else if isCreateKeyRequest(r) {
 		environment = r.URL.Query().Get("environment")
 	} else {
@@ -715,7 +742,7 @@ func getEnvironment(r *http.Request) (string, error) {
 		}
 
 		if environment != "" {
-			envCache[r.URL.Path] = environment
+			envCache.Set(r.URL.Path, environment)
 		}
 	}
 	return environment, nil
@@ -975,6 +1002,8 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't create signer", err)
 			return
 		}
+
+		saveSignerNameHash(signerName)
 		logger.Info(r, true, "signer created", "keyID", keyID, "config", cfg)
 		writeHTTP(w, http.StatusCreated, nil)
 
@@ -1236,11 +1265,14 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 })
 
 var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	signerName := mux.Vars(r)["name"]
-	crl, err := store.GetSignerCRL(r.Context(), signerName)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get signer CRL", err)
-		return
+	var crl []byte
+
+	hash := mux.Vars(r)["hashOfSignerName"]
+	signerName := getSignerNameFromHash(hash)
+	if signerName != "" {
+		if crl1, err := store.GetSignerCRL(r.Context(), signerName); err == nil {
+			crl = crl1
+		}
 	}
 
 	writeHTTPWithHeaders(w, http.StatusOK, crl,
@@ -1249,7 +1281,7 @@ var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 			"Cache-Control":               "public, max-age=3600", // 1 hour cache
 			"X-Content-Type-Options":      "nosniff",
 			"Access-Control-Allow-Origin": "*", // Allow all origins
-			"Content-Disposition":         fmt.Sprintf(`attachment; filename="%s.crl"`, signerName),
+			"Content-Disposition":         `attachment; filename="crl.crl"`,
 		})
 })
 

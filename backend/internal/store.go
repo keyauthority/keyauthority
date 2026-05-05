@@ -61,7 +61,7 @@ const (
 )
 
 var (
-	secretsCache = make(map[string]map[string]any)
+	secretsCache = NewCache(make(map[string]any))
 )
 
 // actual data used for replaying pending requests upon authorization
@@ -1006,8 +1006,8 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 }
 
 func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {
-	if cachedSecret, ok := secretsCache[name]; ok {
-		return cachedSecret, nil
+	if cachedSecret, exists := secretsCache.Get(name); exists {
+		return cachedSecret.(map[string]any), nil
 	}
 
 	var ct []byte
@@ -1048,7 +1048,7 @@ func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, err
 		"data": data,
 	}
 
-	secretsCache[name] = resp
+	secretsCache.Set(name, resp)
 	return resp, nil
 }
 
@@ -1104,7 +1104,7 @@ func (s *Store) UpdateSecret(ctx context.Context, name string, newData map[strin
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows affected: %s", name)
 	}
-	delete(secretsCache, name)
+	secretsCache.Delete(name)
 	return nil
 }
 
@@ -1117,7 +1117,7 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 		return err
 	}
 
-	delete(secretsCache, name)
+	secretsCache.Delete(name)
 	return nil
 }
 

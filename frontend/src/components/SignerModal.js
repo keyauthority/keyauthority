@@ -47,7 +47,6 @@ export default function SignerModal({
   const [postalCode, setPostalCode] = useState("");
 
   // Certificate Template
-  const [isCDPManuallyEdited, setIsCDPManuallyEdited] = useState(false);
   const [cdp, setCDP] = useState("");
   const [isCA, setIsCA] = useState(false);
 
@@ -65,15 +64,7 @@ export default function SignerModal({
   const api = getApi();
 
   const baseURL = new URL(api.defaults.baseURL);
-  let defaultCDPBaseURL = "";
-  // if baseURL is not localhost or an IP,
-  // we can assume that the CRL will be hosted at http://crl.<baseURL.hostname>/v1/crl/<signerName>
-  if (
-    !["localhost", "127.0.0.1"].includes(baseURL.hostname) &&
-    !/^\d{1,3}(\.\d{1,3}){3}$/.test(baseURL.hostname)
-  ) {
-    defaultCDPBaseURL = "http://crl." + baseURL.hostname + "/v1/crl/";
-  }
+  const defaultCDPBaseURL = "http://crl." + baseURL.hostname + "/v1/crl/";
 
   const toHours = (durationStr) => {
     if (!durationStr) return 0;
@@ -111,6 +102,20 @@ export default function SignerModal({
     }
   };
 
+  const createSignerHashForCRL = async (signerName) => {
+    // compute sha256 hash of the signer name, and return the first 32 characters of the base64 string
+    const encoder = new TextEncoder();
+    const data = encoder.encode(signerName);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    // convert to base64 URL safe string
+    const hashBase64 = btoa(String.fromCharCode.apply(null, hashArray))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, ""); // Remove padding
+    return hashBase64.slice(0, 32);
+  };
+
   useEffect(() => {
     if (show && editMode && signerName) {
       fetchSignerConfig(signerName);
@@ -131,7 +136,6 @@ export default function SignerModal({
       setPostalCode((subject.postalCode || []).join(", "));
 
       setCDP((signerConfig.cdp || []).join(", "));
-      setIsCDPManuallyEdited(false);
       setIsCA(signerConfig.isCA || false);
 
       setAllowedDomains(signerConfig.allowedDomains?.join(", ") || "");
@@ -163,7 +167,6 @@ export default function SignerModal({
       setPkcs11URI("");
 
       setCDP("");
-      setIsCDPManuallyEdited(false);
       setIsCA(false);
 
       setAllowedDomains("");
@@ -299,9 +302,6 @@ export default function SignerModal({
                 const value = e.target.value;
                 if (regex.test(value)) {
                   setSignerName(value);
-                  if (!isCDPManuallyEdited && defaultCDPBaseURL !== "") {
-                    setCDP(defaultCDPBaseURL + value);
-                  }
                 }
               }}
             />
@@ -456,15 +456,28 @@ export default function SignerModal({
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>CDP (CRL Distribution Points)</Form.Label>
-              <Form.Control
-                type="text"
-                value={cdp}
-                placeholder="e.g. http://example.com/crl1, http://example.com/crl2"
-                onChange={(e) => {
-                  setIsCDPManuallyEdited(true);
-                  setCDP(e.target.value);
-                }}
-              />
+              <div className="input-group">
+                <Form.Control
+                  type="text"
+                  value={cdp}
+                  placeholder="e.g. http://example.com/crl1, http://example.com/crl2"
+                  onChange={(e) => {
+                    setCDP(e.target.value);
+                  }}
+                />
+                <Button
+                  variant="outline-secondary"
+                  onClick={async () => {
+                    if (defaultCDPBaseURL && signerName) {
+                      const hash = await createSignerHashForCRL(signerName);
+                      setCDP(defaultCDPBaseURL + hash);
+                    }
+                  }}
+                  disabled={!defaultCDPBaseURL || !signerName}
+                >
+                  Set Default
+                </Button>
+              </div>
               <Form.Text className="text-muted">
                 Comma-separated list of URLs
               </Form.Text>
