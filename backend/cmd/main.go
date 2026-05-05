@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -68,10 +69,10 @@ var (
 	router = mux.NewRouter()
 
 	// cache environments for paths, to avoid hitting the store on every request
-	envCache = make(map[string]string)
+	envCache = internalpkg.NewCache(make(map[string]any))
 
 	// hash of signer names to signer names
-	signerNameHashes = make(map[string]string)
+	signerNameHashes = internalpkg.NewCache(make(map[string]any))
 )
 
 func main() {
@@ -203,7 +204,7 @@ func main() {
 	router.PathPrefix("/v1/signers/{name}/acme").Handler(
 		signerACMEHandler)
 
-	router.Handle("/v1/crl/{hashOfSignerName}", signerCRLHandler)
+	router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 
 	// ------------ Secrets ------------ //
 	router.Handle("/v1/secrets", withAuth(
@@ -472,8 +473,11 @@ func recreateAllCRLs() error {
 
 		// store hash of signer name to signer name, to be able to serve CRL requests
 		hash := sha256.Sum256([]byte(signerName))
-		hashStr := hex.EncodeToString(hash[:])
-		signerNameHashes[hashStr] = signerName
+		hashStr := base64.URLEncoding.EncodeToString(hash[:])
+		signerNameHashes.Set(hashStr[:32], signerName)
+
+		logger.DebugWithContext(ctx, "recreating CRL for signer",
+			"signer", signerName, "hash", hashStr[:32])
 
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
@@ -667,8 +671,8 @@ func getEnvironment(r *http.Request) (string, error) {
 	// if it's a create key request, get environment from query parameter
 	// for other requests, get key ID from path or store, and then get environment from store using key ID
 	environment := ""
-	if env, ok := envCache[r.URL.Path]; ok {
-		environment = env
+	if env, exists := envCache.Get(r.URL.Path); exists {
+		environment = env.(string)
 	} else if isCreateKeyRequest(r) {
 		environment = r.URL.Query().Get("environment")
 	} else {
@@ -729,7 +733,7 @@ func getEnvironment(r *http.Request) (string, error) {
 		}
 
 		if environment != "" {
-			envCache[r.URL.Path] = environment
+			envCache.Set(r.URL.Path, environment)
 		}
 	}
 	return environment, nil
@@ -1250,16 +1254,13 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 })
 
 var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	signerName, ok := signerNameHashes[mux.Vars(r)["hashOfSignerName"]]
-	if !ok {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't find signer by hash", nil)
-		return
-	}
+	var crl []byte
 
-	crl, err := store.GetSignerCRL(r.Context(), signerName)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get signer CRL", err)
-		return
+	hash := mux.Vars(r)["hashOfSignerName"]
+	if signerName, exists := signerNameHashes.Get(hash); exists {
+		if crl1, err := store.GetSignerCRL(r.Context(), signerName.(string)); err == nil {
+			crl = crl1
+		}
 	}
 
 	writeHTTPWithHeaders(w, http.StatusOK, crl,
@@ -1268,7 +1269,7 @@ var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 			"Cache-Control":               "public, max-age=3600", // 1 hour cache
 			"X-Content-Type-Options":      "nosniff",
 			"Access-Control-Allow-Origin": "*", // Allow all origins
-			"Content-Disposition":         fmt.Sprintf(`attachment; filename="%s.crl"`, signerName),
+			"Content-Disposition":         `attachment; filename="crl.crl"`,
 		})
 })
 

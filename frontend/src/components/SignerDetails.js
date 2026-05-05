@@ -239,13 +239,13 @@ function ConfigTab({
                         <div>{privateKeyConfig.config.type}</div>
                         <div>
                           {privateKeyConfig.config.pkcs11URI ? (
-                            <>
-                              <i className="bi bi-safe me-1"></i> HSM
-                            </>
+                            <div className="d-flex gap-2 align-items-center">
+                              <i className="bi bi-safe"></i>HSM
+                            </div>
                           ) : (
-                            <>
-                              <i className="bi bi-laptop me-1"></i> Software
-                            </>
+                            <div className="d-flex gap-2 align-items-center">
+                              <i className="bi bi-laptop"></i>Software
+                            </div>
                           )}
                         </div>
                       </div>
@@ -309,17 +309,29 @@ function ConfigTab({
                 <KeyValueTable
                   body={{
                     "Is CA": signerConfig.isCA ? (
-                      <>
-                        <i className="bi bi-check-circle me-1"></i>Yes
-                      </>
+                      <div className="d-flex gap-2 align-items-start">
+                        <i className="bi bi-check-circle"></i>Yes
+                      </div>
                     ) : (
-                      <>
-                        <i className="bi bi-x-circle me-1"></i>No
-                      </>
+                      <div className="d-flex gap-2 align-items-start">
+                        <i className="bi bi-x-circle"></i>No
+                      </div>
                     ),
                     CDP: signerConfig.cdp
                       ? signerConfig.cdp.map((cdp, idx) => (
-                          <div key={idx}>{cdp}</div>
+                          <div
+                            key={idx}
+                            className="d-flex gap-2 align-items-start"
+                          >
+                            <a
+                              href={cdp}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <i className="bi bi-download"></i>
+                            </a>
+                            {cdp}
+                          </div>
                         ))
                       : "-",
                   }}
@@ -350,10 +362,10 @@ function ConfigTab({
                         : ".*",
                     "Max TTL": signerConfig.maxTTL,
                     "Additional Authorization": signerConfig.authzRequired ? (
-                      <>
+                      <div className="d-flex gap-1 align-items-center">
                         <i className="bi bi-exclamation-circle text-warning me-1"></i>
                         Required for non-trivial requests
-                      </>
+                      </div>
                     ) : (
                       <>Not required</>
                     ),
@@ -697,16 +709,7 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
   return (
     <Form>
       <Form.Group>
-        <Form.Label className="d-flex justify-content-between align-items-center">
-          <span>Certificate Serial</span>
-          <a
-            href={`${api.defaults.baseURL}/crl/${encodeURIComponent(signerName)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Download CRL
-          </a>
-        </Form.Label>
+        <Form.Label>Certificate Serial</Form.Label>
         <Form.Control
           type="text"
           value={serial}
