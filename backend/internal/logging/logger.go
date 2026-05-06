@@ -165,11 +165,11 @@ func (l *StdAndDBLogger) Close() {
 	}
 }
 
-func ExtractUser(idToken *oidc.IDToken) string {
+func GetUser(idToken *oidc.IDToken) string {
 	type MyClaims struct {
-		Email             string `json:"email"`
-		PreferredUsername string `json:"preferred_username"`
-		Name              string `json:"name"`
+		Email string `json:"email"`
+		//PreferredUsername string `json:"preferred_username"`
+		//Name              string `json:"name"`
 	}
 
 	var c MyClaims
@@ -177,12 +177,12 @@ func ExtractUser(idToken *oidc.IDToken) string {
 		if c.Email != "" {
 			return c.Email
 		}
-		if c.PreferredUsername != "" {
+		/*if c.PreferredUsername != "" {
 			return c.PreferredUsername
 		}
 		if c.Name != "" {
 			return c.Name
-		}
+		}*/
 	}
 	return idToken.Subject
 }
@@ -195,7 +195,7 @@ func attrsFromContext(ctx context.Context) []any {
 		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
 			attrs = append(attrs,
 				slog.Group("token",
-					slog.String("user", ExtractUser(token)),
+					slog.String("user", GetUser(token)),
 					slog.String("issuer", token.Issuer),
 				),
 			)
@@ -209,7 +209,7 @@ func attrsFromContext(ctx context.Context) []any {
 		if authorizerToken, ok := ctx.Value(CtxKeyAuthorizerToken).(*oidc.IDToken); ok {
 			attrs = append(attrs,
 				slog.Group("authorizerToken",
-					slog.String("user", ExtractUser(authorizerToken)),
+					slog.String("user", GetUser(authorizerToken)),
 					slog.String("issuer", authorizerToken.Issuer),
 				),
 			)

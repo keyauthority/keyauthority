@@ -61,7 +61,7 @@ const (
 )
 
 var (
-	secretsCache = NewCache(make(map[string]any))
+	secretsCache = NewCache()
 )
 
 // actual data used for replaying pending requests upon authorization
@@ -678,6 +678,18 @@ func (s *Store) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {
 	return crl, nil
 }
 
+func (s *Store) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, error) {
+	var crl []byte
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT crl
+		FROM signers
+		WHERE name_hash = $1
+	`, hash).Scan(&crl); err != nil {
+		return nil, fmt.Errorf("get signer CRL by hash: %w", err)
+	}
+	return crl, nil
+}
+
 func (s *Store) SetSignerCRL(ctx context.Context, name string, der []byte) error {
 	_, err := s.DB.ExecContext(ctx, `
 		UPDATE signers
@@ -750,6 +762,11 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 		args = append(args, "%"+san+"%")
 		idx++
 	}
+	if comment := filters.Get("comment"); comment != "" {
+		query += fmt.Sprintf(" AND certs.comment ILIKE $%d", idx)
+		args = append(args, "%"+comment+"%")
+		idx++
+	}
 	if notBeforeFrom := parseTime(filters, "notBeforeFrom"); notBeforeFrom != nil {
 		query += fmt.Sprintf(" AND certs.not_before >= $%d", idx)
 		args = append(args, *notBeforeFrom)
@@ -779,7 +796,7 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 }
 
 func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
-	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, keys.environment FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
+	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, certs.comment, keys.environment FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
 	args := []any{}
 	idx := 1
 
@@ -805,9 +822,10 @@ func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibl
 		var notBefore time.Time
 		var notAfter time.Time
 		var revoked bool
+		var comment string
 		var environment string
 
-		if err := rows.Scan(&serial, &signerName, &cn, &sans, &notBefore, &notAfter, &revoked, &environment); err != nil {
+		if err := rows.Scan(&serial, &signerName, &cn, &sans, &notBefore, &notAfter, &revoked, &comment, &environment); err != nil {
 			return nil, 0, 0, err
 		}
 
@@ -819,6 +837,7 @@ func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibl
 			"notBefore":   notBefore,
 			"notAfter":    notAfter,
 			"revoked":     revoked,
+			"comment":     comment,
 			"environment": environment,
 		})
 	}
@@ -841,7 +860,7 @@ func (s *Store) CountCerts(ctx context.Context, hasAccessToAllEnvs bool, accessi
 	return count, nil
 }
 
-func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Certificate) error {
+func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Certificate, comment string) error {
 	cn := cert.Subject.CommonName
 	sans := append(cert.DNSNames, cert.EmailAddresses...)
 	der := cert.Raw
@@ -851,9 +870,9 @@ func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Ce
 
 	_, err := s.DB.ExecContext(ctx, `
 		INSERT INTO certs (
-			serial, signer_name, cn, sans, der, not_before, not_after, revoked
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, false)
-	`, serial, signerName, cn, sans, der, notBefore, notAfter)
+			serial, signer_name, cn, sans, der, not_before, not_after, revoked, comment
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+	`, serial, signerName, cn, sans, der, notBefore, notAfter, comment)
 	return err
 }
 
@@ -1349,7 +1368,7 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 
 	tokenInfo := map[string]any{
 		"issuer": token.Issuer,
-		"user":   loggingpkg.ExtractUser(token),
+		"user":   loggingpkg.GetUser(token),
 	}
 	tokenInfoBytes, err := json.Marshal(tokenInfo)
 	if err != nil {

@@ -91,7 +91,7 @@ type ACMEResponder struct {
 	baseURL string
 	store   *Store
 	// callback when a certificate is signed, for unified logging/storage
-	onCertificateSigned func(*http.Request, *x509.Certificate) error
+	onCertificateSigned func(*http.Request, *x509.Certificate, string) error
 }
 
 var (
@@ -315,7 +315,7 @@ func (a *ACMEResponder) validateRequest(r *http.Request, structuredPayload any, 
 }
 
 func NewACMEResponder(store *Store,
-	onCertificateSigned func(*http.Request, *x509.Certificate) error) *ACMEResponder {
+	onCertificateSigned func(*http.Request, *x509.Certificate, string) error) *ACMEResponder {
 	go func() {
 		for {
 			time.Sleep(10 * time.Minute)
@@ -657,7 +657,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				return nil, http.StatusInternalServerError, jsonHeader, fmt.Errorf("failed to sign certificate: %v", err)
 			}
 
-			if err := a.onCertificateSigned(r, cert); err != nil {
+			if err := a.onCertificateSigned(r, cert, "ACME"); err != nil {
 				return nil, http.StatusInternalServerError, jsonHeader, err
 			}
 

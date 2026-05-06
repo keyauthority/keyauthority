@@ -39,6 +39,11 @@ import (
 
 type IgnoreCAChainErrors bool
 
+type RevocationPair struct {
+	Serial string `json:"serial"`
+	Reason int    `json:"reason"`
+}
+
 type PKIXName struct {
 	CommonName         string   `json:"commonName,omitempty"`
 	Country            []string `json:"country,omitempty"`
@@ -227,7 +232,7 @@ func (s *Signer) Sign(cr *x509.CertificateRequest, ttl time.Duration) (*x509.Cer
 	return cert, append([]string{certPEM}, s.CAChain...), nil
 }
 
-func (s *Signer) SignCRL(additionalSerials []string) ([]byte, error) {
+func (s *Signer) SignCRL(additional []RevocationPair) ([]byte, error) {
 	if s.CA.Certificate == nil {
 		return nil, errors.New("missing CA certificate")
 	}
@@ -242,14 +247,14 @@ func (s *Signer) SignCRL(additionalSerials []string) ([]byte, error) {
 	}
 
 	now := time.Now()
-	for _, serial := range additionalSerials {
-		i, err := StringToBigInt(serial)
+	for _, pair := range additional {
+		i, err := StringToBigInt(pair.Serial)
 		if err != nil {
 			return nil, err
 		}
 		revokedEntries = append(revokedEntries, x509.RevocationListEntry{
 			SerialNumber:   i,
-			ReasonCode:     0,
+			ReasonCode:     pair.Reason,
 			RevocationTime: now,
 		})
 	}

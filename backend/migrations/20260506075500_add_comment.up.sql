@@ -1,0 +1,13 @@
+BEGIN;
+
+ALTER TABLE certs
+ADD COLUMN comment TEXT DEFAULT '';
+
+UPDATE certs
+SET comment = ''
+WHERE comment IS NULL;
+
+ALTER TABLE certs
+ALTER COLUMN comment SET NOT NULL;
+
+COMMIT;

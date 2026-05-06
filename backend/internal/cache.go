@@ -23,9 +23,9 @@ type Cache struct {
 	data map[string]any
 }
 
-func NewCache(data map[string]any) Cache {
-	return Cache{
-		data: data,
+func NewCache() *Cache {
+	return &Cache{
+		data: make(map[string]any),
 	}
 }
 
