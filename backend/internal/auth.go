@@ -371,7 +371,7 @@ func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingp
 	return idToken, logEntries, providerIDx, nil
 }
 
-func (a *Authenticator) CheckRBAC(token *oidc.IDToken, providerIDx int, environment string, requiredRole Role) bool {
+func (a *Authenticator) HasRequiredRole(token *oidc.IDToken, providerIDx int, environment string, requiredRole Role) bool {
 	if requiredRole == RoleAny {
 		return true
 	}

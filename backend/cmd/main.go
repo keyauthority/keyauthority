@@ -787,14 +787,14 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			r = r.WithContext(ctx)
 		}
 
-		// check RBAC
-		if !authenticator.CheckRBAC(token, providerIDx, environment, requiredRole) {
+		// RBAC
+		if !authenticator.HasRequiredRole(token, providerIDx, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
 		}
 
-		logger.Debug(r, "token verified and RBAC check passed")
+		logger.Debug(r, "token verified and required role satisfied")
 
 		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)
 		if ok && authorizerToken.Subject == token.Subject && authorizerToken.Issuer == token.Issuer {
