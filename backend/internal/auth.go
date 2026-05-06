@@ -61,9 +61,6 @@ var (
 	// HTTP clients with tokens for OIDC discovery, depends on authForOIDCDiscovery map above
 	httpClientsWithTokens = make(map[string]*http.Client)
 
-	ErrUnauthorized error = errors.New("unauthorized")
-	ErrForbidden    error = errors.New("forbidden request")
-
 	RoleMap map[string]Role = map[string]Role{
 		"KEYAUTHORITY_OPERATOR":   RoleOperator,
 		"KEYAUTHORITY_AUDITOR":    RoleAuditor,
@@ -355,11 +352,11 @@ func (a *Authenticator) getToken(client *clientDetail, reqBody *TokenRequest) (s
 	return resp.AccessToken, nil
 }
 
-func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]Role) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
+func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
 	authHeader := r.Header.Get("Authorization")
 	vaultToken := r.Header.Get("X-Vault-Token")
 	if authHeader == "" && vaultToken == "" {
-		return nil, []*loggingpkg.LogEntry{}, -1, fmt.Errorf("%w: missing token", ErrUnauthorized)
+		return nil, []*loggingpkg.LogEntry{}, -1, fmt.Errorf("missing Authorization header or X-Vault-Token header")
 	}
 
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
@@ -367,40 +364,26 @@ func (a *Authenticator) Authenticate(r *http.Request, requiredRoles map[string]R
 		tokenStr = vaultToken
 	}
 
-	idToken, providerIDx, logEntries := a.VerifyToken(r.Context(), tokenStr)
+	idToken, providerIDx, logEntries := a.verifyOIDCToken(r.Context(), tokenStr)
 	if providerIDx == -1 {
-		return nil, logEntries, -1, fmt.Errorf("%w: invalid token", ErrUnauthorized)
-	}
-
-	if len(requiredRoles) > 0 {
-		if requiredRole, ok := requiredRoles[r.Method]; ok {
-			// get env from context for role extraction, if any
-			environment := ""
-			if env, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
-				environment = env
-			}
-
-			assigned := a.ExtractRoles(idToken, providerIDx)
-			roleVal := RoleAny
-			for _, r := range assigned {
-				if rv, ok := RoleMap[r]; ok {
-					roleVal |= rv
-				} else if after, ok := strings.CutSuffix(r, "_"+environment); ok {
-					if rv, ok1 := RoleMap[after]; ok1 {
-						roleVal |= rv
-					}
-				}
-			}
-
-			if !HasAllRoles(roleVal, requiredRole) {
-				return idToken, logEntries, providerIDx,
-					fmt.Errorf("%w: missing required role %d", ErrForbidden, requiredRole)
-			}
-
-			return idToken, logEntries, providerIDx, nil
-		}
+		return nil, logEntries, -1, fmt.Errorf("invalid token")
 	}
 	return idToken, logEntries, providerIDx, nil
+}
+
+func (a *Authenticator) CheckRBAC(token *oidc.IDToken, providerIDx int, environment string, requiredRole Role) bool {
+	assigned := a.ExtractRoles(token, providerIDx)
+	roleVal := RoleAny
+	for _, r := range assigned {
+		if rv, ok := RoleMap[r]; ok {
+			roleVal |= rv
+		} else if after, ok := strings.CutSuffix(r, "_"+environment); ok {
+			if rv, ok1 := RoleMap[after]; ok1 {
+				roleVal |= rv
+			}
+		}
+	}
+	return HasAllRoles(roleVal, requiredRole)
 }
 
 func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int) []string {
@@ -613,7 +596,7 @@ func getHttpClientForIssuer(issuer string) *http.Client {
 // It returns the verified ID token and the index of the provider that verified it successfully.
 // If no provider could verify the token, it returns nil and -1.
 // IMPORTANT: caller must compare the returned index against -1 to check for verification failure.
-func (a *Authenticator) VerifyToken(ctx context.Context, token string) (*oidc.IDToken, int, []*loggingpkg.LogEntry) {
+func (a *Authenticator) verifyOIDCToken(ctx context.Context, token string) (*oidc.IDToken, int, []*loggingpkg.LogEntry) {
 	var logEntries []*loggingpkg.LogEntry
 	for i, provider := range a.Providers {
 		verifier := provider.Provider.Verifier(&oidc.Config{
@@ -665,13 +648,13 @@ func (a *Authenticator) VerifyToken(ctx context.Context, token string) (*oidc.ID
 		}
 
 		// token is valid for this provider
-		return idToken, i, []*loggingpkg.LogEntry{{
+		return idToken, i, nil /*[]*loggingpkg.LogEntry{{
 			Level:   slog.LevelDebug,
 			Message: "token verified successfully",
 			Args: []any{
 				slog.String("issuer", provider.Issuer),
 			},
-		}}
+		}}*/
 	}
 
 	return nil, -1, logEntries

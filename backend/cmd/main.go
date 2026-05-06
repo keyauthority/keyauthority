@@ -23,10 +23,8 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -69,10 +67,7 @@ var (
 	router = mux.NewRouter()
 
 	// cache environments for paths, to avoid hitting the store on every request
-	envCache = internalpkg.NewCache(make(map[string]any))
-
-	// hash of signer names to signer names
-	signerNameHashes = internalpkg.NewCache(make(map[string]any))
+	envCache = internalpkg.NewCache()
 )
 
 func main() {
@@ -290,22 +285,6 @@ func main() {
 	http.ListenAndServe(":"+port, withCORS(router))
 }
 
-func saveSignerNameHash(signerName string) {
-	hash := sha256.Sum256([]byte(signerName))
-	hashStr := base64.URLEncoding.EncodeToString(hash[:])
-	signerNameHashes.Set(hashStr[:32], signerName)
-	logger.DebugWithContext(context.Background(),
-		"stored hash of signer name for CRL access",
-		"signerName", signerName, "hash", hashStr[:32])
-}
-
-func getSignerNameFromHash(hash string) string {
-	if signerName, exists := signerNameHashes.Get(hash); exists {
-		return signerName.(string)
-	}
-	return ""
-}
-
 func startPeriodicTasks() {
 	// ------- Periodic CRL Creation ------- //
 	go func() {
@@ -464,7 +443,7 @@ func decodeJSONBody(r *http.Request, dst any) error {
 }
 
 // hook to run when a certificate is signed
-func onCertificateSigned(r *http.Request, cert *x509.Certificate) error {
+func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string) error {
 	signerName := mux.Vars(r)["name"]
 	logger.Info(r, true, "certificate signed",
 		slog.String("serial", signerpkg.BigIntToString(cert.SerialNumber)),
@@ -473,8 +452,9 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate) error {
 		slog.Any("dns", cert.DNSNames),
 		slog.Any("notBefore", cert.NotBefore),
 		slog.Any("notAfter", cert.NotAfter),
+		slog.String("comment", comment),
 	)
-	return store.InsertCert(r.Context(), signerName, cert)
+	return store.InsertCert(r.Context(), signerName, cert, comment)
 }
 
 func recreateAllCRLs() error {
@@ -486,7 +466,6 @@ func recreateAllCRLs() error {
 
 	for _, s := range signers {
 		signerName := s["name"].(string)
-		saveSignerNameHash(signerName)
 
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
@@ -770,13 +749,31 @@ func withCORS(next http.Handler) http.Handler {
 
 func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requiredRole := internalpkg.RoleAny
 		if len(requiredRoles) > 0 {
-			if _, ok := requiredRoles[r.Method]; !ok {
+			if role, ok := requiredRoles[r.Method]; ok {
+				requiredRole = role
+			} else {
 				logErrorAndWriteHTTP(w, r, http.StatusMethodNotAllowed, "HTTP method not allowed")
 				return
 			}
 		}
-		var ctx context.Context
+
+		// verify token
+		token, logEntries, providerIDx, err := authenticator.VerifyToken(r)
+		for _, entry := range logEntries {
+			logger.LogWithContext(r.Context(), entry)
+		}
+
+		if err != nil {
+			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
+			return
+		}
+
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyProviderIndex, providerIDx)
+		r = r.WithContext(ctx)
 
 		// determine environment for request, to include in logging context and for RBAC
 		environment, err := getEnvironment(r)
@@ -788,37 +785,16 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			ctx = r.Context()
 			ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
 			r = r.WithContext(ctx)
-			logger.Debug(r, "determined request environment")
 		}
 
-		// authenticate and get token and provider index for logging context
-		token, logEntries, providerIDx, err := authenticator.Authenticate(r, requiredRoles)
-		for _, entry := range logEntries {
-			logger.LogWithContext(r.Context(), entry)
-		}
-
-		if errors.Is(err, internalpkg.ErrUnauthorized) {
-			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
+		// check RBAC
+		if !authenticator.CheckRBAC(token, providerIDx, environment, requiredRole) {
+			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
+				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
 		}
 
-		ctx = r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyProviderIndex, providerIDx)
-		r = r.WithContext(ctx)
-
-		if errors.Is(err, internalpkg.ErrForbidden) {
-			logErrorAndWriteHTTP(w, r, http.StatusForbidden, "insufficient permissions", err)
-			return
-		}
-
-		if err != nil { // this case shouldn't happen
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-				"authentication failed with unexpected error", err)
-			return
-		}
-
-		logger.Debug(r, "authenticated request made")
+		logger.Debug(r, "token verified and RBAC check passed")
 
 		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)
 		if ok && authorizerToken.Subject == token.Subject && authorizerToken.Issuer == token.Issuer {
@@ -1003,7 +979,6 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		saveSignerNameHash(signerName)
 		logger.Info(r, true, "signer created", "keyID", keyID, "config", cfg)
 		writeHTTP(w, http.StatusCreated, nil)
 
@@ -1129,8 +1104,9 @@ var signerSignHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 	}
 
 	type Body struct {
-		CSR string `json:"csr"`
-		TTL string `json:"ttl"`
+		CSR     string `json:"csr"`
+		TTL     string `json:"ttl"`
+		Comment string `json:"comment,omitempty"`
 	}
 	var body Body
 	if err := decodeJSONBody(r, &body); err != nil {
@@ -1156,7 +1132,7 @@ var signerSignHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := onCertificateSigned(r, cert); err != nil {
+	if err := onCertificateSigned(r, cert, body.Comment); err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "onCertificateSigned hook failed", err)
 		return
 	}
@@ -1266,13 +1242,9 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 
 var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	var crl []byte
-
 	hash := mux.Vars(r)["hashOfSignerName"]
-	signerName := getSignerNameFromHash(hash)
-	if signerName != "" {
-		if crl1, err := store.GetSignerCRL(r.Context(), signerName); err == nil {
-			crl = crl1
-		}
+	if crl1, err := store.GetSignerCRLByHash(r.Context(), hash); err == nil {
+		crl = crl1
 	}
 
 	writeHTTPWithHeaders(w, http.StatusOK, crl,
@@ -1293,15 +1265,13 @@ var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var body struct {
-		Serial string `json:"serial"`
-	}
-	if err := decodeJSONBody(r, &body); err != nil {
+	var revocationPair signerpkg.RevocationPair
+	if err := decodeJSONBody(r, &revocationPair); err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
 		return
 	}
 
-	der, err := signer.SignCRL([]string{body.Serial})
+	der, err := signer.SignCRL([]signerpkg.RevocationPair{revocationPair})
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't sign CRL", err)
 		return
@@ -1312,11 +1282,12 @@ var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := store.SetCertAsRevoked(r.Context(), body.Serial); err != nil {
+	if err := store.SetCertAsRevoked(r.Context(), revocationPair.Serial); err != nil {
 		logger.Warn(r, false, "couldn't set certificate as revoked", "error", err)
 	}
 
-	logger.Info(r, true, "certificate revoked", "serial", body.Serial)
+	logger.Info(r, true, "certificate revoked",
+		"serial", revocationPair.Serial, "reason", revocationPair.Reason)
 	writeJSONOk(w, nil)
 })
 
@@ -1517,7 +1488,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 					"couldn't get pending request info", err)
 				return
 			}
-			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == loggingpkg.ExtractUser(token) {
+			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == loggingpkg.GetUser(token) {
 				logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
 					"cannot guarantee that requester and authorizer are different users")
 				return

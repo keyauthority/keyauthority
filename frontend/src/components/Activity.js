@@ -142,6 +142,13 @@ export function Certificates({ isLoading, setIsLoading }) {
             value: filters.signerName,
             placeholder: "e.g. signer1",
           },
+          {
+            key: "comment",
+            type: "text",
+            label: "Comment",
+            value: filters.comment,
+            placeholder: "e.g. Issued for Alice's laptop",
+          },
         ]}
       />
 

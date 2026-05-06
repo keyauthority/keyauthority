@@ -362,8 +362,8 @@ function ConfigTab({
                         : ".*",
                     "Max TTL": signerConfig.maxTTL,
                     "Additional Authorization": signerConfig.authzRequired ? (
-                      <div className="d-flex gap-1 align-items-center">
-                        <i className="bi bi-exclamation-circle text-warning me-1"></i>
+                      <div className="d-flex gap-2 align-items-start">
+                        <i className="bi bi-exclamation-circle text-warning"></i>
                         Required for non-trivial requests
                       </div>
                     ) : (
@@ -609,12 +609,14 @@ function CSRAndChainTab({
 function SignCertificateTab({ signerName, isLoading, setIsLoading }) {
   const [csr, setCSR] = useState("");
   const [ttl, setTTL] = useState(720);
+  const [comment, setComment] = useState("");
   const [signedCert, setSignedCert] = useState("");
   const api = getApi();
 
   useEffect(() => {
     setCSR("");
     setTTL(720);
+    setComment("");
     setSignedCert("");
   }, [signerName]);
 
@@ -623,10 +625,11 @@ function SignCertificateTab({ signerName, isLoading, setIsLoading }) {
     try {
       const response = await api.post(
         `/signers/${signerName}/sign?output=pem`,
-        { csr, ttl: `${ttl}h` },
+        { csr, ttl: `${ttl}h`, comment },
       );
       setCSR("");
       setTTL(720);
+      setComment("");
       setSignedCert(response.data);
     } catch (err) {
       showToast("error", errorToString(err));
@@ -638,37 +641,58 @@ function SignCertificateTab({ signerName, isLoading, setIsLoading }) {
   return (
     <>
       <Form>
-        <Form.Group className="mb-3">
-          <Form.Label>CSR</Form.Label>
-          <Form.Control
-            as="textarea"
-            rows={6}
-            value={csr}
-            placeholder="Enter PEM-encoded request"
-            onChange={(e) => setCSR(e.target.value)}
-          />
-        </Form.Group>
-        <Form.Group className="mb-3">
-          <Form.Label>TTL</Form.Label>
-          <div className="input-group">
-            <Form.Control
-              type="number"
-              placeholder="e.g. 8760"
-              value={ttl}
-              onChange={(e) => setTTL(Number(e.target.value))}
-            />
-            <span className="input-group-text">hours</span>
-          </div>
-        </Form.Group>
-        <Form.Group className="d-flex justify-content-end mb-3">
-          <Button
-            variant="primary"
-            onClick={handleSignCertificate}
-            disabled={!csr || ttl === 0}
+        <Row>
+          <Col md={6} className="mb-3">
+            <Form.Group>
+              <Form.Label>CSR</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={10}
+                value={csr}
+                placeholder="Enter PEM-encoded request"
+                onChange={(e) => setCSR(e.target.value)}
+              />
+            </Form.Group>
+          </Col>
+          <Col
+            md={6}
+            className="mb-3 d-flex flex-column justify-content-between gap-3"
           >
-            Sign Certificate
-          </Button>
-        </Form.Group>
+            <Form.Group>
+              <Form.Label>TTL</Form.Label>
+              <div className="input-group">
+                <Form.Control
+                  type="number"
+                  placeholder="e.g. 8760"
+                  value={ttl}
+                  onChange={(e) => setTTL(Number(e.target.value))}
+                />
+                <span className="input-group-text">hours</span>
+              </div>
+            </Form.Group>
+            <Form.Group>
+              <Form.Label>Comment</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={6}
+                placeholder="Optional comment (e.g. 'Issued for Alice's laptop')"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
+            </Form.Group>
+          </Col>
+          <Col md={12} className="d-flex justify-content-end mb-3">
+            <Form.Group>
+              <Button
+                variant="primary"
+                onClick={handleSignCertificate}
+                disabled={!csr || ttl === 0}
+              >
+                Sign Certificate
+              </Button>
+            </Form.Group>
+          </Col>
+        </Row>
       </Form>
 
       {/* {signedCert && prettyCode("pem", signedCert)} */}
@@ -680,10 +704,12 @@ function SignCertificateTab({ signerName, isLoading, setIsLoading }) {
 
 function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
   const [serial, setSerial] = useState("");
+  const [reason, setReason] = useState(0);
   const api = getApi();
 
   useEffect(() => {
     setSerial("");
+    setReason(0);
   }, [signerName]);
 
   const handleRevoke = async () => {
@@ -696,8 +722,9 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
 
     setIsLoading(true);
     try {
-      await api.post(`/signers/${signerName}/revoke`, { serial });
+      await api.post(`/signers/${signerName}/revoke`, { serial, reason });
       setSerial("");
+      setReason(0);
       showToast("success", "Certificate revoked!");
     } catch (err) {
       showToast("error", errorToString(err));
@@ -708,19 +735,40 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
 
   return (
     <Form>
-      <Form.Group>
-        <Form.Label>Certificate Serial</Form.Label>
-        <Form.Control
-          type="text"
-          value={serial}
-          placeholder="e.g. 01ab23cd45ef6789"
-          onChange={(e) => setSerial(e.target.value)}
-        />
-        <Form.Text>
-          Enter the serial of the certificate to revoke -serial must be in
-          hexadecimal format
-        </Form.Text>
-      </Form.Group>
+      <Row>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Certificate Serial</Form.Label>
+            <Form.Control
+              type="text"
+              value={serial}
+              placeholder="e.g. 01ab23cd45ef6789"
+              onChange={(e) => setSerial(e.target.value)}
+            />
+            <Form.Text>
+              Enter the serial of the certificate to revoke -serial must be in
+              hexadecimal format
+            </Form.Text>
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Reason</Form.Label>
+            <Form.Select
+              value={reason}
+              onChange={(e) => setReason(Number(e.target.value))}
+            >
+              <option value={0}>Unspecified</option>
+              <option value={1}>Key Compromise</option>
+              <option value={2}>CA Compromise</option>
+              <option value={3}>Affiliation Changed</option>
+              <option value={4}>Superseded</option>
+              <option value={5}>Cessation of Operation</option>
+              <option value={6}>Certificate Hold</option>
+            </Form.Select>
+          </Form.Group>
+        </Col>
+      </Row>
       <div className="d-flex justify-content-end gap-2 mb-3">
         <Button variant="danger" onClick={handleRevoke} disabled={!serial}>
           Revoke Certificate
