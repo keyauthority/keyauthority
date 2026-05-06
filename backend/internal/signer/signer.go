@@ -81,10 +81,9 @@ type Signer struct {
 	CATemplate    *CATemplate
 	CA            *CertificateAuthority
 	SigningPolicy *PermissiveSigningPolicy
-	CRL           []byte
 }
 
-func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain, crl []byte, args ...any) (*Signer, error) {
+func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain []byte, args ...any) (*Signer, error) {
 	maxTTL, err := time.ParseDuration(cfg.MaxTTL)
 	if err != nil {
 		return nil, err
@@ -111,7 +110,6 @@ func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain, crl []byte, ar
 			CDP:            cfg.CDP,
 			AllowedDomains: allowedDomains,
 		},
-		CRL: crl,
 	}
 
 	if err := s.SetCAChain(caChain); err != nil && len(args) > 0 {
@@ -232,14 +230,14 @@ func (s *Signer) Sign(cr *x509.CertificateRequest, ttl time.Duration) (*x509.Cer
 	return cert, append([]string{certPEM}, s.CAChain...), nil
 }
 
-func (s *Signer) SignCRL(additional []RevocationPair) ([]byte, error) {
+func (s *Signer) SignCRL(existingCRL []byte, additional []RevocationPair) ([]byte, error) {
 	if s.CA.Certificate == nil {
 		return nil, errors.New("missing CA certificate")
 	}
 	revokedEntries := []x509.RevocationListEntry{}
 
-	if len(s.CRL) > 0 {
-		crl, err := x509.ParseRevocationList(s.CRL)
+	if len(existingCRL) > 0 {
+		crl, err := x509.ParseRevocationList(existingCRL)
 		if err != nil {
 			return nil, fmt.Errorf("parse existing CRL: %w", err)
 		}
@@ -270,13 +268,11 @@ func (s *Signer) SignCRL(additional []RevocationPair) ([]byte, error) {
 		return nil, fmt.Errorf("create CRL: %w", err)
 	}
 
-	s.CRL = newCRL
 	return newCRL, nil
 }
 
-func (s *Signer) SignPDF(pdf []byte, ttl time.Duration) ([]byte, error) {
+func (s *Signer) SignPDF(pdf []byte) ([]byte, error) {
 	var chain []*x509.Certificate
-	// chain = append(chain, s.CA.Certificate) # chain should not include leaf cert
 	for _, pemStr := range s.CAChain {
 		block, _ := pem.Decode([]byte(pemStr))
 		if block == nil {
@@ -285,6 +281,9 @@ func (s *Signer) SignPDF(pdf []byte, ttl time.Duration) ([]byte, error) {
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("parse certificate in CA chain: %w", err)
+		}
+		if cert.SerialNumber == s.CA.Certificate.SerialNumber {
+			continue // skip leaf cert if included in chain
 		}
 		chain = append(chain, cert)
 	}

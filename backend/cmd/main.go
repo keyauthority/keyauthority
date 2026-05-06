@@ -473,7 +473,13 @@ func recreateAllCRLs() error {
 			continue
 		}
 
-		crl, err := signer.SignCRL(nil)
+		existingCRL, err := store.GetSignerCRL(ctx, signerName)
+		if err != nil {
+			logger.WarnWithContext(ctx, false, "couldn't get existing CRL", "signer", signerName, "error", err)
+			continue
+		}
+
+		crl, err := signer.SignCRL(existingCRL, nil)
 		if err != nil {
 			logger.WarnWithContext(ctx, false, "couldn't create CRL", "signer", signerName, "error", err)
 			continue
@@ -1206,26 +1212,8 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 		return
 	}
 
-	ttlStr := r.FormValue("ttl")
-	var ttl time.Duration
-	if ttlStr != "" {
-		ttl, err = time.ParseDuration(ttlStr)
-		if err != nil {
-			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "invalid TTL", err)
-			return
-		}
-	} else {
-		if signer.CA.Certificate == nil {
-			logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
-				"signer doesn't have a certificate, TTL must be specified")
-			return
-		}
-		// default TTL is until the end of the signer's certificate validity
-		ttl = time.Until(signer.CA.Certificate.NotAfter)
-	}
-
 	// sign the document
-	signedBytes, err := signer.SignPDF(fileBytes, ttl)
+	signedBytes, err := signer.SignPDF(fileBytes)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't sign document", err)
 		return
@@ -1271,13 +1259,19 @@ var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	der, err := signer.SignCRL([]signerpkg.RevocationPair{revocationPair})
+	existingCRL, err := store.GetSignerCRL(r.Context(), signerName)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get existing CRL", err)
+		return
+	}
+
+	crl, err := signer.SignCRL(existingCRL, []signerpkg.RevocationPair{revocationPair})
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't sign CRL", err)
 		return
 	}
 
-	if err := store.SetSignerCRL(r.Context(), signerName, der); err != nil {
+	if err := store.SetSignerCRL(r.Context(), signerName, crl); err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't save new CRL", err)
 		return
 	}

@@ -719,13 +719,8 @@ func (s *Store) LoadSigner(ctx context.Context, name string, args ...any) (*sign
 		return nil, fmt.Errorf("get signer CA chain: %w", err)
 	}
 
-	crl, err := s.GetSignerCRL(ctx, name)
-	if err != nil {
-		return nil, fmt.Errorf("get signer CRL: %w", err)
-	}
-
 	// create signer object
-	signer, err := signerpkg.NewSigner(cfg, pvk.AssymmetricKey, caChain, crl, args...)
+	signer, err := signerpkg.NewSigner(cfg, pvk.AssymmetricKey, caChain, args...)
 	if err != nil {
 		return nil, fmt.Errorf("create signer: %w", err)
 	}
@@ -796,7 +791,11 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 }
 
 func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error) {
-	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, certs.comment, keys.environment FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
+	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, certs.comment, keys.environment
+        FROM certs
+        JOIN signers ON certs.signer_name = signers.name
+        JOIN keys ON signers.private_key_id = keys.id
+        WHERE 1=1`
 	args := []any{}
 	idx := 1
 
@@ -845,7 +844,11 @@ func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibl
 }
 
 func (s *Store) CountCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
-	query := `SELECT COUNT(certs.serial) FROM keys,signers,certs WHERE certs.signer_name = signers.name AND signers.private_key_id = keys.id`
+	query := `SELECT COUNT(certs.serial)
+        FROM certs
+        JOIN signers ON certs.signer_name = signers.name
+        JOIN keys ON signers.private_key_id = keys.id
+        WHERE 1=1`
 	args := []any{}
 	idx := 1
 
