@@ -87,6 +87,11 @@ docker-run: load-shared-env
 		-e KC_DB_URL=jdbc:postgresql://host.docker.internal:$(POSTGRES_PORT)/$(POSTGRES_DB) \
 		$(IMG)
 
+##@ Stop and remove local docker container
+.PHONY: docker-stop
+docker-stop:
+	docker rm -f keycloak || true
+
 ##@ First time preparation
 docker-remove-ssl-requirement: load-shared-env
 	@echo "Removing SSL requirement for 'master' realm..."

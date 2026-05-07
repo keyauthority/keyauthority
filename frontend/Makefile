@@ -83,6 +83,11 @@ docker-run: load-shared-env
 		--user 65535:4001 \
 		$(IMG)
 
+##@ Stop and remove local docker container
+.PHONY: docker-stop
+docker-stop:
+	docker rm -f frontend || true
+
 ##@ Prettify
 .PHONY: pretty
 pretty:

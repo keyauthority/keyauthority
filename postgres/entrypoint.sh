@@ -3,8 +3,6 @@ set -euo pipefail
 
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_DB="${POSTGRES_DB:-$POSTGRES_USER}"
-POSTGRES_SSL_ENABLED="${POSTGRES_SSL_ENABLED:-false}"
-POSTGRES_ALLOWED_CIDRS="${POSTGRES_ALLOWED_CIDRS:-0.0.0.0/0,::/0}"
 
 # Ensure UID mapping
 if ! getent passwd "$(id -u)" >/dev/null 2>&1; then
@@ -40,27 +38,16 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
   fi
 
   # Build final pg_hba.conf AFTER password setup
-  HBA_HOST_KEYWORD="host"
-  if [ "$POSTGRES_SSL_ENABLED" = "true" ]; then
-    HBA_HOST_KEYWORD="hostssl"
-  fi
-
   {
     echo "local all all scram-sha-256"
-    echo "${HBA_HOST_KEYWORD} all all 127.0.0.1/32 scram-sha-256"
-    echo "${HBA_HOST_KEYWORD} all all ::1/128 scram-sha-256"
-    IFS=',' read -ra CIDRS <<< "$POSTGRES_ALLOWED_CIDRS"
-    for cidr in "${CIDRS[@]}"; do
-      cidr="$(echo "$cidr" | xargs)"
-      [ -n "$cidr" ] && echo "${HBA_HOST_KEYWORD} all all ${cidr} scram-sha-256"
-    done
+    echo "host all all 127.0.0.1/32 scram-sha-256"
+    echo "host all all ::1/128 scram-sha-256"
+    echo "host all all 0.0.0.0/0 scram-sha-256"
+    echo "host all all ::/0 scram-sha-256"
   } > "$PGDATA/pg_hba.conf"
 
   echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
   echo "password_encryption = scram-sha-256" >> "$PGDATA/postgresql.conf"
-  if [ "$POSTGRES_SSL_ENABLED" = "true" ]; then
-    echo "ssl = on" >> "$PGDATA/postgresql.conf"
-  fi
 
   pg_ctl -D "$PGDATA" -m fast -w stop
 fi
