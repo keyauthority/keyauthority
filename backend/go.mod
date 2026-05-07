@@ -15,7 +15,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/pkg/errors v0.9.1
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.77.9
+	go.step.sm/crypto v0.78.0
 	k8s.io/api v0.37.0-alpha.0
 )
 

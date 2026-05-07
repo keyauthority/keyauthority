@@ -146,20 +146,63 @@ func runMigrations(db *sql.DB) error {
 	return err
 }
 
-func withKeyConfigDefaults(cfg *cryptopkg.KeyConfig) *cryptopkg.KeyConfig {
+func withKeyConfigDefaults(cfg *cryptopkg.KeyConfig) (*cryptopkg.KeyConfig, error) {
 	if cfg == nil {
-		cfg = &cryptopkg.KeyConfig{}
+		return nil, fmt.Errorf("key config is required")
 	}
-	if cfg.Type == cryptopkg.Unknown {
-		cfg.Type = cryptopkg.RSA
+
+	cleanCfg := &cryptopkg.KeyConfig{}
+	switch cfg.Type {
+	case cryptopkg.RSA:
+		bits := cfg.Bits
+		if bits == 0 {
+			bits = 2048
+		}
+		cleanCfg = &cryptopkg.KeyConfig{
+			Type: cryptopkg.RSA,
+			Bits: bits,
+		}
+
+	case cryptopkg.ECDSA:
+		curve := cfg.Curve
+		if curve == "" {
+			curve = "P-256"
+		}
+		cleanCfg = &cryptopkg.KeyConfig{
+			Type:  cryptopkg.ECDSA,
+			Curve: curve,
+		}
+
+	case cryptopkg.Ed25519:
+		cleanCfg = &cryptopkg.KeyConfig{
+			Type: cryptopkg.Ed25519,
+		}
+
+	case cryptopkg.AES:
+		bits := cfg.Bits
+		if bits == 0 {
+			bits = 256
+		}
+		mode := cfg.Mode
+		if mode == "" {
+			mode = "GCM"
+		}
+		cleanCfg = &cryptopkg.KeyConfig{
+			Type: cryptopkg.AES,
+			Bits: bits,
+			Mode: mode,
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported key type: %s", cfg.Type)
 	}
-	if cfg.Type == cryptopkg.RSA && cfg.Bits == 0 {
-		cfg.Bits = 2048
+
+	if cfg.PKCS11Uri != "" {
+		cleanCfg.PKCS11Uri = cfg.PKCS11Uri
+		cleanCfg.PKCS11KeyUri = cfg.PKCS11KeyUri
 	}
-	if cfg.Type == cryptopkg.ECDSA && cfg.Curve == "" {
-		cfg.Curve = "P-256"
-	}
-	return cfg
+
+	return cleanCfg, nil
 }
 
 func withSignerConfigDefaults(cfg *signerpkg.SignerConfig) *signerpkg.SignerConfig {
@@ -341,9 +384,15 @@ func (s *Store) CountKeys(ctx context.Context, hasAccessToAllEnvs bool, accessib
 	return count, nil
 }
 
-func (s *Store) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyConfig) (uuid.UUID, error) {
+func (s *Store) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyConfig, createdBy string) (uuid.UUID, error) {
 	// marshal config
-	cfgJSON, err := json.Marshal(withKeyConfigDefaults(cfg))
+	if cleanCfg, err := withKeyConfigDefaults(cfg); err != nil {
+		return uuid.Nil, fmt.Errorf("apply key config defaults: %w", err)
+	} else {
+		cfg = cleanCfg
+	}
+
+	cfgJSON, err := json.Marshal(cfg)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("marshal key config: %w", err)
 	}
@@ -355,20 +404,11 @@ func (s *Store) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyCon
 
 	var id uuid.UUID
 	if err := s.DB.QueryRowContext(ctx, `
-    INSERT INTO keys (environment, config, software_key)
-    VALUES ($1, $2, $3)
+    INSERT INTO keys (environment, config, software_key, created_by)
+    VALUES ($1, $2, $3, $4)
     RETURNING id
-`, env, cfgJSON, softwareKey).Scan(&id); err != nil {
+`, env, cfgJSON, softwareKey, createdBy).Scan(&id); err != nil {
 		return uuid.Nil, fmt.Errorf("insert key: %w", err)
-	}
-
-	if err := s.ConsolidateKey(ctx, id); err != nil {
-		// delete DB entry
-		s.DB.ExecContext(ctx, `
-			DELETE FROM keys
-			WHERE id = $1
-		`, id)
-		return uuid.Nil, fmt.Errorf("consolidate key: %w", err)
 	}
 	return id, nil
 }
@@ -414,48 +454,6 @@ func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) error {
 		WHERE id = $1
 	`, id)
 	return err
-}
-
-func (s *Store) ConsolidateKey(ctx context.Context, id uuid.UUID) error {
-	key, err := s.LoadKey(ctx, id)
-	if err != nil {
-		return fmt.Errorf("load key: %w", err)
-	}
-	// create config from key
-	keyCfg, err := key.InferConfig()
-	if err != nil {
-		return fmt.Errorf("get key config from key object: %w", err)
-	}
-
-	// retrieve config from DB to get PKCS11 URIs
-	keyFromDB, err := s.GetKey(ctx, id)
-	if err != nil {
-		return fmt.Errorf("get key from DB: %w", err)
-	}
-	dbCfg := keyFromDB["config"].(*cryptopkg.KeyConfig)
-	if err != nil {
-		return fmt.Errorf("get key info: %w", err)
-	}
-
-	// add PKCS11 URIs if present in DB config
-	keyCfg.PKCS11Uri = dbCfg.PKCS11Uri
-	keyCfg.PKCS11KeyUri = dbCfg.PKCS11KeyUri
-
-	// update DB entry
-	cfgJSON, err := json.Marshal(keyCfg)
-	if err != nil {
-		return fmt.Errorf("marshal key config: %w", err)
-	}
-	_, err = s.DB.ExecContext(ctx, `
-		UPDATE keys
-		SET config = $2
-		WHERE id = $1
-	`, id, cfgJSON)
-	if err != nil {
-		return fmt.Errorf("update key config in DB: %w", err)
-	}
-
-	return nil
 }
 
 func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {

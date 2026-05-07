@@ -3,6 +3,8 @@ set -euo pipefail
 
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_DB="${POSTGRES_DB:-$POSTGRES_USER}"
+POSTGRES_SSL_ENABLED="${POSTGRES_SSL_ENABLED:-false}"
+POSTGRES_ALLOWED_CIDRS="${POSTGRES_ALLOWED_CIDRS:-0.0.0.0/0,::/0}"
 
 # Ensure UID mapping
 if ! getent passwd "$(id -u)" >/dev/null 2>&1; then
@@ -24,18 +26,40 @@ mkdir -p /run/postgresql /usr/share/zoneinfo
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "Initializing database \"$POSTGRES_DB\"..."
   initdb -D "$PGDATA" --username="$POSTGRES_USER" --auth-local=trust --auth-host=scram-sha-256
-  echo "host all all all scram-sha-256" >> "$PGDATA/pg_hba.conf"
-  echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
 
+  # Start with initdb bootstrap auth (trust local) so we can set initial password
   pg_ctl -D "$PGDATA" -o "-c listen_addresses=''" -w start
 
   if [ -n "$POSTGRES_DB" ] && [ "$POSTGRES_DB" != "postgres" ]; then
-    createdb -U "$POSTGRES_USER" -T template1 "$POSTGRES_DB"
+    createdb -w -U "$POSTGRES_USER" -T template1 "$POSTGRES_DB"
   fi
 
   if [ -n "${POSTGRES_PASSWORD:-}" ]; then
     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
       -c "ALTER USER \"$POSTGRES_USER\" PASSWORD '$POSTGRES_PASSWORD';"
+  fi
+
+  # Build final pg_hba.conf AFTER password setup
+  HBA_HOST_KEYWORD="host"
+  if [ "$POSTGRES_SSL_ENABLED" = "true" ]; then
+    HBA_HOST_KEYWORD="hostssl"
+  fi
+
+  {
+    echo "local all all scram-sha-256"
+    echo "${HBA_HOST_KEYWORD} all all 127.0.0.1/32 scram-sha-256"
+    echo "${HBA_HOST_KEYWORD} all all ::1/128 scram-sha-256"
+    IFS=',' read -ra CIDRS <<< "$POSTGRES_ALLOWED_CIDRS"
+    for cidr in "${CIDRS[@]}"; do
+      cidr="$(echo "$cidr" | xargs)"
+      [ -n "$cidr" ] && echo "${HBA_HOST_KEYWORD} all all ${cidr} scram-sha-256"
+    done
+  } > "$PGDATA/pg_hba.conf"
+
+  echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
+  echo "password_encryption = scram-sha-256" >> "$PGDATA/postgresql.conf"
+  if [ "$POSTGRES_SSL_ENABLED" = "true" ]; then
+    echo "ssl = on" >> "$PGDATA/postgresql.conf"
   fi
 
   pg_ctl -D "$PGDATA" -m fast -w stop

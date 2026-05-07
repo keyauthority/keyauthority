@@ -878,7 +878,13 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		keyID, err := store.CreateKey(r.Context(), environment, &cfg)
+		token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+		if !ok {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token from context")
+			return
+		}
+
+		keyID, err := store.CreateKey(r.Context(), environment, &cfg, loggingpkg.GetUser(token))
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't create key", err)
 			return

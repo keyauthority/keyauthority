@@ -24,6 +24,7 @@ make docker-run IMG_REGISTRY=keyauthoritydh
 #    'sslRequired' is 'none'
 #    'keyauthority-discovery' client secret matches one in shared.env
 #    'keyauthority-frontend' rootUrl, adminUrl, redirectUris, and webOrigins point to http://localhost:3000
+make docker-remove-ssl-requirement
 make docker-run-provisioner
 
 #@ Backend

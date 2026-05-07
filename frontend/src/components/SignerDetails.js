@@ -317,23 +317,25 @@ function ConfigTab({
                         <i className="bi bi-x-circle"></i>No
                       </div>
                     ),
-                    CDP: signerConfig.cdp
-                      ? signerConfig.cdp.map((cdp, idx) => (
-                          <div
-                            key={idx}
-                            className="d-flex gap-2 align-items-start"
+                    CDP:
+                      signerConfig.cdp?.length > 0 ? (
+                        <div className="d-flex gap-2 align-items-start">
+                          <a
+                            href={signerConfig.cdp}
+                            target="_blank"
+                            rel="noreferrer"
                           >
-                            <a
-                              href={cdp}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <i className="bi bi-download"></i>
-                            </a>
-                            {cdp}
+                            <i className="bi bi-download"></i>
+                          </a>
+                          <div className="overflow-auto">
+                            {signerConfig.cdp.map((cdp, idx) => (
+                              <div key={idx}>{cdp}</div>
+                            ))}
                           </div>
-                        ))
-                      : "-",
+                        </div>
+                      ) : (
+                        "-"
+                      ),
                   }}
                   keysClass="fw-bold"
                 />

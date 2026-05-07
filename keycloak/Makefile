@@ -88,14 +88,16 @@ docker-run: load-shared-env
 		$(IMG)
 
 ##@ First time preparation
-.PHONY: docker-run-provisioner
-docker-run-provisioner: load-shared-env
+docker-remove-ssl-requirement: load-shared-env
 	@echo "Removing SSL requirement for 'master' realm..."
 	docker exec -it $(POSTGRES_CONTAINER_NAME) /bin/bash \
 		-c "export PGPASSWORD=$(POSTGRES_PASSWORD) && psql \
 			-U $(POSTGRES_USER) \
 			-d $(POSTGRES_DB) \
 			-c \"UPDATE realm SET ssl_required = 'NONE' WHERE name = 'master';\""
+
+.PHONY: docker-run-provisioner
+docker-run-provisioner: load-shared-env
 	@echo "Importing realm configuration..."
 	mkdir -p /tmp/keycloak/config
 	envsubst < realm.json > /tmp/keycloak/config/realm.json
