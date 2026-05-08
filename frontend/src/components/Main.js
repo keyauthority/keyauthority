@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Row,
@@ -86,12 +86,14 @@ export default function Main() {
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
           icon: "bi-journal-text",
+          requiredRole: "KEYAUTHORITY_AUDITOR",
         },
         {
           title: "Pending Requests",
           subtitle: "Review and approve/reject pending requests",
           to: "/activity/pending-requests",
           icon: "bi-clock",
+          requiredRole: "KEYAUTHORITY_AUTHORIZER",
         },
       ],
     },
@@ -156,6 +158,12 @@ export default function Main() {
       ],
     },
   ];
+
+  // check for errors in URL query parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    setError(urlParams.get("error"));
+  }, [location.search]);
 
   const handleDeleteSigner = async () => {
     const signerName = decodeURIComponent(
@@ -395,11 +403,23 @@ export default function Main() {
 
           {/* Main content */}
           <Col md={9} lg={10} className="pt-4 px-md-5">
-            {error && <Alert variant="danger">{error}</Alert>}
+            {/* {error && <Alert variant="danger">{error}</Alert>} */}
 
             {(() => {
               if (!isValidPath(location.pathname)) {
                 return <Alert variant="danger">404 Not Found</Alert>;
+              }
+
+              if (error) {
+                return (
+                  <Alert
+                    variant="danger"
+                    {...(error.isDismissible ? { dismissible: true } : {})}
+                    onClose={() => setError(null)}
+                  >
+                    {error}
+                  </Alert>
+                );
               }
 
               const top = () => (

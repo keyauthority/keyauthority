@@ -1,8 +1,22 @@
 import { Nav, Col, ListGroup } from "react-bootstrap";
 import { NavLink as RouterNavLink } from "react-router-dom";
+import { getRoles } from "../utils/utils";
+import { getKeycloak } from "../keycloak";
 import Topbar from "./Topbar";
 
 export default function Sidebar({ sidebarSections, selectedItem }) {
+  const keycloak = getKeycloak();
+  const token = keycloak?.tokenParsed || {};
+  const roles = getRoles(token);
+
+  const addAccessDeniedIfApplicable = (to, requiredRole) => {
+    const msg = "You don't have access to this page.";
+    if (requiredRole && !roles.some((role) => role.startsWith(requiredRole))) {
+      return to + "?error=" + encodeURIComponent(msg);
+    }
+    return to;
+  };
+
   return (
     <Col
       md={3}
@@ -46,8 +60,7 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
                     action
                     key={item.to}
                     as={RouterNavLink}
-                    to={item.to}
-                    //className="rounded"
+                    to={addAccessDeniedIfApplicable(item.to, item.requiredRole)}
                   >
                     {item.icon && (
                       <i

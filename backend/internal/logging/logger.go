@@ -35,7 +35,6 @@ type ctxKey string
 
 const (
 	envLogLevel           = "LOG_LEVEL"
-	envLogDBEnabled       = "LOG_DB_ENABLED"
 	envLogDBBatchSize     = "LOG_DB_BATCH_SIZE"
 	envLogDBFlushInterval = "LOG_DB_FLUSH_INTERVAL"
 
@@ -48,12 +47,11 @@ const (
 )
 
 // LogEntry represents a log entry with level, message, args, and whether to save to DB.
-// To be used only in functions that do not have direct access to the logger
+// !IMPORTANT: To be used ONLY in functions that do not have direct access to the logger
 type LogEntry struct {
-	Level    slog.Level
-	Message  string
-	Args     []any
-	SaveToDB bool
+	Level   slog.Level
+	Message string
+	Args    []any
 }
 
 type StdAndDBLogger struct {
@@ -80,20 +78,13 @@ func NewLogger(ctx context.Context, db *sql.DB) (*StdAndDBLogger, error) {
 		return nil, fmt.Errorf("couldn't parse flush interval: %v", err)
 	}
 
+	// Create the standard logger
 	stdHandler := slog.NewTextHandler(
 		os.Stdout, &slog.HandlerOptions{
 			Level: getLogLevel(),
 		})
 
-	// If LOG_DB_ENABLED is not true, we only log to stdout
-	if os.Getenv(envLogDBEnabled) != "true" {
-		return &StdAndDBLogger{
-			stdLogger: slog.New(stdHandler),
-			dbLogger:  nil,
-		}, nil
-	}
-
-	// Try to create the PGHandler to log to Postgres
+	// Create the database logger
 	pgHandler := NewPGHandler(db, batchSize, flushInterval)
 
 	return &StdAndDBLogger{
@@ -102,61 +93,75 @@ func NewLogger(ctx context.Context, db *sql.DB) (*StdAndDBLogger, error) {
 	}, nil
 }
 
+func removeErrorArgs(args []any) []any {
+	// remove error pairs (e.g. "error", err) from args to avoid storing them in DB, but keep them in the standard logger
+	var filtered []any
+	for i := 0; i < len(args)-1; i += 2 {
+		key, val := args[i], args[i+1]
+		keyStr, isString := key.(string)
+		if isError(val) || (isString && (keyStr == "error" || keyStr == "err" || keyStr == "ERROR" || keyStr == "ERR")) {
+			continue // skip this pair
+		}
+		filtered = append(filtered, key, val)
+	}
+	return filtered
+}
+
+func isError(val any) bool {
+	_, ok := val.(error)
+	return ok
+}
+
 func (l *StdAndDBLogger) LogWithContext(ctx context.Context, logEntry *LogEntry) {
-	l.stdLogger.Log(ctx, logEntry.Level, logEntry.Message, logEntry.Args...)
-	if logEntry.Level != slog.LevelDebug && logEntry.SaveToDB && l.dbLogger != nil {
-		l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, logEntry.Args...)
-	}
+	args := append(attrsFromContext(ctx), logEntry.Args...)
+	l.stdLogger.Log(ctx, logEntry.Level, logEntry.Message, args...)
+	l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, removeErrorArgs(args)...)
 }
 
-func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Info(msg, append(attrsFromContext(ctx), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Info(msg, append(attrsFromContext(ctx), args...)...)
-	}
+func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {
+	attrs := append(attrsFromContext(ctx), args...)
+	l.stdLogger.InfoContext(ctx, msg, attrs...)
+	l.dbLogger.InfoContext(ctx, msg, attrs...)
 }
 
-func (l *StdAndDBLogger) Info(r *http.Request, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Info(msg, append(attrsFromRequest(r), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Info(msg, append(attrsFromRequest(r), args...)...)
-	}
+func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
+	attrs := append(attrsFromRequest(r), args...)
+	l.stdLogger.InfoContext(r.Context(), msg, attrs...)
+	l.dbLogger.InfoContext(r.Context(), msg, attrs...)
 }
 
-func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Error(msg, append(attrsFromContext(ctx), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Error(msg, append(attrsFromContext(ctx), args...)...)
-	}
+func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args ...any) {
+	attrs := append(attrsFromContext(ctx), args...)
+	l.stdLogger.ErrorContext(ctx, msg, attrs...)
+	l.dbLogger.ErrorContext(ctx, msg, removeErrorArgs(attrs)...)
 }
 
-func (l *StdAndDBLogger) Error(r *http.Request, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Error(msg, append(attrsFromRequest(r), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Error(msg, append(attrsFromRequest(r), args...)...)
-	}
+func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
+	attrs := append(attrsFromRequest(r), args...)
+	l.stdLogger.ErrorContext(r.Context(), msg, attrs...)
+	l.dbLogger.ErrorContext(r.Context(), msg, removeErrorArgs(attrs)...)
 }
 
-func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Warn(msg, append(attrsFromContext(ctx), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Warn(msg, append(attrsFromContext(ctx), args...)...)
-	}
+func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args ...any) {
+	attrs := append(attrsFromContext(ctx), args...)
+	l.stdLogger.WarnContext(ctx, msg, attrs...)
+	l.dbLogger.WarnContext(ctx, msg, removeErrorArgs(attrs)...)
 }
 
-func (l *StdAndDBLogger) Warn(r *http.Request, writeToDB bool, msg string, args ...any) {
-	l.stdLogger.Warn(msg, append(attrsFromRequest(r), args...)...)
-	if writeToDB && l.dbLogger != nil {
-		l.dbLogger.Warn(msg, append(attrsFromRequest(r), args...)...)
-	}
+func (l *StdAndDBLogger) Warn(r *http.Request, msg string, args ...any) {
+	attrs := append(attrsFromRequest(r), args...)
+	l.stdLogger.WarnContext(r.Context(), msg, attrs...)
+	l.dbLogger.WarnContext(r.Context(), msg, removeErrorArgs(attrs)...)
 }
 
 func (l *StdAndDBLogger) DebugWithContext(ctx context.Context, msg string, args ...any) {
-	l.stdLogger.Debug(msg, append(attrsFromContext(ctx), args...)...)
+	attrs := append(attrsFromContext(ctx), args...)
+	l.stdLogger.DebugContext(ctx, msg, attrs...)
 }
 
 func (l *StdAndDBLogger) Debug(r *http.Request, msg string, args ...any) {
-	l.stdLogger.Debug(msg, append(attrsFromRequest(r), args...)...)
+	attrs := append(attrsFromRequest(r), args...)
+	l.stdLogger.DebugContext(r.Context(), msg, attrs...)
 }
 
 func (l *StdAndDBLogger) Close() {

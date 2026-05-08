@@ -166,7 +166,9 @@ export function Certificates({ isLoading, setIsLoading }) {
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
-              <td>{cert.serial.substr(0, 10)}...</td>
+              <td style={{ maxWidth: "12rem" }} className="text-truncate">
+                {cert.serial}
+              </td>
               <td
                 className={cert.revoked ? "text-decoration-line-through" : ""}
               >
@@ -361,11 +363,17 @@ export function Logs({ isLoading, setIsLoading }) {
                   levelVariant[log.level] || "secondary",
                 )}
               </td>
-              <td>{log.msg}</td>
+              <td style={{ maxWidth: "12rem" }}>{log.msg}</td>
               <td>{log.token?.user || "-"}</td>
-              <td>{log.environment && prettyEnv(log.environment)}</td>
+              <td>{log.environment ? prettyEnv(log.environment) : "-"}</td>
               <td>
-                {log.method} {log.url}
+                {log.method && log.url ? (
+                  <>
+                    {log.method} {log.url.split("?")[0]}
+                  </>
+                ) : (
+                  "-"
+                )}
               </td>
               <td>{prettyTime(log.time)}</td>
               <td>
@@ -588,10 +596,18 @@ export function PendingRequests({ isLoading, setIsLoading }) {
         <tbody>
           {requests.map((req) => (
             <tr key={req.id}>
-              <td>{req.id.substring(0, 18) + "..."}</td>
+              <td style={{ maxWidth: "12rem" }} className="text-truncate">
+                {req.id}
+              </td>
               <td>{req.tokenInfo?.user || "-"}</td>
               <td>
-                {req.method} {req.url}
+                {req.method && req.url ? (
+                  <>
+                    {req.method} {req.url.split("?")[0]}
+                  </>
+                ) : (
+                  "-"
+                )}
               </td>
               <td>{prettyTime(req.createdAt)}</td>
               <td>

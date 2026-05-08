@@ -65,7 +65,7 @@ docker-buildx: check-image-exists ## Build and push docker image for the manager
 	rm Dockerfile.cross
 
 ##@ Run locally on docker
-DATA_VOLUME ?= postgres-data-new
+DATA_VOLUME ?= postgres-data
 
 .PHONY: docker-run
 docker-run: load-shared-env
