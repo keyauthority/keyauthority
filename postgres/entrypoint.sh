@@ -37,19 +37,23 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
       -c "ALTER USER \"$POSTGRES_USER\" PASSWORD '$POSTGRES_PASSWORD';"
   fi
 
-  # Build final pg_hba.conf AFTER password setup
-  {
-    echo "local all all scram-sha-256"
-    echo "host all all 127.0.0.1/32 scram-sha-256"
-    echo "host all all ::1/128 scram-sha-256"
-    echo "host all all all scram-sha-256"
-  } > "$PGDATA/pg_hba.conf"
-
-  echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
-  echo "password_encryption = scram-sha-256" >> "$PGDATA/postgresql.conf"
-
   pg_ctl -D "$PGDATA" -m fast -w stop
 fi
+
+# Always enforce final auth/network config (every startup)
+cat > "$PGDATA/pg_hba.conf" <<'EOF'
+local all all scram-sha-256
+host  all all 127.0.0.1/32 scram-sha-256
+host  all all ::1/128      scram-sha-256
+host  all all all          scram-sha-256
+EOF
+
+# Replace managed settings idempotently
+sed -i '/^listen_addresses *=/d;/^password_encryption *=/d' "$PGDATA/postgresql.conf"
+cat >> "$PGDATA/postgresql.conf" <<'EOF'
+listen_addresses = '*'
+password_encryption = scram-sha-256
+EOF
 
 # If args start with "-", assume they are postgres flags and prepend the binary.
 if [ "${1:-}" != "" ] && [ "${1#-}" != "$1" ]; then

@@ -289,10 +289,7 @@ func startPeriodicTasks() {
 		defer ticker.Stop()
 
 		for {
-			if err := recreateAllCRLs(); err != nil {
-				logger.WarnWithContext(context.Background(), "couldn't recreate CRLs",
-					"error", err)
-			}
+			recreateAllCRLs()
 			<-ticker.C
 		}
 	}()
@@ -459,11 +456,12 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 	}()
 }
 
-func recreateAllCRLs() error {
+func recreateAllCRLs() {
 	ctx := context.Background()
 	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
 	if err != nil {
-		return err
+		logger.WarnWithContext(ctx, "couldn't get signers for CRL recreation", "error", err)
+		return
 	}
 
 	for _, s := range signers {
@@ -493,26 +491,9 @@ func recreateAllCRLs() error {
 
 		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
 	}
-
-	return nil
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	/*if token, ok := ctx.Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
-		if providerIdx, ok := ctx.Value(loggingpkg.CtxKeyProviderIndex).(int); ok {
-			roles := authenticator.ExtractRoles(token, providerIdx)
-			envs := []string{}
-			for _, role := range roles {
-				if role == "KEYAUTHORITY_OPERATOR" {
-					return true, nil, nil // has access to all environments
-				}
-				if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
-					envs = append(envs, after)
-				}
-			}
-			return false, envs, nil
-		}
-	}*/
 	if roles, ok := ctx.Value(loggingpkg.CtxKeyRoles).([]string); ok {
 		envs := []string{}
 		for _, role := range roles {
@@ -525,7 +506,7 @@ func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
 		}
 		return false, envs, nil
 	}
-	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token or provider index")
+	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token roles in context")
 }
 
 func getPaginatedListWithAccessibleEnvs(

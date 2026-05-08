@@ -150,7 +150,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 
 	if skipIssuerCheck {
 		logEntries = append(logEntries, &loggingpkg.LogEntry{
-			Level:   slog.LevelWarn,
+			Level:   slog.LevelDebug,
 			Message: "skipping issuer check for internal provider due to HTTP localhost",
 		})
 	}
@@ -177,7 +177,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 	discoveryToken, err := getDiscoveryToken()
 	if err != nil {
 		logEntries = append(logEntries, &loggingpkg.LogEntry{
-			Level:   slog.LevelWarn,
+			Level:   slog.LevelDebug,
 			Message: "couldn't obtain token for client discovery",
 			Args:    []any{slog.Any("error", err)},
 		})
@@ -186,7 +186,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 		clientSummaries, err := getAllClientSummaries(discoveryToken)
 		if err != nil {
 			logEntries = append(logEntries, &loggingpkg.LogEntry{
-				Level:   slog.LevelWarn,
+				Level:   slog.LevelDebug,
 				Message: "couldn't discover clients",
 				Args:    []any{slog.Any("error", err)},
 			})
@@ -268,7 +268,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				externalProviders = append(externalProviders, externalProvider)
 				logEntries = append(logEntries, &loggingpkg.LogEntry{
 					Level:   slog.LevelInfo,
-					Message: "external OIDC provider discovered and configured",
+					Message: "external OIDC provider configured",
 					Args: []any{
 						slog.String("clientID", summary.ClientID),
 						slog.String("issuer", externalProvider.Issuer),
