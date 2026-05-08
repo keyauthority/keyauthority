@@ -39,9 +39,10 @@ const (
 	envLogDBFlushInterval = "LOG_DB_FLUSH_INTERVAL"
 
 	CtxKeyToken             = ctxKey("token")
+	CtxKeyUser              = ctxKey("user")
+	CtxKeyRoles             = ctxKey("roles")
 	CtxKeyEnvironment       = ctxKey("environment")
 	CtxKeyAuthorizerToken   = ctxKey("authorizerToken")
-	CtxKeyProviderIndex     = ctxKey("providerIndex")
 	CtxKeyRequestID         = ctxKey("requestID")
 	CtxKeyOriginalRequestID = ctxKey("originalRequestID")
 )
@@ -170,26 +171,43 @@ func (l *StdAndDBLogger) Close() {
 	}
 }
 
-func GetUser(idToken *oidc.IDToken) string {
-	type MyClaims struct {
+func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string) {
+	if full {
+		type tokenClaimsFull struct {
+			Email string `json:"email"`
+			//PreferredUsername string `json:"preferred_username"`
+			//Name              string `json:"name"`
+			Sub         string `json:"sub"`
+			RealmAccess struct {
+				Roles []string `json:"roles"`
+			} `json:"realm_access"`
+			ResourceAccess map[string]struct {
+				Roles []string `json:"roles"`
+			} `json:"resource_access"`
+		}
+		var c tokenClaimsFull
+		var roles []string
+		if err := idToken.Claims(&c); err == nil {
+			roles = c.RealmAccess.Roles
+			for _, res := range c.ResourceAccess {
+				roles = append(roles, res.Roles...)
+			}
+		}
+		return firstNonEmpty(c.Email /*c.PreferredUsername, c.Name,*/, c.Sub), roles
+	}
+
+	type tokenClaims struct {
 		Email string `json:"email"`
 		//PreferredUsername string `json:"preferred_username"`
 		//Name              string `json:"name"`
+		Sub string `json:"sub"`
 	}
 
-	var c MyClaims
+	var c tokenClaims
 	if err := idToken.Claims(&c); err == nil {
-		if c.Email != "" {
-			return c.Email
-		}
-		/*if c.PreferredUsername != "" {
-			return c.PreferredUsername
-		}
-		if c.Name != "" {
-			return c.Name
-		}*/
+		return firstNonEmpty(c.Email /*c.PreferredUsername, c.Name,*/, c.Sub), nil
 	}
-	return idToken.Subject
+	return idToken.Subject, nil
 }
 
 // ---- Helpers ---- //
@@ -198,12 +216,14 @@ func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
 		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
-			attrs = append(attrs,
-				slog.Group("token",
-					slog.String("user", GetUser(token)),
-					slog.String("issuer", token.Issuer),
-				),
-			)
+			if user, ok := ctx.Value(CtxKeyUser).(string); ok {
+				attrs = append(attrs,
+					slog.Group("token",
+						slog.String("user", user),
+						slog.String("issuer", token.Issuer),
+					),
+				)
+			}
 		}
 		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
 			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
@@ -212,9 +232,10 @@ func attrsFromContext(ctx context.Context) []any {
 			attrs = append(attrs, slog.String(string(CtxKeyOriginalRequestID), originalReqID.String()))
 		}
 		if authorizerToken, ok := ctx.Value(CtxKeyAuthorizerToken).(*oidc.IDToken); ok {
+			user, _ := GetTokenInfoFromClaims(authorizerToken, false)
 			attrs = append(attrs,
 				slog.Group("authorizerToken",
-					slog.String("user", GetUser(authorizerToken)),
+					slog.String("user", user),
 					slog.String("issuer", authorizerToken.Issuer),
 				),
 			)
@@ -265,4 +286,13 @@ func getLogLevel() slog.Level {
 	default:
 		return slog.LevelInfo // fallback
 	}
+}
+
+func firstNonEmpty(v ...string) string {
+	for _, s := range v {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }

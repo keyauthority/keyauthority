@@ -352,11 +352,11 @@ func (a *Authenticator) getToken(client *clientDetail, reqBody *TokenRequest) (s
 	return resp.AccessToken, nil
 }
 
-func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
+func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingpkg.LogEntry, []string, error) {
 	authHeader := r.Header.Get("Authorization")
 	vaultToken := r.Header.Get("X-Vault-Token")
 	if authHeader == "" && vaultToken == "" {
-		return nil, []*loggingpkg.LogEntry{}, -1, fmt.Errorf("missing Authorization header or X-Vault-Token header")
+		return nil, []*loggingpkg.LogEntry{}, nil, fmt.Errorf("missing Authorization header or X-Vault-Token header")
 	}
 
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
@@ -366,18 +366,17 @@ func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingp
 
 	idToken, providerIDx, logEntries := a.verifyOIDCToken(r.Context(), tokenStr)
 	if providerIDx == -1 {
-		return nil, logEntries, -1, fmt.Errorf("invalid token")
+		return nil, logEntries, nil, fmt.Errorf("invalid token")
 	}
-	return idToken, logEntries, providerIDx, nil
+	return idToken, logEntries, a.Providers[providerIDx].OverrideRoles, nil
 }
 
-func (a *Authenticator) HasRequiredRole(token *oidc.IDToken, providerIDx int, environment string, requiredRole Role) bool {
+func (a *Authenticator) HasRequiredRole(roles []string, environment string, requiredRole Role) bool {
 	if requiredRole == RoleAny {
 		return true
 	}
-	assigned := a.ExtractRoles(token, providerIDx)
 	roleVal := RoleAny
-	for _, r := range assigned {
+	for _, r := range roles {
 		if rv, ok := RoleMap[r]; ok {
 			roleVal |= rv
 		} else if after, ok := strings.CutSuffix(r, "_"+environment); ok {

@@ -91,7 +91,6 @@ func main() {
 		return
 	}
 	defer logger.Close()
-	logger.InfoWithContext(context.Background(), "logger ready")
 
 	// Set default HTTP transport
 	setDefaultHttpTransport()
@@ -102,11 +101,9 @@ func main() {
 			"couldn't set up authenticator", "error", err)
 		return
 	}
-	logger.InfoWithContext(context.Background(), "authenticator ready")
 
 	// Create ACME responder
 	acmeResponder = internalpkg.NewACMEResponder(store, onCertificateSigned)
-	logger.InfoWithContext(context.Background(), "ACME responder ready")
 
 	// Handlers
 
@@ -455,7 +452,7 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.String("comment", comment),
 	)
 	go func() {
-		err := store.InsertCert(r.Context(), signerName, cert, comment)
+		err := store.InsertCert(context.Background(), signerName, cert, comment)
 		if err != nil {
 			logger.Error(r, "couldn't insert certificate", "error", err)
 		}
@@ -501,7 +498,7 @@ func recreateAllCRLs() error {
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	if token, ok := ctx.Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
+	/*if token, ok := ctx.Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
 		if providerIdx, ok := ctx.Value(loggingpkg.CtxKeyProviderIndex).(int); ok {
 			roles := authenticator.ExtractRoles(token, providerIdx)
 			envs := []string{}
@@ -515,6 +512,18 @@ func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
 			}
 			return false, envs, nil
 		}
+	}*/
+	if roles, ok := ctx.Value(loggingpkg.CtxKeyRoles).([]string); ok {
+		envs := []string{}
+		for _, role := range roles {
+			if role == "KEYAUTHORITY_OPERATOR" {
+				return true, nil, nil // has access to all environments
+			}
+			if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
+				envs = append(envs, after)
+			}
+		}
+		return false, envs, nil
 	}
 	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token or provider index")
 }
@@ -760,6 +769,7 @@ func withCORS(next http.Handler) http.Handler {
 
 func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Determine required role for HTTP method
 		requiredRole := internalpkg.RoleAny
 		if len(requiredRoles) > 0 {
 			if role, ok := requiredRoles[r.Method]; ok {
@@ -770,23 +780,30 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			}
 		}
 
-		// verify token
-		token, logEntries, providerIDx, err := authenticator.VerifyToken(r)
+		// Verify token (once per request)
+		token, logEntries, providerRoles, err := authenticator.VerifyToken(r)
 		for _, entry := range logEntries {
 			logger.LogWithContext(r.Context(), entry)
 		}
-
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
 		}
 
+		// Parse immutable claims once, store in context
+		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		if len(providerRoles) > 0 {
+			// override roles
+			roles = providerRoles
+		}
+
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyProviderIndex, providerIDx)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
 		r = r.WithContext(ctx)
 
-		// determine environment for request, to include in logging context and for RBAC
+		// Determine environment for RBAC and logging context
 		environment, err := getEnvironment(r)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't determine environment", err)
@@ -798,8 +815,8 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			r = r.WithContext(ctx)
 		}
 
-		// RBAC
-		if !authenticator.HasRequiredRole(token, providerIDx, environment, requiredRole) {
+		// RBAC check — use roles already extracted above
+		if !authenticator.HasRequiredRole(roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -807,6 +824,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		logger.Debug(r, "token verified and required role satisfied")
 
+		// Prevent requester and authorizer from being the same user
 		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)
 		if ok && authorizerToken.Subject == token.Subject && authorizerToken.Issuer == token.Issuer {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
@@ -814,8 +832,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			return
 		}
 
-		// if the request requires additional authorization
-		// save it as pending and return the request ID to the client
+		// If request requires additional authorization, save as pending
 		if requiresAuthorization(r) {
 			body, _ := io.ReadAll(r.Body)
 			ctx = r.Context()
@@ -837,9 +854,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 			logger.Info(r, "pending request created", "id", requestID)
 			writeHTTPWithHeaders(w, http.StatusPreconditionRequired, []byte(requestID.String()),
-				map[string]string{
-					"Content-Type": "text/plain",
-				})
+				map[string]string{"Content-Type": "text/plain"})
 			return
 		}
 
@@ -883,13 +898,13 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
 		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token from context")
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get user from context")
 			return
 		}
 
-		keyID, err := store.CreateKey(r.Context(), environment, &cfg, loggingpkg.GetUser(token))
+		keyID, err := store.CreateKey(r.Context(), environment, &cfg, user)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't create key", err)
 			return
@@ -1466,9 +1481,9 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
 		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing user in context")
 			return
 		}
 
@@ -1490,7 +1505,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 					"couldn't get pending request info", err)
 				return
 			}
-			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == loggingpkg.GetUser(token) {
+			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == user {
 				logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
 					"cannot guarantee that requester and authorizer are different users")
 				return
@@ -1500,6 +1515,12 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			pendingReq.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 		} else {
+			token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+			if !ok {
+				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+				return
+			}
+
 			ctx = context.WithValue(ctx, loggingpkg.CtxKeyAuthorizerToken, token)
 		}
 

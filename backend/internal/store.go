@@ -1367,9 +1367,14 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 		isPrivateBody = false
 	}
 
+	user, ok := ctx.Value(loggingpkg.CtxKeyUser).(string)
+	if !ok {
+		user = "unknown"
+	}
+
 	tokenInfo := map[string]any{
 		"issuer": token.Issuer,
-		"user":   loggingpkg.GetUser(token),
+		"user":   user,
 	}
 	tokenInfoBytes, err := json.Marshal(tokenInfo)
 	if err != nil {
