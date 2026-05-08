@@ -9,14 +9,6 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
   const token = keycloak?.tokenParsed || {};
   const roles = getRoles(token);
 
-  const addAccessDeniedIfApplicable = (to, requiredRole) => {
-    const msg = "You don't have access to this page.";
-    if (requiredRole && !roles.some((role) => role.startsWith(requiredRole))) {
-      return to + "?error=" + encodeURIComponent(msg);
-    }
-    return to;
-  };
-
   return (
     <Col
       md={3}
@@ -60,7 +52,15 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
                     action
                     key={item.to}
                     as={RouterNavLink}
-                    to={addAccessDeniedIfApplicable(item.to, item.requiredRole)}
+                    to={
+                      item.to +
+                      (item.requiredRole && !roles.includes(item.requiredRole)
+                        ? "?error=" +
+                          encodeURIComponent(
+                            "You do not have permission to access this page.",
+                          )
+                        : "")
+                    }
                   >
                     {item.icon && (
                       <i

@@ -61,6 +61,7 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
       setSecretMetadata(metadata);
     } catch (err) {
       setError(errorToString(err));
+      navigation.navigate("/secrets");
     } finally {
       setIsLoading(false);
     }

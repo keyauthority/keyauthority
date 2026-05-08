@@ -159,12 +159,6 @@ export default function Main() {
     },
   ];
 
-  // check for errors in URL query parameters
-  useEffect(() => {
-    const urlParams = new URLSearchParams(location.search);
-    setError(urlParams.get("error"));
-  }, [location.search]);
-
   const handleDeleteSigner = async () => {
     const signerName = decodeURIComponent(
       location.pathname.replace("/signers/", ""),
@@ -403,23 +397,18 @@ export default function Main() {
 
           {/* Main content */}
           <Col md={9} lg={10} className="pt-4 px-md-5">
-            {/* {error && <Alert variant="danger">{error}</Alert>} */}
+            {error && <Alert variant="danger">{error}</Alert>}
 
             {(() => {
               if (!isValidPath(location.pathname)) {
                 return <Alert variant="danger">404 Not Found</Alert>;
               }
 
-              if (error) {
-                return (
-                  <Alert
-                    variant="danger"
-                    {...(error.isDismissible ? { dismissible: true } : {})}
-                    onClose={() => setError(null)}
-                  >
-                    {error}
-                  </Alert>
-                );
+              const errorFromURL = new URLSearchParams(location.search).get(
+                "error",
+              );
+              if (errorFromURL) {
+                return <Alert variant="danger">{errorFromURL}</Alert>;
               }
 
               const top = () => (

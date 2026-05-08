@@ -755,7 +755,7 @@ func withCORS(next http.Handler) http.Handler {
 		if !strings.HasPrefix(r.URL.Path, "/v1/crl/") {
 			w.Header().Set("Access-Control-Allow-Origin", os.Getenv(envCORSOrigin))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
@@ -792,8 +792,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		// Parse immutable claims once, store in context
 		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
-		if len(providerRoles) > 0 {
-			// override roles
+		if len(providerRoles) > 0 { // override roles from token with provider roles
 			roles = providerRoles
 		}
 

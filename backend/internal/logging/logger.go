@@ -189,8 +189,8 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 		var roles []string
 		if err := idToken.Claims(&c); err == nil {
 			roles = c.RealmAccess.Roles
-			for _, res := range c.ResourceAccess {
-				roles = append(roles, res.Roles...)
+			for _, ra := range c.ResourceAccess {
+				roles = append(roles, ra.Roles...)
 			}
 		}
 		return firstNonEmpty(c.Email /*c.PreferredUsername, c.Name,*/, c.Sub), roles

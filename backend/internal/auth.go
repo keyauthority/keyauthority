@@ -385,44 +385,7 @@ func (a *Authenticator) HasRequiredRole(roles []string, environment string, requ
 			}
 		}
 	}
-	return HasAllRoles(roleVal, requiredRole)
-}
-
-func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int) []string {
-	roles := []string{}
-	if len(a.Providers[providerIDx].OverrideRoles) > 0 {
-		// override roles
-		roles = a.Providers[providerIDx].OverrideRoles
-
-	} else {
-		var claims struct {
-			RealmAccess struct {
-				Roles []string `json:"roles"`
-			} `json:"realm_access"`
-			ResourceAccess map[string]struct {
-				Roles []string `json:"roles"`
-			} `json:"resource_access"`
-		}
-		if err := idToken.Claims(&claims); err != nil {
-			return []string{}
-		}
-		roles = claims.RealmAccess.Roles
-		for _, ra := range claims.ResourceAccess {
-			roles = append(roles, ra.Roles...)
-		}
-	}
-	return roles
-}
-
-func (a *Authenticator) GetProviderIssuer(idx int) string {
-	if idx < 0 || idx >= len(a.Providers) {
-		return ""
-	}
-	return a.Providers[idx].Issuer
-}
-
-func HasAllRoles(userRoles, required Role) bool {
-	return (userRoles & required) == required
+	return (roleVal & requiredRole) == requiredRole
 }
 
 //------ Helpers ------//

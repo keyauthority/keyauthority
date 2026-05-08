@@ -164,6 +164,7 @@ function ConfigTab({
     } catch (err) {
       //showToast("error", errorToString(err));
       setError(errorToString(err));
+      navigation.navigate("/signers");
     } finally {
       setIsLoading(false);
     }
