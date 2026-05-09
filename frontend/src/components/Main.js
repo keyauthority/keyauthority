@@ -86,14 +86,12 @@ export default function Main() {
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
           icon: "bi-journal-text",
-          requiredRole: "KEYAUTHORITY_AUDITOR",
         },
         {
           title: "Pending Requests",
           subtitle: "Review and approve/reject pending requests",
           to: "/activity/pending-requests",
           icon: "bi-clock",
-          requiredRole: "KEYAUTHORITY_AUTHORIZER",
         },
       ],
     },
@@ -402,13 +400,6 @@ export default function Main() {
             {(() => {
               if (!isValidPath(location.pathname)) {
                 return <Alert variant="danger">404 Not Found</Alert>;
-              }
-
-              const errorFromURL = new URLSearchParams(location.search).get(
-                "error",
-              );
-              if (errorFromURL) {
-                return <Alert variant="danger">{errorFromURL}</Alert>;
               }
 
               const top = () => (

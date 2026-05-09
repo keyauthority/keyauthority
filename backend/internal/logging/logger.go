@@ -38,6 +38,7 @@ const (
 	envLogDBBatchSize     = "LOG_DB_BATCH_SIZE"
 	envLogDBFlushInterval = "LOG_DB_FLUSH_INTERVAL"
 
+	CtxKeySaveLogToDB       = ctxKey("saveLogToDB")
 	CtxKeyToken             = ctxKey("token")
 	CtxKeyUser              = ctxKey("user")
 	CtxKeyRoles             = ctxKey("roles")
@@ -116,43 +117,57 @@ func isError(val any) bool {
 func (l *StdAndDBLogger) LogWithContext(ctx context.Context, logEntry *LogEntry) {
 	args := append(attrsFromContext(ctx), logEntry.Args...)
 	l.stdLogger.Log(ctx, logEntry.Level, logEntry.Message, args...)
-	l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, removeErrorArgs(args)...)
+	if saveToDB, ok := ctx.Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, removeErrorArgs(args)...)
+	}
 }
 
 func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.InfoContext(ctx, msg, attrs...)
-	l.dbLogger.InfoContext(ctx, msg, attrs...)
+	if saveToDB, ok := ctx.Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.InfoContext(ctx, msg, attrs...)
+	}
 }
 
 func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.InfoContext(r.Context(), msg, attrs...)
-	l.dbLogger.InfoContext(r.Context(), msg, attrs...)
+	if saveToDB, ok := r.Context().Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.InfoContext(r.Context(), msg, attrs...)
+	}
 }
 
 func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.ErrorContext(ctx, msg, attrs...)
-	l.dbLogger.ErrorContext(ctx, msg, removeErrorArgs(attrs)...)
+	if saveToDB, ok := ctx.Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.ErrorContext(ctx, msg, removeErrorArgs(attrs)...)
+	}
 }
 
 func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.ErrorContext(r.Context(), msg, attrs...)
-	l.dbLogger.ErrorContext(r.Context(), msg, removeErrorArgs(attrs)...)
+	if saveToDB, ok := r.Context().Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.ErrorContext(r.Context(), msg, removeErrorArgs(attrs)...)
+	}
 }
 
 func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.WarnContext(ctx, msg, attrs...)
-	l.dbLogger.WarnContext(ctx, msg, removeErrorArgs(attrs)...)
+	if saveToDB, ok := ctx.Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.WarnContext(ctx, msg, removeErrorArgs(attrs)...)
+	}
 }
 
 func (l *StdAndDBLogger) Warn(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.WarnContext(r.Context(), msg, attrs...)
-	l.dbLogger.WarnContext(r.Context(), msg, removeErrorArgs(attrs)...)
+	if saveToDB, ok := r.Context().Value(CtxKeySaveLogToDB).(bool); ok && saveToDB {
+		l.dbLogger.WarnContext(r.Context(), msg, removeErrorArgs(attrs)...)
+	}
 }
 
 func (l *StdAndDBLogger) DebugWithContext(ctx context.Context, msg string, args ...any) {

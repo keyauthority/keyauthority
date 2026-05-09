@@ -91,6 +91,7 @@ func main() {
 		return
 	}
 	defer logger.Close()
+	logger.InfoWithContext(context.Background(), "logger ready")
 
 	// Set default HTTP transport
 	setDefaultHttpTransport()
@@ -101,9 +102,11 @@ func main() {
 			"couldn't set up authenticator", "error", err)
 		return
 	}
+	logger.InfoWithContext(context.Background(), "authenticator ready")
 
 	// Create ACME responder
 	acmeResponder = internalpkg.NewACMEResponder(store, onCertificateSigned)
+	logger.InfoWithContext(context.Background(), "ACME responder ready")
 
 	// Handlers
 
@@ -283,7 +286,7 @@ func main() {
 }
 
 func startPeriodicTasks() {
-	// ------- Periodic CRL Creation ------- //
+	// CRL re-creation
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
 		defer ticker.Stop()
@@ -294,7 +297,7 @@ func startPeriodicTasks() {
 		}
 	}()
 
-	// ------ Periodic Authenticator Reloading ------ //
+	// Authenticator Reloading
 	go func() {
 		interval := 30 * time.Minute
 
@@ -311,7 +314,7 @@ func startPeriodicTasks() {
 		}
 	}()
 
-	// ------ Periodic Store Ops ------ //
+	// Store Ops
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -324,6 +327,43 @@ func startPeriodicTasks() {
 			<-ticker.C
 		}
 	}()
+}
+
+func recreateAllCRLs() {
+	ctx := context.Background()
+	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
+	if err != nil {
+		logger.WarnWithContext(ctx, "couldn't get signers for CRL recreation", "error", err)
+		return
+	}
+
+	for _, s := range signers {
+		signerName := s["name"].(string)
+
+		signer, err := store.LoadSigner(ctx, signerName)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't load signer", "signer", signerName, "error", err)
+			continue
+		}
+
+		existingCRL, err := store.GetSignerCRL(ctx, signerName)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't get existing CRL", "signer", signerName, "error", err)
+			continue
+		}
+
+		crl, err := signer.SignCRL(existingCRL, nil)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't create CRL", "signer", signerName, "error", err)
+			continue
+		}
+
+		if err := store.SetSignerCRL(ctx, signerName, crl); err != nil {
+			logger.WarnWithContext(ctx, "couldn't store CRL", "signer", signerName, "error", err)
+		}
+
+		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
+	}
 }
 
 func setupAuthenticator() error {
@@ -400,12 +440,10 @@ func writeJSONOk(w http.ResponseWriter, data any) {
 func logErrorAndWriteHTTP(w http.ResponseWriter, r *http.Request, code int, msg string, args ...any) {
 	var errors []error
 	var logArgs []any
-	saveErr := false
 	for i := range args {
 		if e, isError := args[i].(error); isError && e != nil {
 			logArgs = append(logArgs, "error", e)
 			errors = append(errors, e)
-			saveErr = saveErr || saveErrorLogToDB(r)
 		}
 	}
 
@@ -448,49 +486,14 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.Any("notAfter", cert.NotAfter),
 		slog.String("comment", comment),
 	)
+
+	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
 		err := store.InsertCert(context.Background(), signerName, cert, comment)
 		if err != nil {
 			logger.Error(r, "couldn't insert certificate", "error", err)
 		}
 	}()
-}
-
-func recreateAllCRLs() {
-	ctx := context.Background()
-	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
-	if err != nil {
-		logger.WarnWithContext(ctx, "couldn't get signers for CRL recreation", "error", err)
-		return
-	}
-
-	for _, s := range signers {
-		signerName := s["name"].(string)
-
-		signer, err := store.LoadSigner(ctx, signerName)
-		if err != nil {
-			logger.WarnWithContext(ctx, "couldn't load signer", "signer", signerName, "error", err)
-			continue
-		}
-
-		existingCRL, err := store.GetSignerCRL(ctx, signerName)
-		if err != nil {
-			logger.WarnWithContext(ctx, "couldn't get existing CRL", "signer", signerName, "error", err)
-			continue
-		}
-
-		crl, err := signer.SignCRL(existingCRL, nil)
-		if err != nil {
-			logger.WarnWithContext(ctx, "couldn't create CRL", "signer", signerName, "error", err)
-			continue
-		}
-
-		if err := store.SetSignerCRL(ctx, signerName, crl); err != nil {
-			logger.WarnWithContext(ctx, "couldn't store CRL", "signer", signerName, "error", err)
-		}
-
-		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
-	}
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
@@ -622,14 +625,6 @@ func isGetSecretRequest(r *http.Request) bool {
 	return r.Method == http.MethodGet &&
 		(r.URL.Path == fmt.Sprintf("/v1/secrets/%s", secretName) ||
 			strings.HasPrefix(r.URL.Path, fmt.Sprintf("/v1/secrets/data/%s", secretName)))
-}
-
-func saveErrorLogToDB(r *http.Request) bool {
-	// save error log to DB if the request is authenticated with a token (not a pending request or other non-authenticated request)
-	if _, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
-		return isUpdateSignerRequest(r) || isSigningRequest(r) || isUpdateSecretRequest(r) || isGetSecretRequest(r)
-	}
-	return false
 }
 
 func requiresAuthorization(r *http.Request) bool {
@@ -803,6 +798,11 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		logger.Debug(r, "token verified and required role satisfied")
+
+		// Save logs to DB only after token is verified and RBAC is checked
+		ctx = r.Context()
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		r = r.WithContext(ctx)
 
 		// Prevent requester and authorizer from being the same user
 		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)

@@ -1,14 +1,8 @@
 import { Nav, Col, ListGroup } from "react-bootstrap";
 import { NavLink as RouterNavLink } from "react-router-dom";
-import { getRoles } from "../utils/utils";
-import { getKeycloak } from "../keycloak";
 import Topbar from "./Topbar";
 
 export default function Sidebar({ sidebarSections, selectedItem }) {
-  const keycloak = getKeycloak();
-  const token = keycloak?.tokenParsed || {};
-  const roles = getRoles(token);
-
   return (
     <Col
       md={3}
@@ -52,15 +46,7 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
                     action
                     key={item.to}
                     as={RouterNavLink}
-                    to={
-                      item.to +
-                      (item.requiredRole && !roles.includes(item.requiredRole)
-                        ? "?error=" +
-                          encodeURIComponent(
-                            "You do not have permission to access this page.",
-                          )
-                        : "")
-                    }
+                    to={item.to}
                   >
                     {item.icon && (
                       <i

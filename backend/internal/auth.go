@@ -177,7 +177,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 	discoveryToken, err := getDiscoveryToken()
 	if err != nil {
 		logEntries = append(logEntries, &loggingpkg.LogEntry{
-			Level:   slog.LevelDebug,
+			Level:   slog.LevelWarn,
 			Message: "couldn't obtain token for client discovery",
 			Args:    []any{slog.Any("error", err)},
 		})
@@ -186,7 +186,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 		clientSummaries, err := getAllClientSummaries(discoveryToken)
 		if err != nil {
 			logEntries = append(logEntries, &loggingpkg.LogEntry{
-				Level:   slog.LevelDebug,
+				Level:   slog.LevelWarn,
 				Message: "couldn't discover clients",
 				Args:    []any{slog.Any("error", err)},
 			})
@@ -220,7 +220,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				client, err := getClientDetails(discoveryToken, summary.ID)
 				if err != nil {
 					logEntries = append(logEntries, &loggingpkg.LogEntry{
-						Level:   slog.LevelDebug,
+						Level:   slog.LevelWarn,
 						Message: "skipping client for external OIDC provider discovery",
 						Args: []any{
 							slog.String("clientID", summary.ClientID),
@@ -247,7 +247,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				externalProvider, err := newProvider(ctx, client)
 				if err != nil {
 					logEntries = append(logEntries, &loggingpkg.LogEntry{
-						Level:   slog.LevelDebug,
+						Level:   slog.LevelWarn,
 						Message: "skipping client for external OIDC provider discovery",
 						Args: []any{
 							slog.String("clientID", summary.ClientID),
