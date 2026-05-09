@@ -150,7 +150,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 
 	if skipIssuerCheck {
 		logEntries = append(logEntries, &loggingpkg.LogEntry{
-			Level:   slog.LevelWarn,
+			Level:   slog.LevelDebug,
 			Message: "skipping issuer check for internal provider due to HTTP localhost",
 		})
 	}
@@ -220,7 +220,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				client, err := getClientDetails(discoveryToken, summary.ID)
 				if err != nil {
 					logEntries = append(logEntries, &loggingpkg.LogEntry{
-						Level:   slog.LevelDebug,
+						Level:   slog.LevelWarn,
 						Message: "skipping client for external OIDC provider discovery",
 						Args: []any{
 							slog.String("clientID", summary.ClientID),
@@ -247,7 +247,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				externalProvider, err := newProvider(ctx, client)
 				if err != nil {
 					logEntries = append(logEntries, &loggingpkg.LogEntry{
-						Level:   slog.LevelDebug,
+						Level:   slog.LevelWarn,
 						Message: "skipping client for external OIDC provider discovery",
 						Args: []any{
 							slog.String("clientID", summary.ClientID),
@@ -268,7 +268,7 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 				externalProviders = append(externalProviders, externalProvider)
 				logEntries = append(logEntries, &loggingpkg.LogEntry{
 					Level:   slog.LevelInfo,
-					Message: "external OIDC provider discovered and configured",
+					Message: "external OIDC provider configured",
 					Args: []any{
 						slog.String("clientID", summary.ClientID),
 						slog.String("issuer", externalProvider.Issuer),
@@ -352,11 +352,11 @@ func (a *Authenticator) getToken(client *clientDetail, reqBody *TokenRequest) (s
 	return resp.AccessToken, nil
 }
 
-func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingpkg.LogEntry, int, error) {
+func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingpkg.LogEntry, []string, error) {
 	authHeader := r.Header.Get("Authorization")
 	vaultToken := r.Header.Get("X-Vault-Token")
 	if authHeader == "" && vaultToken == "" {
-		return nil, []*loggingpkg.LogEntry{}, -1, fmt.Errorf("missing Authorization header or X-Vault-Token header")
+		return nil, []*loggingpkg.LogEntry{}, nil, fmt.Errorf("missing Authorization header or X-Vault-Token header")
 	}
 
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
@@ -366,18 +366,17 @@ func (a *Authenticator) VerifyToken(r *http.Request) (*oidc.IDToken, []*loggingp
 
 	idToken, providerIDx, logEntries := a.verifyOIDCToken(r.Context(), tokenStr)
 	if providerIDx == -1 {
-		return nil, logEntries, -1, fmt.Errorf("invalid token")
+		return nil, logEntries, nil, fmt.Errorf("invalid token")
 	}
-	return idToken, logEntries, providerIDx, nil
+	return idToken, logEntries, a.Providers[providerIDx].OverrideRoles, nil
 }
 
-func (a *Authenticator) HasRequiredRole(token *oidc.IDToken, providerIDx int, environment string, requiredRole Role) bool {
+func (a *Authenticator) HasRequiredRole(roles []string, environment string, requiredRole Role) bool {
 	if requiredRole == RoleAny {
 		return true
 	}
-	assigned := a.ExtractRoles(token, providerIDx)
 	roleVal := RoleAny
-	for _, r := range assigned {
+	for _, r := range roles {
 		if rv, ok := RoleMap[r]; ok {
 			roleVal |= rv
 		} else if after, ok := strings.CutSuffix(r, "_"+environment); ok {
@@ -386,44 +385,7 @@ func (a *Authenticator) HasRequiredRole(token *oidc.IDToken, providerIDx int, en
 			}
 		}
 	}
-	return HasAllRoles(roleVal, requiredRole)
-}
-
-func (a *Authenticator) ExtractRoles(idToken *oidc.IDToken, providerIDx int) []string {
-	roles := []string{}
-	if len(a.Providers[providerIDx].OverrideRoles) > 0 {
-		// override roles
-		roles = a.Providers[providerIDx].OverrideRoles
-
-	} else {
-		var claims struct {
-			RealmAccess struct {
-				Roles []string `json:"roles"`
-			} `json:"realm_access"`
-			ResourceAccess map[string]struct {
-				Roles []string `json:"roles"`
-			} `json:"resource_access"`
-		}
-		if err := idToken.Claims(&claims); err != nil {
-			return []string{}
-		}
-		roles = claims.RealmAccess.Roles
-		for _, ra := range claims.ResourceAccess {
-			roles = append(roles, ra.Roles...)
-		}
-	}
-	return roles
-}
-
-func (a *Authenticator) GetProviderIssuer(idx int) string {
-	if idx < 0 || idx >= len(a.Providers) {
-		return ""
-	}
-	return a.Providers[idx].Issuer
-}
-
-func HasAllRoles(userRoles, required Role) bool {
-	return (userRoles & required) == required
+	return (roleVal & requiredRole) == requiredRole
 }
 
 //------ Helpers ------//

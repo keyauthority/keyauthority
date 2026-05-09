@@ -475,7 +475,7 @@ export default function SignerModal({
                   }}
                   disabled={!defaultCDPBaseURL || !signerName}
                 >
-                  Set Default
+                  <i className="bi bi-arrow-clockwise"></i> Set Default
                 </Button>
               </div>
               <Form.Text className="text-muted">

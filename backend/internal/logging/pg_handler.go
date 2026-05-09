@@ -28,15 +28,11 @@ import (
 	"time"
 )
 
-type batchedRecord struct {
-	JSON string
-}
-
 // PGHandler implements slog.Handler with async batching
 type PGHandler struct {
 	db            *sql.DB
 	minLevel      slog.Level
-	ch            chan batchedRecord
+	ch            chan slog.Record
 	wg            sync.WaitGroup
 	flushInterval time.Duration
 	batchSize     int
@@ -50,7 +46,7 @@ func NewPGHandler(db *sql.DB, batchSize int, flushInterval time.Duration) *PGHan
 	h := &PGHandler{
 		db:            db,
 		minLevel:      slog.LevelInfo,
-		ch:            make(chan batchedRecord, batchSize*2),
+		ch:            make(chan slog.Record, batchSize*2),
 		batchSize:     batchSize,
 		flushInterval: flushInterval,
 		ctx:           ctx,
@@ -68,7 +64,7 @@ func (h *PGHandler) worker() {
 	ticker := time.NewTicker(h.flushInterval)
 	defer ticker.Stop()
 
-	var batch []batchedRecord
+	var batch []slog.Record
 
 	flush := func() {
 		if len(batch) == 0 {
@@ -81,8 +77,16 @@ func (h *PGHandler) worker() {
 	for {
 		select {
 		case <-h.ctx.Done():
-			flush()
-			return
+			// drain queue before exit
+			for {
+				select {
+				case rec := <-h.ch:
+					batch = append(batch, rec)
+				default:
+					flush()
+					return
+				}
+			}
 		case rec := <-h.ch:
 			batch = append(batch, rec)
 			if len(batch) >= h.batchSize {
@@ -95,8 +99,28 @@ func (h *PGHandler) worker() {
 }
 
 // insertBatch performs a single INSERT for the collected records.
-func (h *PGHandler) insertBatch(batch []batchedRecord) {
+func (h *PGHandler) insertBatch(batch []slog.Record) {
 	if len(batch) == 0 {
+		return
+	}
+
+	var (
+		buf         bytes.Buffer
+		jsonHandler = slog.NewJSONHandler(&buf, &slog.HandlerOptions{AddSource: false})
+		jsonRows    = make([]string, 0, len(batch))
+	)
+
+	// Serialize in worker (off request path)
+	for _, rec := range batch {
+		buf.Reset()
+		if err := jsonHandler.Handle(context.Background(), rec); err != nil {
+			log.Printf("[pgslog] format record failed: %v", err)
+			continue
+		}
+		jsonRows = append(jsonRows, strings.TrimSpace(buf.String()))
+	}
+
+	if len(jsonRows) == 0 {
 		return
 	}
 
@@ -108,12 +132,12 @@ func (h *PGHandler) insertBatch(batch []batchedRecord) {
 	)
 	sb.WriteString(`INSERT INTO logs (entry) VALUES `)
 
-	for i, r := range batch {
+	for i, row := range jsonRows {
 		if i > 0 {
 			sb.WriteString(",")
 		}
 		fmt.Fprintf(&sb, "($%d::jsonb)", count)
-		args = append(args, r.JSON)
+		args = append(args, row)
 		count++
 	}
 
@@ -126,21 +150,13 @@ func (h *PGHandler) insertBatch(batch []batchedRecord) {
 }
 
 // Handle adds the record to the buffer for async insertion.
-func (h *PGHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *PGHandler) Handle(_ context.Context, r slog.Record) error {
 	if r.Level < h.minLevel {
 		return nil
 	}
 
-	// Convert record to JSON using a standard slog JSON handler.
-	var buf bytes.Buffer
-	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{AddSource: false})
-	if err := jsonHandler.Handle(ctx, r); err != nil {
-		return fmt.Errorf("format record: %w", err)
-	}
-
-	rec := batchedRecord{
-		JSON: buf.String(),
-	}
+	// Clone and enqueue quickly; heavy work happens in worker.
+	rec := r.Clone()
 
 	select {
 	case h.ch <- rec:

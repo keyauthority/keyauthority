@@ -291,6 +291,11 @@ run: load-shared-env
 	SOFTHSM_PIN=5678 \
 	go run cmd/main.go
 
+##@ Stop and remove local docker container
+.PHONY: docker-stop
+docker-stop:
+	docker rm -f backend || true
+
 ##@ Pretty
 .PHONY: pretty
 pretty: fmt

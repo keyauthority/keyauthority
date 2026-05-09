@@ -91,22 +91,22 @@ func main() {
 		return
 	}
 	defer logger.Close()
-	logger.InfoWithContext(context.Background(), false, "logger ready")
+	logger.InfoWithContext(context.Background(), "logger ready")
 
 	// Set default HTTP transport
 	setDefaultHttpTransport()
 
 	// Set up authenticator (first time, next will be in goroutine)
 	if err := setupAuthenticator(); err != nil {
-		logger.ErrorWithContext(context.Background(), false,
+		logger.ErrorWithContext(context.Background(),
 			"couldn't set up authenticator", "error", err)
 		return
 	}
-	logger.InfoWithContext(context.Background(), false, "authenticator ready")
+	logger.InfoWithContext(context.Background(), "authenticator ready")
 
 	// Create ACME responder
 	acmeResponder = internalpkg.NewACMEResponder(store, onCertificateSigned)
-	logger.InfoWithContext(context.Background(), false, "ACME responder ready")
+	logger.InfoWithContext(context.Background(), "ACME responder ready")
 
 	// Handlers
 
@@ -279,28 +279,25 @@ func main() {
 	startPeriodicTasks()
 
 	// ------------ Start server ------------ //
-	logger.InfoWithContext(context.Background(), false, "server started",
+	logger.InfoWithContext(context.Background(), "server started",
 		"port", port, "version", version, "enterprise", enterprise)
 
 	http.ListenAndServe(":"+port, withCORS(router))
 }
 
 func startPeriodicTasks() {
-	// ------- Periodic CRL Creation ------- //
+	// CRL re-creation
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
 		defer ticker.Stop()
 
 		for {
-			if err := recreateAllCRLs(); err != nil {
-				logger.WarnWithContext(context.Background(), false, "couldn't recreate CRLs",
-					"error", err)
-			}
+			recreateAllCRLs()
 			<-ticker.C
 		}
 	}()
 
-	// ------ Periodic Authenticator Reloading ------ //
+	// Authenticator Reloading
 	go func() {
 		interval := 30 * time.Minute
 
@@ -310,26 +307,63 @@ func startPeriodicTasks() {
 
 		for {
 			if err := setupAuthenticator(); err != nil {
-				logger.ErrorWithContext(context.Background(), false, "couldn't reload authenticator",
+				logger.ErrorWithContext(context.Background(), "couldn't reload authenticator",
 					"error", err)
 			}
 			<-ticker.C
 		}
 	}()
 
-	// ------ Periodic Store Ops ------ //
+	// Store Ops
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
 		for {
 			if err := store.PeriodicOps(context.Background()); err != nil {
-				logger.WarnWithContext(context.Background(), false, "couldn't perform periodic store ops",
+				logger.WarnWithContext(context.Background(), "couldn't perform periodic store ops",
 					"error", err)
 			}
 			<-ticker.C
 		}
 	}()
+}
+
+func recreateAllCRLs() {
+	ctx := context.Background()
+	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
+	if err != nil {
+		logger.WarnWithContext(ctx, "couldn't get signers for CRL recreation", "error", err)
+		return
+	}
+
+	for _, s := range signers {
+		signerName := s["name"].(string)
+
+		signer, err := store.LoadSigner(ctx, signerName)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't load signer", "signer", signerName, "error", err)
+			continue
+		}
+
+		existingCRL, err := store.GetSignerCRL(ctx, signerName)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't get existing CRL", "signer", signerName, "error", err)
+			continue
+		}
+
+		crl, err := signer.SignCRL(existingCRL, nil)
+		if err != nil {
+			logger.WarnWithContext(ctx, "couldn't create CRL", "signer", signerName, "error", err)
+			continue
+		}
+
+		if err := store.SetSignerCRL(ctx, signerName, crl); err != nil {
+			logger.WarnWithContext(ctx, "couldn't store CRL", "signer", signerName, "error", err)
+		}
+
+		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
+	}
 }
 
 func setupAuthenticator() error {
@@ -348,7 +382,7 @@ func setupAuthenticator() error {
 func setDefaultHttpTransport() {
 	caPool, err := x509.SystemCertPool()
 	if err != nil {
-		logger.ErrorWithContext(context.Background(), false, "couldn't load system cert pool",
+		logger.ErrorWithContext(context.Background(), "couldn't load system cert pool",
 			"error", err)
 		return
 	}
@@ -360,12 +394,12 @@ func setDefaultHttpTransport() {
 		for path := range paths {
 			caCert, err := os.ReadFile(strings.TrimSpace(path))
 			if err != nil {
-				logger.WarnWithContext(context.Background(), false, "couldn't load CA from file",
+				logger.WarnWithContext(context.Background(), "couldn't load CA from file",
 					"path", path, "error", err)
 				continue
 			}
 			if ok := caPool.AppendCertsFromPEM(caCert); !ok {
-				logger.WarnWithContext(context.Background(), false, "couldn't append CA from file",
+				logger.WarnWithContext(context.Background(), "couldn't append CA from file",
 					"path", path)
 			}
 		}
@@ -406,16 +440,14 @@ func writeJSONOk(w http.ResponseWriter, data any) {
 func logErrorAndWriteHTTP(w http.ResponseWriter, r *http.Request, code int, msg string, args ...any) {
 	var errors []error
 	var logArgs []any
-	saveErr := false
 	for i := range args {
 		if e, isError := args[i].(error); isError && e != nil {
 			logArgs = append(logArgs, "error", e)
 			errors = append(errors, e)
-			saveErr = saveErr || saveErrorLogToDB(r)
 		}
 	}
 
-	logger.Error(r, saveErr, msg, logArgs...)
+	logger.Error(r, msg, logArgs...)
 
 	var m struct {
 		Errors []string `json:"errors"`
@@ -443,9 +475,9 @@ func decodeJSONBody(r *http.Request, dst any) error {
 }
 
 // hook to run when a certificate is signed
-func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string) error {
+func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string) {
 	signerName := mux.Vars(r)["name"]
-	logger.Info(r, true, "certificate signed",
+	logger.Info(r, "certificate signed",
 		slog.String("serial", signerpkg.BigIntToString(cert.SerialNumber)),
 		slog.String("signerName", signerName),
 		slog.String("cn", cert.Subject.CommonName),
@@ -454,58 +486,30 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.Any("notAfter", cert.NotAfter),
 		slog.String("comment", comment),
 	)
-	return store.InsertCert(r.Context(), signerName, cert, comment)
-}
 
-func recreateAllCRLs() error {
-	ctx := context.Background()
-	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
-	if err != nil {
-		return err
-	}
-
-	for _, s := range signers {
-		signerName := s["name"].(string)
-
-		signer, err := store.LoadSigner(ctx, signerName)
+	// insert cert in DB asynchronously, to avoid delaying the response to the client
+	go func() {
+		err := store.InsertCert(context.Background(), signerName, cert, comment)
 		if err != nil {
-			logger.WarnWithContext(ctx, false, "couldn't load signer", "signer", signerName, "error", err)
-			continue
+			logger.Error(r, "couldn't insert certificate", "error", err)
 		}
-
-		crl, err := signer.SignCRL(nil)
-		if err != nil {
-			logger.WarnWithContext(ctx, false, "couldn't create CRL", "signer", signerName, "error", err)
-			continue
-		}
-
-		if err := store.SetSignerCRL(ctx, signerName, crl); err != nil {
-			logger.WarnWithContext(ctx, false, "couldn't store CRL", "signer", signerName, "error", err)
-		}
-
-		logger.InfoWithContext(ctx, false, "CRL updated", "signer", signerName)
-	}
-
-	return nil
+	}()
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	if token, ok := ctx.Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
-		if providerIdx, ok := ctx.Value(loggingpkg.CtxKeyProviderIndex).(int); ok {
-			roles := authenticator.ExtractRoles(token, providerIdx)
-			envs := []string{}
-			for _, role := range roles {
-				if role == "KEYAUTHORITY_OPERATOR" {
-					return true, nil, nil // has access to all environments
-				}
-				if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
-					envs = append(envs, after)
-				}
+	if roles, ok := ctx.Value(loggingpkg.CtxKeyRoles).([]string); ok {
+		envs := []string{}
+		for _, role := range roles {
+			if role == "KEYAUTHORITY_OPERATOR" {
+				return true, nil, nil // has access to all environments
 			}
-			return false, envs, nil
+			if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
+				envs = append(envs, after)
+			}
 		}
+		return false, envs, nil
 	}
-	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token or provider index")
+	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token roles in context")
 }
 
 func getPaginatedListWithAccessibleEnvs(
@@ -623,14 +627,6 @@ func isGetSecretRequest(r *http.Request) bool {
 			strings.HasPrefix(r.URL.Path, fmt.Sprintf("/v1/secrets/data/%s", secretName)))
 }
 
-func saveErrorLogToDB(r *http.Request) bool {
-	// save error log to DB if the request is authenticated with a token (not a pending request or other non-authenticated request)
-	if _, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken); ok {
-		return isUpdateSignerRequest(r) || isSigningRequest(r) || isUpdateSecretRequest(r) || isGetSecretRequest(r)
-	}
-	return false
-}
-
 func requiresAuthorization(r *http.Request) bool {
 	// already authorized
 	if _, ok := r.Context().Value(loggingpkg.CtxKeyOriginalRequestID).(uuid.UUID); ok {
@@ -735,7 +731,7 @@ func withCORS(next http.Handler) http.Handler {
 		if !strings.HasPrefix(r.URL.Path, "/v1/crl/") {
 			w.Header().Set("Access-Control-Allow-Origin", os.Getenv(envCORSOrigin))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
@@ -749,6 +745,7 @@ func withCORS(next http.Handler) http.Handler {
 
 func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Determine required role for HTTP method
 		requiredRole := internalpkg.RoleAny
 		if len(requiredRoles) > 0 {
 			if role, ok := requiredRoles[r.Method]; ok {
@@ -759,23 +756,29 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			}
 		}
 
-		// verify token
-		token, logEntries, providerIDx, err := authenticator.VerifyToken(r)
+		// Verify token (once per request)
+		token, logEntries, providerRoles, err := authenticator.VerifyToken(r)
 		for _, entry := range logEntries {
 			logger.LogWithContext(r.Context(), entry)
 		}
-
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
 		}
 
+		// Parse immutable claims once, store in context
+		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		if len(providerRoles) > 0 { // override roles from token with provider roles
+			roles = providerRoles
+		}
+
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyProviderIndex, providerIDx)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
 		r = r.WithContext(ctx)
 
-		// determine environment for request, to include in logging context and for RBAC
+		// Determine environment for RBAC and logging context
 		environment, err := getEnvironment(r)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't determine environment", err)
@@ -787,8 +790,8 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			r = r.WithContext(ctx)
 		}
 
-		// RBAC
-		if !authenticator.HasRequiredRole(token, providerIDx, environment, requiredRole) {
+		// RBAC check — use roles already extracted above
+		if !authenticator.HasRequiredRole(roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -796,6 +799,12 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		logger.Debug(r, "token verified and required role satisfied")
 
+		// Save logs to DB only after token is verified and RBAC is checked
+		ctx = r.Context()
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		r = r.WithContext(ctx)
+
+		// Prevent requester and authorizer from being the same user
 		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)
 		if ok && authorizerToken.Subject == token.Subject && authorizerToken.Issuer == token.Issuer {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
@@ -803,8 +812,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			return
 		}
 
-		// if the request requires additional authorization
-		// save it as pending and return the request ID to the client
+		// If request requires additional authorization, save as pending
 		if requiresAuthorization(r) {
 			body, _ := io.ReadAll(r.Body)
 			ctx = r.Context()
@@ -824,11 +832,9 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			ctx = context.WithValue(ctx, loggingpkg.CtxKeyRequestID, requestID)
 			r = r.WithContext(ctx)
 
-			logger.Info(r, true, "pending request created", "id", requestID)
+			logger.Info(r, "pending request created", "id", requestID)
 			writeHTTPWithHeaders(w, http.StatusPreconditionRequired, []byte(requestID.String()),
-				map[string]string{
-					"Content-Type": "text/plain",
-				})
+				map[string]string{"Content-Type": "text/plain"})
 			return
 		}
 
@@ -872,13 +878,19 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		keyID, err := store.CreateKey(r.Context(), environment, &cfg)
+		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
+		if !ok {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get user from context")
+			return
+		}
+
+		keyID, err := store.CreateKey(r.Context(), environment, &cfg, user)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't create key", err)
 			return
 		}
 
-		logger.Info(r, true, "key created",
+		logger.Info(r, "key created",
 			"keyID", keyID,
 			"environment", environment,
 			"config", cfg)
@@ -912,7 +924,7 @@ var keyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete key", err)
 			return
 		}
-		logger.Info(r, true, "key deleted if existed")
+		logger.Info(r, "key deleted if existed")
 		writeJSONOk(w, nil)
 	}
 })
@@ -979,7 +991,7 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		logger.Info(r, true, "signer created", "keyID", keyID, "config", cfg)
+		logger.Info(r, "signer created", "keyID", keyID, "config", cfg)
 		writeHTTP(w, http.StatusCreated, nil)
 
 	case http.MethodDelete: // delete signer
@@ -987,7 +999,7 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete signer", err)
 			return
 		}
-		logger.Info(r, true, "signer deleted")
+		logger.Info(r, "signer deleted")
 		writeJSONOk(w, nil)
 	}
 })
@@ -1028,7 +1040,7 @@ var signerConfigHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		logger.Info(r, true, "signer config updated", "config", cfg)
+		logger.Info(r, "signer config updated", "config", cfg)
 		writeJSONOk(w, nil)
 	}
 
@@ -1069,7 +1081,7 @@ var signerCAChainHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't save CA chain", err)
 			return
 		}
-		logger.Info(r, true, "CA chain updated")
+		logger.Info(r, "CA chain updated")
 		writeJSONOk(w, nil)
 	}
 })
@@ -1088,7 +1100,7 @@ var signerCSRHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	logger.Info(r, true, "CA CSR created")
+	logger.Info(r, "CA CSR created")
 	writeHTTPWithHeaders(w, http.StatusOK, csr, map[string]string{
 		"Content-Type":        "application/x-pem-file",
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s-ca-csr.pem"`, signerName),
@@ -1132,10 +1144,7 @@ var signerSignHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := onCertificateSigned(r, cert, body.Comment); err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "onCertificateSigned hook failed", err)
-		return
-	}
+	onCertificateSigned(r, cert, body.Comment)
 
 	switch r.URL.Query().Get("output") {
 	case "pem":
@@ -1206,33 +1215,15 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 		return
 	}
 
-	ttlStr := r.FormValue("ttl")
-	var ttl time.Duration
-	if ttlStr != "" {
-		ttl, err = time.ParseDuration(ttlStr)
-		if err != nil {
-			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "invalid TTL", err)
-			return
-		}
-	} else {
-		if signer.CA.Certificate == nil {
-			logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
-				"signer doesn't have a certificate, TTL must be specified")
-			return
-		}
-		// default TTL is until the end of the signer's certificate validity
-		ttl = time.Until(signer.CA.Certificate.NotAfter)
-	}
-
 	// sign the document
-	signedBytes, err := signer.SignPDF(fileBytes, ttl)
+	signedBytes, err := signer.SignPDF(fileBytes)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't sign document", err)
 		return
 	}
 
 	h := sha256.Sum256(signedBytes)
-	logger.Info(r, true, "document signed", "sha256", hex.EncodeToString(h[:]))
+	logger.Info(r, "document signed", "sha256", hex.EncodeToString(h[:]))
 
 	writeHTTPWithHeaders(w, http.StatusOK, signedBytes, map[string]string{
 		"Content-Disposition": `attachment; filename="signed.pdf"`,
@@ -1271,22 +1262,28 @@ var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	der, err := signer.SignCRL([]signerpkg.RevocationPair{revocationPair})
+	existingCRL, err := store.GetSignerCRL(r.Context(), signerName)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get existing CRL", err)
+		return
+	}
+
+	crl, err := signer.SignCRL(existingCRL, []signerpkg.RevocationPair{revocationPair})
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't sign CRL", err)
 		return
 	}
 
-	if err := store.SetSignerCRL(r.Context(), signerName, der); err != nil {
+	if err := store.SetSignerCRL(r.Context(), signerName, crl); err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't save new CRL", err)
 		return
 	}
 
 	if err := store.SetCertAsRevoked(r.Context(), revocationPair.Serial); err != nil {
-		logger.Warn(r, false, "couldn't set certificate as revoked", "error", err)
+		logger.Warn(r, "couldn't set certificate as revoked", "error", err)
 	}
 
-	logger.Info(r, true, "certificate revoked",
+	logger.Info(r, "certificate revoked",
 		"serial", revocationPair.Serial, "reason", revocationPair.Reason)
 	writeJSONOk(w, nil)
 })
@@ -1299,12 +1296,11 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't determine environment", err)
 			return
 		}
-		if environment != "" {
-			ctx := r.Context()
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
-			r = r.WithContext(ctx)
-			logger.Debug(r, "determined request environment")
-		}
+
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		r = r.WithContext(ctx)
 	}
 
 	resp, code, headers, err := acmeResponder.BuildResponse(r)
@@ -1313,7 +1309,7 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if code == http.StatusCreated && strings.HasSuffix(r.URL.Path, "/new-acct") {
-		logger.Info(r, true, "ACME account created", "uri", headers["Location"])
+		logger.Info(r, "ACME account created", "uri", headers["Location"])
 	}
 
 	logger.Debug(r, "ACME request handled", "code", code)
@@ -1337,7 +1333,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get secret", err)
 			return
 		}
-		logger.Info(r, true, "secret read")
+		logger.Info(r, "secret read")
 
 		switch r.URL.Query().Get("output") {
 		case "shell":
@@ -1385,7 +1381,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't insert secret", err)
 			return
 		}
-		logger.Info(r, true, "secret inserted", "encryptionKeyID", encryptionKeyID)
+		logger.Info(r, "secret inserted", "encryptionKeyID", encryptionKeyID)
 		writeHTTP(w, http.StatusCreated, nil)
 
 	case http.MethodPost, http.MethodPatch: // update/patch secret
@@ -1400,7 +1396,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't update secret", err)
 			return
 		}
-		logger.Info(r, true, "secret updated/patched")
+		logger.Info(r, "secret updated/patched")
 		writeJSONOk(w, nil)
 
 	case http.MethodDelete:
@@ -1409,7 +1405,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 				"couldn't delete secret", err)
 			return
 		}
-		logger.Info(r, true, "secret deleted if existed")
+		logger.Info(r, "secret deleted if existed")
 		writeJSONOk(w, nil)
 	}
 })
@@ -1454,7 +1450,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete pending request", err)
 			return
 		}
-		logger.Info(r, true, "pending request rejected")
+		logger.Info(r, "pending request rejected")
 		writeJSONOk(w, nil)
 
 	case http.MethodPost: // authorize
@@ -1464,9 +1460,9 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
 		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing user in context")
 			return
 		}
 
@@ -1488,16 +1484,22 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 					"couldn't get pending request info", err)
 				return
 			}
-			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == loggingpkg.GetUser(token) {
+			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == user {
 				logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
 					"cannot guarantee that requester and authorizer are different users")
 				return
 			}
 
-			logger.Info(r, false, "using authorizer's own token to execute pending request")
+			logger.Info(r, "using authorizer's own token to execute pending request")
 			pendingReq.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 		} else {
+			token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+			if !ok {
+				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+				return
+			}
+
 			ctx = context.WithValue(ctx, loggingpkg.CtxKeyAuthorizerToken, token)
 		}
 
@@ -1531,7 +1533,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		logger.Info(r, false, "pending request authorized and processed")
+		logger.Info(r, "pending request authorized and processed")
 	}
 })
 

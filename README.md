@@ -18,12 +18,15 @@ make docker-run IMG_REGISTRY=keyauthoritydh
 #@ Keycloak
 # open a terminal at ./keycloak
 make docker-create-db
-make docker-run IMG_REGISTRY=keyauthoritydh
+make docker-run IMG_REGISTRY=docker.io/keyauthoritydh
 # ...wait for Keycloak to be ready
 # ...create realm.json using KeyAuthority Helm chart and make sure that:
 #    'sslRequired' is 'none'
 #    'keyauthority-discovery' client secret matches one in shared.env
 #    'keyauthority-frontend' rootUrl, adminUrl, redirectUris, and webOrigins point to http://localhost:3000
+make docker-remove-ssl-requirement
+make docker-stop
+make docker-run IMG_REGISTRY=docker.io/keyauthoritydh
 make docker-run-provisioner
 
 #@ Backend
@@ -36,7 +39,7 @@ make docker-run \
 
 #@ Frontend
 # open a terminal at ./frontend
-make docker-run IMG_REGISTRY=keyauthoritydh
+make docker-run IMG_REGISTRY=docker.io/keyauthoritydh
 ```
 
 Adjust the `IMG_REGISTRY` and `TAG_SUFFIX` variables as needed to point to your image registry and to use appropriate tags for your images.

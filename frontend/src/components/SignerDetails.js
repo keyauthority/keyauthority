@@ -164,6 +164,7 @@ function ConfigTab({
     } catch (err) {
       //showToast("error", errorToString(err));
       setError(errorToString(err));
+      navigation.navigate("/signers");
     } finally {
       setIsLoading(false);
     }
@@ -317,23 +318,25 @@ function ConfigTab({
                         <i className="bi bi-x-circle"></i>No
                       </div>
                     ),
-                    CDP: signerConfig.cdp
-                      ? signerConfig.cdp.map((cdp, idx) => (
-                          <div
-                            key={idx}
-                            className="d-flex gap-2 align-items-start"
+                    CDP:
+                      signerConfig.cdp?.length > 0 ? (
+                        <div className="d-flex gap-2 align-items-start">
+                          <a
+                            href={signerConfig.cdp}
+                            target="_blank"
+                            rel="noreferrer"
                           >
-                            <a
-                              href={cdp}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <i className="bi bi-download"></i>
-                            </a>
-                            {cdp}
+                            <i className="bi bi-download"></i>
+                          </a>
+                          <div className="overflow-auto">
+                            {signerConfig.cdp.map((cdp, idx) => (
+                              <div key={idx}>{cdp}</div>
+                            ))}
                           </div>
-                        ))
-                      : "-",
+                        </div>
+                      ) : (
+                        "-"
+                      ),
                   }}
                   keysClass="fw-bold"
                 />
@@ -736,22 +739,18 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
   return (
     <Form>
       <Row>
-        <Col md={6}>
+        <Col md={6} className="mb-3">
           <Form.Group>
             <Form.Label>Certificate Serial</Form.Label>
             <Form.Control
               type="text"
               value={serial}
-              placeholder="e.g. 01ab23cd45ef6789"
+              placeholder="In hexadecimal format (e.g. 01ab23cd45ef6789)"
               onChange={(e) => setSerial(e.target.value)}
             />
-            <Form.Text>
-              Enter the serial of the certificate to revoke -serial must be in
-              hexadecimal format
-            </Form.Text>
           </Form.Group>
         </Col>
-        <Col md={6}>
+        <Col md={6} className="mb-3">
           <Form.Group>
             <Form.Label>Reason</Form.Label>
             <Form.Select
@@ -768,12 +767,18 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
             </Form.Select>
           </Form.Group>
         </Col>
+        <Col md={12} className="d-flex justify-content-end mb-3">
+          <Form.Group>
+            <Button
+              variant="danger"
+              onClick={handleRevoke}
+              disabled={!serial || isLoading}
+            >
+              Revoke Certificate
+            </Button>
+          </Form.Group>
+        </Col>
       </Row>
-      <div className="d-flex justify-content-end gap-2 mb-3">
-        <Button variant="danger" onClick={handleRevoke} disabled={!serial}>
-          Revoke Certificate
-        </Button>
-      </div>
     </Form>
   );
 }

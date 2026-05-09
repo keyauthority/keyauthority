@@ -66,13 +66,12 @@ docker-buildx: check-image-exists ## Build and push docker image for the manager
 
 ##@ Run locally on docker
 DATA_VOLUME ?= postgres-data
-POSTGRES_CONTAINER_NAME ?= postgres
 
 .PHONY: docker-run
 docker-run: load-shared-env
 	$(CONTAINER_TOOL) volume create $(DATA_VOLUME) || true
-	$(CONTAINER_TOOL) run --platform=linux/amd64 -d --rm -p $(POSTGRES_PORT):5432 \
-			--name $(POSTGRES_CONTAINER_NAME) \
+	$(CONTAINER_TOOL) run -d --rm -p $(POSTGRES_PORT):5432 \
+			--name postgres \
 			--user 65535:4001 \
 			-v $(DATA_VOLUME):/var/lib/postgresql \
 			-e PGDATA=/var/lib/postgresql/data \
@@ -80,11 +79,9 @@ docker-run: load-shared-env
 			-e POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
 			$(IMG)
 
-.PHONY: docker-clean
-docker-clean:
-	$(CONTAINER_TOOL) rm -f $(POSTGRES_CONTAINER_NAME) || true
-	$(CONTAINER_TOOL) run --rm -v $(DATA_VOLUME):/data alpine sh -c "rm -rf /data/*" || true
-	$(CONTAINER_TOOL) volume rm $(DATA_VOLUME) || true
+.PHONY: docker-stop
+docker-stop:
+	$(CONTAINER_TOOL) rm -f postgres || true
 
 .PHONY: scan
 scan:
