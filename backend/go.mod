@@ -1,6 +1,6 @@
 module github.com/keyauthority/keyauthority
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/ThalesGroup/crypto11 v1.6.0
