@@ -1296,12 +1296,11 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't determine environment", err)
 			return
 		}
-		if environment != "" {
-			ctx := r.Context()
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
-			r = r.WithContext(ctx)
-			logger.Debug(r, "determined request environment")
-		}
+
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		r = r.WithContext(ctx)
 	}
 
 	resp, code, headers, err := acmeResponder.BuildResponse(r)
