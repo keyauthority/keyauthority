@@ -4,11 +4,11 @@ import { copyToClipboard } from "../utils/utils";
 export function errorToString(err, fallback = "An unexpected error occurred.") {
   if (!err) return fallback;
 
-  // handle 428 for additional authorization required
+  // handle 428 for approval required
   if (err.response && err.response.status === 428) {
     return (
       <span>
-        Additional authorization required for request:{" "}
+        Approval required for request:{" "}
         <Link
           as="button"
           onClick={() =>

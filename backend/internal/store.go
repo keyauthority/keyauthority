@@ -64,7 +64,7 @@ var (
 	secretsCache = NewCache()
 )
 
-// actual data used for replaying pending requests upon authorization
+// actual data used for replaying pending requests upon approval
 type PendingRequestPrivate struct {
 	Method string
 	URL    *url.URL

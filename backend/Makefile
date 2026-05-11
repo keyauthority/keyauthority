@@ -207,7 +207,7 @@ ln -sf $(1)-$(3) $(1)
 endef
 
 ##@ Swagger
-SWAGGER_VERSION = 5.32.4
+SWAGGER_VERSION = 5.32.5
 SWAGGER_DIR = ./swagger
 .PHONY: download-swagger
 download-swagger:

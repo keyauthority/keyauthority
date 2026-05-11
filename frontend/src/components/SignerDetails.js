@@ -9,6 +9,7 @@ import {
   Tab,
   Row,
   Col,
+  Tooltip,
 } from "react-bootstrap";
 import {
   showToast,
@@ -18,6 +19,7 @@ import {
   copyToClipboard,
   prettyCode,
   boxedContent,
+  withTooltipDescription,
 } from "../utils/utils";
 import { Link } from "react-router-dom";
 import JSONModal from "./JSONModal";
@@ -265,7 +267,12 @@ function ConfigTab({
           {/* CA Template Section */}
           <Col md={6} className="mb-3">
             <Card>
-              <Card.Header>CA Template</Card.Header>
+              <Card.Header>
+                {withTooltipDescription(
+                  "CA Template",
+                  "Fields of the certificate template used when creating CA CSRs",
+                )}
+              </Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
@@ -305,19 +312,16 @@ function ConfigTab({
           {/* Certificate Template Section */}
           <Col md={6} className="mb-3">
             <Card>
-              <Card.Header>Certificate Template</Card.Header>
+              <Card.Header>
+                {withTooltipDescription(
+                  "Certificate Template",
+                  "Fields included in the certificates issued by this signer",
+                )}
+              </Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
-                    "Is CA": signerConfig.isCA ? (
-                      <div className="d-flex gap-2 align-items-start">
-                        <i className="bi bi-check-circle"></i>Yes
-                      </div>
-                    ) : (
-                      <div className="d-flex gap-2 align-items-start">
-                        <i className="bi bi-x-circle"></i>No
-                      </div>
-                    ),
+                    "Is CA": signerConfig.isCA ? "Yes" : "No",
                     CDP:
                       signerConfig.cdp?.length > 0 ? (
                         <div className="d-flex gap-2 align-items-start">
@@ -347,7 +351,12 @@ function ConfigTab({
           {/* Policy Section */}
           <Col md={6} className="mb-3">
             <Card>
-              <Card.Header>Policy</Card.Header>
+              <Card.Header>
+                {withTooltipDescription(
+                  "Policy",
+                  "Rules that control what this signer is allowed to issue and how it operates",
+                )}
+              </Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
@@ -364,13 +373,13 @@ function ConfigTab({
                           ))
                         : ".*",
                     "Max TTL": signerConfig.maxTTL,
-                    "Additional Authorization": signerConfig.authzRequired ? (
+                    "Approval Required": signerConfig.approvalRequired ? (
                       <div className="d-flex gap-2 align-items-start">
                         <i className="bi bi-exclamation-circle text-warning"></i>
-                        Required for non-trivial requests
+                        Yes, for non-trivial requests
                       </div>
                     ) : (
-                      <>Not required</>
+                      <>No</>
                     ),
                   }}
                   keysClass="fw-bold"
@@ -552,8 +561,9 @@ function CSRAndChainTab({
             return (
               <Card className="mb-3" key={index}>
                 <Card.Header>
-                  Certificate {index + 1} -{" "}
-                  {cert.subject === cert.issuer ? "Root" : "Intermediate"}
+                  {`Certificate ${index + 1} - ${
+                    cert.subject === cert.issuer ? "Root" : "Intermediate"
+                  }`}
                 </Card.Header>
                 <Card.Body>
                   <KeyValueTable

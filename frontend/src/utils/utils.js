@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
-import { Button, Alert, Tab, Table } from "react-bootstrap";
+import {
+  Button,
+  Alert,
+  Tab,
+  Table,
+  OverlayTrigger,
+  Tooltip,
+} from "react-bootstrap";
 import { X509Certificate } from "@peculiar/x509";
 
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -404,4 +411,34 @@ export const getRoles = (token) => {
 
   const allRoles = [...realmRoles, ...clientRoles];
   return allRoles.filter((role) => role.startsWith("KEYAUTHORITY_"));
+};
+
+export const withTooltipDescription = (title, description) => {
+  const tooltipId = `tooltip-${String(title)
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")}`;
+
+  return (
+    <div className="d-flex align-items-center gap-2">
+      <div>{title}</div>
+      {description ? (
+        <div>
+          <OverlayTrigger
+            placement="top"
+            overlay={<Tooltip id={tooltipId}>{description}</Tooltip>}
+          >
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={description}
+              className="text-muted small"
+              //style={{ cursor: "help" }}
+            >
+              <i className="bi bi-question-circle"></i>
+            </span>
+          </OverlayTrigger>
+        </div>
+      ) : null}
+    </div>
+  );
 };

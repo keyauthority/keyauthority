@@ -227,20 +227,20 @@ func main() {
 	// ------------ Pending Requests ------------ //
 	router.Handle("/v1/pending-requests", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAuthorizer, // get pending requests
+			http.MethodGet: internalpkg.RoleApprover, // get pending requests
 		},
 		pendingRequestsHandler))
 
 	router.Handle("/v1/pending-requests/{id}", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodPost:   internalpkg.RoleAuthorizer, // approve pending request
-			http.MethodDelete: internalpkg.RoleAuthorizer, // reject pending request
+			http.MethodPost:   internalpkg.RoleApprover, // approve pending request
+			http.MethodDelete: internalpkg.RoleApprover, // reject pending request
 		},
 		pendingRequestHandler))
 
 	router.Handle("/v1/pending-requests/{id}/body", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAuthorizer, // get pending request body
+			http.MethodGet: internalpkg.RoleApprover, // get pending request body
 		},
 		pendingRequestBodyHandler))
 
@@ -614,7 +614,7 @@ func isInsertSecretRequest(r *http.Request) bool {
 		r.URL.Path == fmt.Sprintf("/v1/secrets/%s", mux.Vars(r)["name"])
 }
 
-func isUpdateSecretRequest(r *http.Request) bool {
+/*func isUpdateSecretRequest(r *http.Request) bool {
 	return r.Method != http.MethodGet &&
 		r.Method != http.MethodPut &&
 		r.URL.Path == fmt.Sprintf("/v1/secrets/%s", mux.Vars(r)["name"])
@@ -625,10 +625,10 @@ func isGetSecretRequest(r *http.Request) bool {
 	return r.Method == http.MethodGet &&
 		(r.URL.Path == fmt.Sprintf("/v1/secrets/%s", secretName) ||
 			strings.HasPrefix(r.URL.Path, fmt.Sprintf("/v1/secrets/data/%s", secretName)))
-}
+}*/
 
-func requiresAuthorization(r *http.Request) bool {
-	// already authorized
+func requiresApproval(r *http.Request) bool {
+	// already approved, no need for approval again
 	if _, ok := r.Context().Value(loggingpkg.CtxKeyOriginalRequestID).(uuid.UUID); ok {
 		return false
 	}
@@ -644,7 +644,7 @@ func requiresAuthorization(r *http.Request) bool {
 		if err != nil {
 			return false
 		}
-		return cfg.AuthzRequired
+		return cfg.ApprovalRequired
 	}
 
 	return false
@@ -801,19 +801,19 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		// Save logs to DB only after token is verified and RBAC is checked
 		ctx = r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, true)
 		r = r.WithContext(ctx)
 
-		// Prevent requester and authorizer from being the same user
-		authorizerToken, ok := ctx.Value(loggingpkg.CtxKeyAuthorizerToken).(*oidc.IDToken)
-		if ok && authorizerToken.Subject == token.Subject && authorizerToken.Issuer == token.Issuer {
+		// Prevent requester and approver from being the same user
+		approverToken, ok := ctx.Value(loggingpkg.CtxKeyApproverToken).(*oidc.IDToken)
+		if ok && approverToken.Subject == token.Subject && approverToken.Issuer == token.Issuer {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
-				"cannot guarantee that requester and authorizer are different users")
+				"cannot guarantee that requester and approver are different users")
 			return
 		}
 
-		// If request requires additional authorization, save as pending
-		if requiresAuthorization(r) {
+		// If request requires additional approval, save as pending
+		if requiresApproval(r) {
 			body, _ := io.ReadAll(r.Body)
 			ctx = r.Context()
 			requestID, err := store.InsertPendingRequest(ctx,
@@ -1299,7 +1299,7 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeySaveLogToDB, true)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, true)
 		r = r.WithContext(ctx)
 	}
 
@@ -1453,7 +1453,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 		logger.Info(r, "pending request rejected")
 		writeJSONOk(w, nil)
 
-	case http.MethodPost: // authorize
+	case http.MethodPost: // approve and execute
 		pendingReq, err := store.GetPendingRequest(r.Context(), id)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get pending request", err)
@@ -1471,6 +1471,9 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyOriginalRequestID, id)
 
+		// remove the writeToDB flag from context to prevent double logging
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, false)
+
 		// logic for executing request with own token
 		if useOwnToken := r.URL.Query().Get("useOwnToken"); useOwnToken == "true" {
 			prList, _, _, err := store.GetPendingRequests(r.Context(),
@@ -1486,11 +1489,11 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			}
 			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == user {
 				logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
-					"cannot guarantee that requester and authorizer are different users")
+					"cannot guarantee that requester and approver are different users")
 				return
 			}
 
-			logger.Info(r, "using authorizer's own token to execute pending request")
+			logger.Debug(r, "using approver's own token to execute pending request")
 			pendingReq.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 		} else {
@@ -1500,7 +1503,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 				return
 			}
 
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyAuthorizerToken, token)
+			ctx = context.WithValue(ctx, loggingpkg.CtxKeyApproverToken, token)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, pendingReq.Method, pendingReq.URL.String(), reqBody)
@@ -1515,7 +1518,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 
 		if !(rr.Code >= 200 && rr.Code < 300) {
 			logErrorAndWriteHTTP(w, r.WithContext(ctx), http.StatusInternalServerError,
-				"pending request authorized but failed", err)
+				"pending request approved but execution failed", err)
 			return
 		}
 
@@ -1523,17 +1526,19 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 		w.WriteHeader(rr.Code)
 		if _, err := w.Write(rr.Body.Bytes()); err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-				"pending request authorized but failed", fmt.Errorf("couldn't write response body: %w", err))
+				"pending request approved but execution failed",
+				fmt.Errorf("couldn't write response body: %w", err))
 			return
 		}
 
 		if err := store.DeletePendingRequest(r.Context(), id); err != nil {
 			logErrorAndWriteHTTP(w, r.WithContext(ctx), http.StatusInternalServerError,
-				"pending request authorized but failed", fmt.Errorf("couldn't delete pending request: %w", err))
+				"pending request approved but execution failed",
+				fmt.Errorf("couldn't delete pending request: %w", err))
 			return
 		}
 
-		logger.Info(r, "pending request authorized and processed")
+		logger.Info(r, "pending request approved and processed")
 	}
 })
 

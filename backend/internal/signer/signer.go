@@ -72,8 +72,8 @@ type SignerConfig struct {
 	AllowedKeyUsages []capi.KeyUsage `json:"allowedKeyUsages,omitempty"`
 	AllowedDomains   []string        `json:"allowedDomains,omitempty"`
 
-	// Authorization required for non-trivial requests
-	AuthzRequired bool `json:"authzRequired,omitempty"`
+	// Approval required for non-trivial requests
+	ApprovalRequired bool `json:"approvalRequired,omitempty"`
 }
 
 type Signer struct {

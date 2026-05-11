@@ -33,9 +33,9 @@ export function Administration() {
       <p>
         KeyAuthority provides a comprehensive API and web interface for managing
         certificates, signers, secrets, and cryptographic operations. User
-        authentication, authorization, and role-based access control are managed
-        through the integrated Keycloak identity provider. This design ensures
-        that KeyAuthority focuses on cryptographic operations while delegating
+        authentication and RBAC (role-based access control) are managed through
+        the integrated Keycloak identity provider. This design ensures that
+        KeyAuthority focuses on cryptographic operations while delegating
         identity management to a proven, enterprise-grade solution.
       </p>
       <p>
@@ -104,8 +104,8 @@ export function Administration() {
           KEYAUTHORITY_OPERATOR:
             "Access to manage resources such as keys, signers and secrets",
           KEYAUTHORITY_AUDITOR: "Read-only access to view logs",
-          KEYAUTHORITY_AUTHORIZER:
-            "Permissions to authorize requests that require additional review and approval",
+          KEYAUTHORITY_APPROVER:
+            "Permissions to approve requests that are pending review and approval",
         }}
         header={["Role", "Access"]}
         minKeyLen={30}
@@ -582,6 +582,7 @@ metadata:
   annotations:
     cert-manager.io/issuer: ${signerName} # or cert-manager.io/cluster-issuer: ${signerName}
 spec:
+  ingressClassName: nginx
   tls:
     - hosts:
         - my-app.example.com
@@ -658,7 +659,7 @@ spec:
   vault:
     path: signers/${signerName}/sign
     server: "${apiRootUrl}"
-    caBundle: "..." # optional, base64-encoded CA cert of '${apiRootUrl}'
+    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
     auth:
       appRole:
         path: approle
@@ -712,7 +713,7 @@ spec:
   vault:
     path: signers/${signerName}/sign
     server: "${apiRootUrl}"
-    caBundle: "..." # optional, base64-encoded CA cert of '${apiRootUrl}'
+    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
     auth:
       kubernetes:
         role: ${signerName}-role
@@ -748,7 +749,7 @@ spec:
   acme:
     server: "${apiRootUrl}/v1/signers/${signerName}/acme/directory"
     email: ${validEmail} # or your actual email
-    caBundle: "..." # optional, base64-encoded CA cert of '${apiRootUrl}'
+    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
     privateKeySecretRef:
       name: ${signerName}-acme-key
     solvers:

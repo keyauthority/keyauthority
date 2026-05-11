@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.15
+  version: 1.4.16
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -11,7 +11,7 @@ info:
     This documentation provides a complete reference for most endpoints, 
     including PKI operations, secret management, and health checks.
 
-    We document here only the status error code 400 for simplicity. In practice, the API may return other status codes such as 428 for actions requiring additional authorization, 401 for unauthorized access, 403 for forbidden actions, and 500 for internal server errors. The error response will include a JSON body with an "errors" field describing the error messages.
+    We document here only the status error code 400 for simplicity. In practice, the API may return other status codes such as 428 for actions requiring approval, 401 for unauthorized access, 403 for forbidden actions, and 500 for internal server errors. The error response will include a JSON body with an "errors" field describing the error messages.
 
     **Features:**
     - Full support for X.509 CA operations
@@ -1016,10 +1016,10 @@ paths:
 
   /v1/pending-requests/{id}:
     post:
-      summary: Authorize pending request
+      summary: Approve and execute pending request
       description: |
-        Authorize the pending request with the specified ID. 
-        The authorizer can choose to use their own token or the requester's token when executing the pending request.
+        Approve and execute the pending request with the specified ID. 
+        The approver can choose to use their own token or the requester's token when executing the pending request.
       tags:
         - Pending Requests
       parameters:
@@ -1033,7 +1033,7 @@ paths:
           in: query
           schema:
             type: boolean
-          description: Whether to use the authorizer's own token when executing the pending request.
+          description: Whether to use the approver's own token when executing the pending request.
       responses:
         "200":
           description: Success
@@ -1350,9 +1350,9 @@ components:
           items:
             type: string
           description: Allowed domains for issued certificates
-        authzRequired:
+        approvalRequired:
           type: boolean
-          description: Whether additional authorization is required for non-trivial operations
+          description: Whether approval is required for non-trivial operations
 
     Signer:
       type: object

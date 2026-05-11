@@ -206,7 +206,7 @@ export default function SecretModal({
           )}
 
           <Card className="mb-3">
-            <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+            <Card.Header>
               <div>
                 Data{" "}
                 {isFetchingData && (
@@ -217,7 +217,7 @@ export default function SecretModal({
                   />
                 )}
               </div>
-              <div className="text-muted small fw-normal">
+              <div className="text-muted small">
                 Key-value pairs to store in the secret
               </div>
             </Card.Header>
@@ -322,7 +322,7 @@ export default function SecretModal({
 
           {!editMode && (
             <Card className="mb-3">
-              <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+              <Card.Header>
                 <div>
                   Encryption Key{" "}
                   {isFetchingKeys && (
@@ -333,8 +333,8 @@ export default function SecretModal({
                     />
                   )}
                 </div>
-                <div className="text-muted small fw-normal">
-                  The key used to encrypt the secret
+                <div className="text-muted small">
+                  Key used to encrypt the secret
                 </div>
               </Card.Header>
               <Card.Body>

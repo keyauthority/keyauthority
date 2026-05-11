@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS pending_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at TIMESTAMPTZ DEFAULT now(),
   token_info JSONB NOT NULL,
-  private_body BOOLEAN DEFAULT TRUE, -- whether the body can be viewed by authorizers
+  private_body BOOLEAN DEFAULT TRUE, -- whether the body can be viewed by approvers
   method TEXT NOT NULL,
   url TEXT NOT NULL,
   encrypted_token BYTEA,

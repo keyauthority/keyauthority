@@ -53,7 +53,7 @@ export default function SignerModal({
   // Policy
   const [allowedDomains, setAllowedDomains] = useState("");
   const [maxTTL, setMaxTTL] = useState(720);
-  const [authzRequired, setAuthzRequired] = useState(false);
+  const [approvalRequired, setApprovalRequired] = useState(false);
   const [allowedKeyUsages, setAllowedKeyUsages] = useState([
     "digital signature",
     "key encipherment",
@@ -141,7 +141,7 @@ export default function SignerModal({
       setAllowedDomains(signerConfig.allowedDomains?.join(", ") || "");
       setAllowedKeyUsages(signerConfig.allowedKeyUsages || []);
       setMaxTTL(toHours(signerConfig.maxTTL) || 720);
-      setAuthzRequired(signerConfig.authzRequired || false);
+      setApprovalRequired(signerConfig.approvalRequired || false);
     }
   }, [signerConfig]);
 
@@ -171,7 +171,7 @@ export default function SignerModal({
 
       setAllowedDomains("");
       setMaxTTL(720);
-      setAuthzRequired(false);
+      setApprovalRequired(false);
       setAllowedKeyUsages([
         "digital signature",
         "key encipherment",
@@ -230,7 +230,7 @@ export default function SignerModal({
         .map((s) => s.trim())
         .filter(Boolean),
       allowedKeyUsages,
-      authzRequired,
+      approvalRequired,
     };
 
     if (!editMode) {
@@ -311,10 +311,10 @@ export default function SignerModal({
         {/* Private Key Section */}
         {!editMode && (
           <Card className="mb-3">
-            <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+            <Card.Header>
               <div>Private Key</div>
-              <div className="text-muted small fw-normal">
-                The private key associated with this signer
+              <div className="text-muted small">
+                Private key associated with this signer
               </div>
             </Card.Header>
             <Card.Body>
@@ -337,9 +337,9 @@ export default function SignerModal({
 
         {/* CA Template Section */}
         <Card className="mb-3">
-          <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+          <Card.Header>
             <div>CA Template</div>
-            <div className="text-muted small fw-normal">
+            <div className="text-muted small">
               Fields of the certificate template used when creating CA CSRs
             </div>
           </Card.Header>
@@ -435,9 +435,9 @@ export default function SignerModal({
 
         {/* Certificate Template Section */}
         <Card className="mb-3">
-          <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+          <Card.Header>
             <div>Certificate Template</div>
-            <div className="text-muted small fw-normal">
+            <div className="text-muted small">
               Fields included in the certificates issued by this signer
             </div>
           </Card.Header>
@@ -487,10 +487,11 @@ export default function SignerModal({
 
         {/* Policy Section */}
         <Card className="mb-3">
-          <Card.Header className="d-flex justify-content-between align-items-center gap-1">
+          <Card.Header>
             <div>Policy</div>
-            <div className="text-muted small fw-normal">
-              Restrictions applied when using this signer
+            <div className="text-muted small">
+              Rules that control what this signer is allowed to issue and how it
+              operates
             </div>
           </Card.Header>
           <Card.Body>
@@ -525,7 +526,7 @@ export default function SignerModal({
                 ))}
               </Row>
               <Form.Text className="text-muted">
-                Key usages allowed in issued certificates
+                Key usages allowed in certificates issued by this signer
               </Form.Text>
             </Form.Group>
 
@@ -553,7 +554,7 @@ export default function SignerModal({
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Max duration (TTL) of issued certificates</Form.Label>
+              <Form.Label>Max TTL</Form.Label>
               <div className="input-group">
                 <Form.Control
                   type="number"
@@ -563,17 +564,21 @@ export default function SignerModal({
                 />
                 <span className="input-group-text">hours</span>
               </div>
+              <Form.Text className="text-muted">
+                Maximum allowed Time-to-Live (TTL) for certificates issued by
+                this signer
+              </Form.Text>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Check
                 type="checkbox"
-                label="Additional Authorization Required"
-                checked={authzRequired}
-                onChange={(e) => setAuthzRequired(e.target.checked)}
+                label="Approval Required"
+                checked={approvalRequired}
+                onChange={(e) => setApprovalRequired(e.target.checked)}
               />
               <Form.Text className="text-muted">
-                If set, non-trivial requests such as signing, revocation, etc.
-                will require authorization from a second user
+                If set, non-trivial requests such as signing, revocation, etc...
+                will require approval from an additional user
               </Form.Text>
             </Form.Group>
           </Card.Body>
