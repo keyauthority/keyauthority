@@ -85,7 +85,7 @@ export default function Main() {
           title: "Application Logs",
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
-          icon: "bi-journal-text",
+          icon: "bi-file-text",
         },
         {
           title: "Pending Requests",

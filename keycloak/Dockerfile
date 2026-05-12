@@ -4,10 +4,10 @@ ARG UBI_VERSION=10.1-1778058333
 ARG RUNTIME_GID=4001
 
 # Stage 1: Prepare Keycloak theme
-FROM debian:bookworm AS theme
+FROM alpine:3.22 AS theme
+RUN apk add unzip
 COPY theming/keyauthority-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar keycloak-themes.jar
-RUN apt-get update && apt-get install -y unzip && \
-    unzip keycloak-themes.jar -d keycloak-themes
+RUN unzip keycloak-themes.jar -d keycloak-themes
 
 # Stage 2: Builder
 FROM quay.io/keycloak/keycloak:${KC_VERSION} AS builder

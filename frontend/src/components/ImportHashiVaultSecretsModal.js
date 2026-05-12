@@ -231,7 +231,7 @@ export default function ImportHashiVaultSecretsModal({
             <code>
               vault write sys/config/cors enabled=true
               allowed_origins="https://staging.keyauthority.com"
-              allowed_headers="Content-Type,X-Vault-Token,Authorization"
+              allowed_headers="Content-Type,Authorization,X-Vault-Token"
               allowed_methods="GET,POST,PUT,DELETE,LIST,OPTIONS,PATCH"
             </code>
           </Form.Text>

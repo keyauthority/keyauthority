@@ -117,10 +117,10 @@ const classes = {
 
   kcHeaderClass: "",
   kcHeaderWrapperClass:
-    "bg-body border border-bottom-0 rounded-3 rounded-bottom-0 p-5 pt-5 pb-3",
+    "bg-body border border-bottom-0 rounded-3 rounded-bottom-0 p-5 pt-5 pb-3 shadow-sm",
 
   kcFormCardClass:
-    "bg-body border border-top-0 rounded-3 rounded-top-0 p-5 pt-0",
+    "bg-body border border-top-0 rounded-3 rounded-top-0 p-5 pt-0 shadow-sm",
   kcLocaleMainClass: "d-none",
 
   kcFormHeaderClass: "opacity-85 pb-3",

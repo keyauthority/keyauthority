@@ -451,9 +451,9 @@ export function PendingRequests({ isLoading, setIsLoading }) {
     fetchRequests();
   }, [fetchRequests]);
 
-  const handleAuthorizeRequest = async (requestID, useOwnToken) => {
+  const handleApproveRequest = async (requestID, useOwnToken) => {
     const confirmed = window.confirm(
-      `Are you sure you want to authorize the request '${requestID}'?`,
+      `Are you sure you want to approve the request '${requestID}'?`,
     );
     if (!confirmed) return;
 
@@ -535,7 +535,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <div>
         {Object.keys(files).map((requestID) =>
           downloadOrCopy(
-            `Request '${requestID}' authorized!`,
+            `Request '${requestID}' approved!`,
             files[requestID].data,
             `response-${requestID}.${contentTypeToExtension[files[requestID].contentTypeFromHeader] || "txt"}`,
           ),
@@ -623,16 +623,16 @@ export function PendingRequests({ isLoading, setIsLoading }) {
                   <Button
                     variant="outline-success"
                     size="sm"
-                    title="Authorize and Execute with Requester's Token"
-                    onClick={() => handleAuthorizeRequest(req.id, false)}
+                    title="Approve and Execute with Requester's Token"
+                    onClick={() => handleApproveRequest(req.id, false)}
                   >
                     <i className="bi bi-check-lg"></i>
                   </Button>
                   <Button
                     variant="outline-success"
                     size="sm"
-                    title="Authorize and Execute with My Own Token"
-                    onClick={() => handleAuthorizeRequest(req.id, true)}
+                    title="Approve and Execute with My Own Token"
+                    onClick={() => handleApproveRequest(req.id, true)}
                   >
                     <i className="bi bi-person-check-fill"></i>
                   </Button>
