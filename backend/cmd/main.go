@@ -308,13 +308,21 @@ func main() {
 		crlRouter := mux.NewRouter()
 		crlRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 		go func() {
-			logger.InfoWithContext(context.Background(), "CRL HTTP server started", "port", httpPort)
+			logger.InfoWithContext(context.Background(), "CRL server started")
 			if err := http.ListenAndServe(":"+httpPort, crlRouter); err != nil {
-				logger.ErrorWithContext(context.Background(), "CRL HTTP server stopped", "error", err)
+				logger.ErrorWithContext(context.Background(), "CRL server stopped", "error", err)
 			}
 		}()
 
-		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withCORS(router))
+		server := &http.Server{
+			Addr:    ":" + httpsPort,
+			Handler: withCORS(router),
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		}
+		server.ListenAndServeTLS(tlsCert, tlsKey)
+
 	} else {
 		http.ListenAndServe(":"+httpPort, withCORS(router))
 	}
@@ -459,8 +467,14 @@ func setDefaultHttpTransport() {
 			}
 		}
 	}
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
-		RootCAs: caPool,
+
+	defaulTransp := http.DefaultTransport.(*http.Transport)
+	if defaulTransp.TLSClientConfig == nil {
+		defaulTransp.TLSClientConfig = &tls.Config{
+			RootCAs: caPool,
+		}
+	} else {
+		defaulTransp.TLSClientConfig.RootCAs = caPool
 	}
 }
 
