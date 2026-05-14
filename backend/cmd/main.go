@@ -1296,10 +1296,11 @@ var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *
 })
 
 var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	var crl []byte
 	hash := mux.Vars(r)["hashOfSignerName"]
-	if crl1, err := store.GetSignerCRLByHash(r.Context(), hash); err == nil {
-		crl = crl1
+	crl, err := store.GetSignerCRLByHash(r.Context(), hash)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get CRL for signer", err)
+		return
 	}
 
 	writeHTTPWithHeaders(w, http.StatusOK, crl,
