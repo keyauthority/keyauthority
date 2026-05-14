@@ -314,15 +314,7 @@ func main() {
 			}
 		}()
 
-		server := &http.Server{
-			Addr:    ":" + httpsPort,
-			Handler: withCORS(router),
-			TLSConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			},
-		}
-		server.ListenAndServeTLS(tlsCert, tlsKey)
-
+		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withCORS(router))
 	} else {
 		http.ListenAndServe(":"+httpPort, withCORS(router))
 	}

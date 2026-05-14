@@ -61,7 +61,9 @@ const (
 )
 
 var (
-	secretsCache = NewCache()
+	secretsCache     = NewCache()
+	crlCache         = NewCache()
+	signerNameHashes = make(map[string]string)
 )
 
 // actual data used for replaying pending requests upon approval
@@ -677,14 +679,22 @@ func (s *Store) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {
 }
 
 func (s *Store) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, error) {
+	if cachedCRL, found := crlCache.Get(hash); found {
+		return cachedCRL.([]byte), nil
+	}
+
+	var name string
 	var crl []byte
 	if err := s.DB.QueryRowContext(ctx, `
-		SELECT crl
+		SELECT name, crl
 		FROM signers
 		WHERE name_hash = $1
-	`, hash).Scan(&crl); err != nil {
-		return nil, fmt.Errorf("get signer CRL by hash: %w", err)
+	`, hash).Scan(&name, &crl); err != nil {
+		return nil, fmt.Errorf("get signer CRL: %w", err)
 	}
+
+	signerNameHashes[name] = hash
+	crlCache.Set(hash, crl)
 	return crl, nil
 }
 
@@ -694,7 +704,14 @@ func (s *Store) SetSignerCRL(ctx context.Context, name string, der []byte) error
 		SET crl = $2
 		WHERE name = $1
 	`, name, der)
-	return err
+	if err != nil {
+		return fmt.Errorf("set signer CRL: %w", err)
+	}
+
+	if hash, found := signerNameHashes[name]; found {
+		crlCache.Delete(hash) // invalidate cache
+	}
+	return nil
 }
 
 func (s *Store) LoadSigner(ctx context.Context, name string, args ...any) (*signerpkg.Signer, error) {
