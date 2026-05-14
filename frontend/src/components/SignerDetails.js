@@ -324,20 +324,28 @@ function ConfigTab({
                     "Is CA": signerConfig.isCA ? "Yes" : "No",
                     CDP:
                       signerConfig.cdp?.length > 0 ? (
-                        <div className="d-flex gap-2 align-items-start">
-                          <a
-                            href={signerConfig.cdp}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <i className="bi bi-download"></i>
-                          </a>
-                          <div className="overflow-auto">
-                            {signerConfig.cdp.map((cdp, idx) => (
-                              <div key={idx}>{cdp}</div>
-                            ))}
-                          </div>
-                        </div>
+                        <>
+                          {signerConfig.cdp.map((cdp, idx) => (
+                            <div
+                              key={idx}
+                              className="d-flex gap-2 align-items-start"
+                            >
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="m-0 p-0"
+                                onClick={() => {
+                                  copyToClipboard(cdp, "CDP URL copied!");
+                                }}
+                              >
+                                <i className="bi bi-clipboard"></i>
+                              </Button>
+                              <span className="overflow-auto text-truncate">
+                                {cdp}
+                              </span>
+                            </div>
+                          ))}
+                        </>
                       ) : (
                         "-"
                       ),
