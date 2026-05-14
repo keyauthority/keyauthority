@@ -49,15 +49,18 @@ import (
 )
 
 const (
-	envPort       = "PORT"
-	envCORSOrigin = "CORS_ORIGIN"
-	envTruststore = "TRUSTSTORE"
+	envHTTPPort    = "HTTP_PORT"
+	envHTTPSPort   = "HTTPS_PORT"
+	envMetricsPort = "METRICS_PORT"
+	envCORSOrigin  = "CORS_ORIGIN"
+	envTruststore  = "TRUSTSTORE"
+	envTLSCert     = "TLS_CERT"
+	envTLSKey      = "TLS_KEY"
 )
 
 var (
 	version       string
 	enterprise    string
-	port          string
 	logger        *loggingpkg.StdAndDBLogger
 	store         *internalpkg.Store
 	authenticator *internalpkg.Authenticator
@@ -76,8 +79,15 @@ func main() {
 	// Set enterprise flag
 	cryptopkg.Enterprise = enterprise == "true"
 
-	// Port
-	port = os.Getenv(envPort)
+	// Ports
+	httpPort := os.Getenv(envHTTPPort)
+	httpsPort := os.Getenv(envHTTPSPort)
+	metricsPort := os.Getenv(envMetricsPort)
+
+	// TLS cert and key for HTTPS (optional)
+	tlsCert := os.Getenv(envTLSCert)
+	tlsKey := os.Getenv(envTLSKey)
+	tlsEnabled := tlsCert != "" && tlsKey != ""
 
 	// Create store
 	if store, err = internalpkg.NewStore(context.Background()); err != nil {
@@ -107,6 +117,11 @@ func main() {
 	// Create ACME responder
 	acmeResponder = internalpkg.NewACMEResponder(store, onCertificateSigned)
 	logger.InfoWithContext(context.Background(), "ACME responder ready")
+
+	// Metrics
+	internalpkg.SetupMetrics()
+	startMetricsServer(metricsPort)
+	withMetrics := internalpkg.WithMetrics
 
 	// Handlers
 
@@ -178,11 +193,11 @@ func main() {
 		},
 		signerCSRHandler))
 
-	router.Handle("/v1/signers/{name}/sign", withAuth(
+	router.Handle("/v1/signers/{name}/sign", withMetrics("/v1/signers/{name}/sign", withAuth(
 		map[string]internalpkg.Role{
 			http.MethodPost: internalpkg.RoleOperator, // sign certificate
 		},
-		signerSignHandler))
+		signerSignHandler)))
 
 	router.Handle("/v1/signers/{name}/sign-document", withAuth(
 		map[string]internalpkg.Role{
@@ -199,7 +214,11 @@ func main() {
 	router.PathPrefix("/v1/signers/{name}/acme").Handler(
 		signerACMEHandler)
 
-	router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+	// CRL is registered on the main router only when TLS is disabled.
+	// When TLS is enabled, it gets its own plain HTTP listener (see bottom of main).
+	if !tlsEnabled {
+		router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+	}
 
 	// ------------ Secrets ------------ //
 	router.Handle("/v1/secrets", withAuth(
@@ -208,13 +227,13 @@ func main() {
 		},
 		secretsHandler))
 
-	router.Handle("/v1/secrets/data/{name:.+}", withAuth(
+	router.Handle("/v1/secrets/data/{name:.+}", withMetrics("/v1/secrets/data/{name}", withAuth(
 		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
 		},
-		secretHandler))
+		secretHandler)))
 
-	router.Handle("/v1/secrets/{name:.+}", withAuth(
+	router.Handle("/v1/secrets/{name:.+}", withMetrics("/v1/secrets/{name}", withAuth(
 		map[string]internalpkg.Role{
 			http.MethodGet:    internalpkg.RoleOperator, // get secret
 			http.MethodPut:    internalpkg.RoleOperator, // insert secret
@@ -222,7 +241,7 @@ func main() {
 			http.MethodPatch:  internalpkg.RoleOperator, // patch secret
 			http.MethodDelete: internalpkg.RoleOperator, // delete secret
 		},
-		secretHandler))
+		secretHandler)))
 
 	// ------------ Pending Requests ------------ //
 	router.Handle("/v1/pending-requests", withAuth(
@@ -280,9 +299,45 @@ func main() {
 
 	// ------------ Start server ------------ //
 	logger.InfoWithContext(context.Background(), "server started",
-		"port", port, "version", version, "enterprise", enterprise)
+		"version", version, "enterprise", enterprise)
 
-	http.ListenAndServe(":"+port, withCORS(router))
+	if tlsEnabled {
+		logger.InfoWithContext(context.Background(), "TLS enabled")
+
+		// CRL must always be served over plain HTTP
+		crlRouter := mux.NewRouter()
+		crlRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+		go func() {
+			logger.InfoWithContext(context.Background(), "CRL HTTP server started", "port", httpPort)
+			if err := http.ListenAndServe(":"+httpPort, crlRouter); err != nil {
+				logger.ErrorWithContext(context.Background(), "CRL HTTP server stopped", "error", err)
+			}
+		}()
+
+		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withCORS(router))
+	} else {
+		http.ListenAndServe(":"+httpPort, withCORS(router))
+	}
+}
+
+func startMetricsServer(metricsPort string) {
+	if metricsPort == "" {
+		logger.WarnWithContext(context.Background(),
+			"metrics server disabled: METRICS_PORT is not set")
+		return
+	}
+
+	metricsRouter := mux.NewRouter()
+	metricsRouter.Handle("/metrics", internalpkg.MetricsHandler())
+
+	go func() {
+		logger.InfoWithContext(context.Background(), "metrics server started")
+
+		if err := http.ListenAndServe(":"+metricsPort, metricsRouter); err != nil {
+			logger.ErrorWithContext(context.Background(),
+				"metrics server stopped", "error", err)
+		}
+	}()
 }
 
 func startPeriodicTasks() {
@@ -486,6 +541,9 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.Any("notAfter", cert.NotAfter),
 		slog.String("comment", comment),
 	)
+
+	// set cert expiration metrics
+	internalpkg.SetCertMetrics(cert)
 
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {

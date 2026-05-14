@@ -232,6 +232,7 @@ docker-create-db: load-shared-env
 PWD = $(shell pwd)
 CORS_ORIGIN ?= http://localhost:$(FRONTEND_PORT)
 BACKEND_PORT ?= 8081
+METRICS_PORT ?= 9090
 LOG_LEVEL ?= debug
 RESPOND_WITH_ERROR_DETAILS ?= true
 SOFTWARE_KEY_PASSPHRASE ?= passphrase
@@ -240,12 +241,13 @@ KC_URL = http://host.docker.internal:$(KC_PORT)
 
 .PHONY: docker-run
 docker-run: load-shared-env
-	docker run -d --rm -p $(BACKEND_PORT):8080 \
+	docker run -d --rm -p $(BACKEND_PORT):8081 \
 		--name backend \
 		--user 65535:4001 \
 		-v "$(PWD)/ignore/primus/etc/primus:/etc/primus" \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
-		-e PORT=8080 \
+		-e HTTP_PORT=8081 \
+		-e METRICS_PORT=$(METRICS_PORT) \
 		-e CORS_ORIGIN=$(CORS_ORIGIN) \
 		-e RESPOND_WITH_ERROR_DETAILS=$(RESPOND_WITH_ERROR_DETAILS) \
 		-e LOG_LEVEL=$(LOG_LEVEL) \
@@ -269,7 +271,8 @@ docker-run: load-shared-env
 
 .PHONY: run
 run: load-shared-env
-	PORT=$(BACKEND_PORT) \
+	HTTP_PORT=$(BACKEND_PORT) \
+	METRICS_PORT=$(METRICS_PORT) \
 	CORS_ORIGIN=$(CORS_ORIGIN) \
 	LOG_LEVEL=$(LOG_LEVEL) \
 	RESPOND_WITH_ERROR_DETAILS=$(RESPOND_WITH_ERROR_DETAILS) \

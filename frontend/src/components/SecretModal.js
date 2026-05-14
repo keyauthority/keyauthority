@@ -346,12 +346,14 @@ export default function SecretModal({
                     {keys.map((keyInfo) => (
                       <option key={keyInfo.id} value={keyInfo.id}>
                         {[
-                          keyInfo.id.substring(0, 12) + "...",
                           keyInfo.environment,
-                          keyInfo.config.type,
-                          keyInfo.config.pkcs11URI ? "HSM" : "Software",
+                          keyInfo.id.substring(0, 18) + "...",
+                          keyInfo.config.type +
+                            (keyInfo.config.pkcs11URI
+                              ? " (HSM)"
+                              : " (Software)"),
                           `created ${prettyTime(keyInfo.createdAt)}`,
-                        ].join(", ")}
+                        ].join(" | ")}
                       </option>
                     ))}
                     <option key="new" value="new">
