@@ -23,8 +23,10 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -514,8 +516,12 @@ func logErrorAndWriteHTTP(w http.ResponseWriter, r *http.Request, code int, msg 
 		Errors []string `json:"errors"`
 	}
 	m.Errors = []string{msg}
-	for _, err := range errors {
-		m.Errors = append(m.Errors, err.Error())
+
+	// include non-500 errors only in the response, to avoid leaking sensitive information
+	if code != http.StatusInternalServerError {
+		for _, err := range errors {
+			m.Errors = append(m.Errors, err.Error())
+		}
 	}
 
 	b, _ := json.Marshal(m)
@@ -1299,10 +1305,13 @@ var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 	hash := mux.Vars(r)["hashOfSignerName"]
 	crl, err := store.GetSignerCRLByHash(r.Context(), hash)
 	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get CRL for signer", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			logErrorAndWriteHTTP(w, r, http.StatusNotFound, "CRL not found for signer", err)
+		} else {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get CRL for signer", err)
+		}
 		return
 	}
-
 	writeHTTPWithHeaders(w, http.StatusOK, crl,
 		map[string]string{
 			"Content-Type":                "application/pkix-crl",
@@ -1405,7 +1414,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			var shell strings.Builder
 			data, ok := secret["data"].(map[string]string)
 			if !ok {
-				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "invalid secret data type", nil)
+				logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "invalid secret data type", nil)
 				return
 			}
 			for k, v := range data {
