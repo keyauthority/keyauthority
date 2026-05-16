@@ -121,5 +121,6 @@ COPY --from=builder /workspace/server /usr/bin/server
 ENV PATH="/usr/local/primus/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/primus/lib"
 
+EXPOSE 8081 8443 9090
 USER 1001
 CMD ["server"]

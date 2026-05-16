@@ -447,13 +447,13 @@ export default function Main() {
                             <Dropdown.Item eventKey="new">
                               <i className="bi bi-plus-lg me-1"></i> New
                             </Dropdown.Item>
-                            <Dropdown.Divider />
+                            {/*<Dropdown.Divider />
                             <Dropdown.Item eventKey="import">
                               <i className="bi bi-upload me-1"></i> Import
                             </Dropdown.Item>
                             <Dropdown.Item eventKey="export">
                               <i className="bi bi-download me-1"></i> Export
-                            </Dropdown.Item>
+                            </Dropdown.Item>*/}
                           </DropdownButton>
                         );
                       }
@@ -517,7 +517,7 @@ export default function Main() {
                             <Dropdown.Item eventKey="new">
                               <i className="bi bi-plus-lg me-1"></i> New
                             </Dropdown.Item>
-                            <Dropdown.Divider />
+                            {/*<Dropdown.Divider />
                             <Dropdown.Item eventKey="import">
                               <i className="bi bi-upload me-1"></i> Import
                             </Dropdown.Item>
@@ -527,6 +527,10 @@ export default function Main() {
                             </Dropdown.Item>
                             <Dropdown.Item eventKey="export">
                               <i className="bi bi-download me-1"></i> Export
+                            </Dropdown.Item>*/}
+                            <Dropdown.Item eventKey="import-vault">
+                              <i className="bi bi-upload me-1"></i> Import From
+                              HashiCorp Vault
                             </Dropdown.Item>
                           </DropdownButton>
                         );

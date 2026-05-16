@@ -60,6 +60,7 @@ export default function SignerModal({
     "server auth",
     "client auth",
   ]);
+  const [manualAllowedKeyUsages, setManualAllowedKeyUsages] = useState(false);
 
   const api = getApi();
 
@@ -178,6 +179,7 @@ export default function SignerModal({
         "server auth",
         "client auth",
       ]);
+      setManualAllowedKeyUsages(false);
     }
   }, [show]);
 
@@ -311,12 +313,7 @@ export default function SignerModal({
         {/* Private Key Section */}
         {!editMode && (
           <Card className="mb-3">
-            <Card.Header>
-              <div>Private Key</div>
-              <div className="text-muted small">
-                Private key associated with this signer
-              </div>
-            </Card.Header>
+            <Card.Header>Private Key</Card.Header>
             <Card.Body>
               <KeyInput
                 environment={environment}
@@ -447,7 +444,27 @@ export default function SignerModal({
                 type="checkbox"
                 label="Is CA"
                 checked={isCA}
-                onChange={(e) => setIsCA(e.target.checked)}
+                onChange={(e) => {
+                  setIsCA(e.target.checked);
+                  if (!manualAllowedKeyUsages) {
+                    if (e.target.checked) {
+                      // if it's a CA, set usages to: cert sign, crl sign, digital signature
+                      setAllowedKeyUsages([
+                        "cert sign",
+                        "crl sign",
+                        "digital signature",
+                      ]);
+                    } else {
+                      // if it's not a CA, set usages to: digital signature, key encipherment, server auth, client auth
+                      setAllowedKeyUsages([
+                        "digital signature",
+                        "key encipherment",
+                        "server auth",
+                        "client auth",
+                      ]);
+                    }
+                  }
+                }}
               />
               <Form.Text className="text-muted">
                 Defines what type of certificates this signer issues (CA or
@@ -513,6 +530,7 @@ export default function SignerModal({
                       value={usage}
                       checked={allowedKeyUsages.includes(usage)}
                       onChange={(e) => {
+                        setManualAllowedKeyUsages(true);
                         if (e.target.checked) {
                           setAllowedKeyUsages([...allowedKeyUsages, usage]);
                         } else {
