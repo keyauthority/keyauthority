@@ -559,7 +559,12 @@ function CSRAndChainTab({
           Create CA CSR
         </Button>
         {caCSR &&
-          downloadOrCopy("CA CSR created!", caCSR, "ca-csr.pem", "mt-3 mb-0")}
+          downloadOrCopy(
+            "CA CSR created! Next, have it signed, then use the signed certificate with full CA chain to update this signer's CA chain.",
+            caCSR,
+            "ca-csr.pem",
+            "mt-3 mb-0",
+          )}
       </Col>
 
       {/* Show CA Chain */}

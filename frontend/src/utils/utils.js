@@ -151,7 +151,7 @@ export function downloadOrCopy(successMsg, data, filename, classes = "") {
       className={`d-flex justify-content-between align-items-center ${classes}`}
     >
       <span>{successMsg}</span>
-      <div>
+      <div className="d-flex">
         <Button
           size="sm"
           variant="outline-secondary"
