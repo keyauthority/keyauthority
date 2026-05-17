@@ -238,12 +238,11 @@ func NewKey(ctx context.Context, cfg *KeyConfig, data, password []byte) (*Key, e
 
 func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 	if cfg.IsSymmetric() {
-		plainKey, err := DecryptData(data, password)
+		plainKey, err := DecryptWithPwd(data, password)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt symmetric key: %w", err)
 		}
 		return &Key{SymmetricKey: &SoftwareAESGCMKey{Key: plainKey}}, nil
-
 	}
 
 	// Assymmetric key
