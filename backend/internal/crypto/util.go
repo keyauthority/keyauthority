@@ -33,8 +33,8 @@ func EncryptWithPwd(plainData, password []byte) ([]byte, error) {
 	return append(kdfSalt, cipherData...), nil
 }
 
-// DecryptData takes an encrypted byte slice and a password, and returns the decrypted data using AES-GCM.
-func DecryptData(cipherData, password []byte) ([]byte, error) {
+// DecryptWithPwd takes an encrypted byte slice and a password, and returns the decrypted data using AES-GCM.
+func DecryptWithPwd(cipherData, password []byte) ([]byte, error) {
 	// derive key from password
 	kdfSalt := cipherData[:pbkdf2SaltLength]
 	key, err := pbkdf2.Key(sha256.New, string(password), kdfSalt, pbkdf2Iterations, pbkdf2KeyLength)

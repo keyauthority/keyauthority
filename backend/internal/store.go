@@ -1444,7 +1444,7 @@ func (s *Store) GetPendingRequestBody(ctx context.Context, id uuid.UUID) ([]byte
 		return nil, fmt.Errorf("body is private")
 	}
 
-	return cryptopkg.DecryptData(encryptedBody, s.SoftwareKeyPass)
+	return cryptopkg.DecryptWithPwd(encryptedBody, s.SoftwareKeyPass)
 }
 
 func (s *Store) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRequestPrivate, error) {
@@ -1474,7 +1474,7 @@ func (s *Store) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRe
 	var token []byte
 	if len(encryptedToken) > 0 {
 		var err error
-		token, err = cryptopkg.DecryptData(encryptedToken, s.SoftwareKeyPass)
+		token, err = cryptopkg.DecryptWithPwd(encryptedToken, s.SoftwareKeyPass)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt Authorization header: %w", err)
 		}
@@ -1485,7 +1485,7 @@ func (s *Store) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRe
 	var body []byte
 	if len(encryptedBody) > 0 {
 		var err error
-		body, err = cryptopkg.DecryptData(encryptedBody, s.SoftwareKeyPass)
+		body, err = cryptopkg.DecryptWithPwd(encryptedBody, s.SoftwareKeyPass)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt body: %w", err)
 		}

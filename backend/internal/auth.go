@@ -19,6 +19,7 @@ package internal
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,11 @@ import (
 )
 
 type Role uint64
+
+type tokenCacheData struct {
+	providerIdx int
+	verifier    *oidc.IDTokenVerifier
+}
 
 const (
 	envKeycloakURL                   = "KEYCLOAK_URL"
@@ -67,6 +73,9 @@ var (
 		"KEYAUTHORITY_APPROVER":   RoleApprover,
 		"KEYAUTHORITY_AUTHORIZER": RoleApprover, // for backward compatibility
 	}
+
+	// cache tokenHash -> tokenCacheData
+	tokenCache = NewCache()
 )
 
 type TokenRequest struct {
@@ -121,6 +130,11 @@ type Authenticator struct {
 }
 
 func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEntry, error) {
+	// initialize token cache and start janitor
+	tokenCache.Clear()
+	tokenCache.StartJanitor(10 * time.Minute)
+
+	// prepare HTTP clients with tokens for OIDC discovery, if any
 	logEntries := createHttpClientsWithTokens()
 
 	// --- Configure internal provider
@@ -563,6 +577,31 @@ func getHttpClientForIssuer(issuer string) *http.Client {
 // If no provider could verify the token, it returns nil and -1.
 // IMPORTANT: caller must compare the returned index against -1 to check for verification failure.
 func (a *Authenticator) verifyOIDCToken(ctx context.Context, token string) (*oidc.IDToken, int, []*loggingpkg.LogEntry) {
+	// check cache first
+	hashOfTokenBytes := sha256.Sum256([]byte(token))
+	hashOfToken := fmt.Sprintf("%x", hashOfTokenBytes[:])
+	if tcd, ok := tokenCache.Get(hashOfToken); ok {
+		cacheData := tcd.(tokenCacheData)
+		idToken, err := cacheData.verifier.Verify(ctx, token)
+		if err != nil {
+			return nil, -1, []*loggingpkg.LogEntry{{
+				Level:   slog.LevelDebug,
+				Message: "token verification failed for cached verifier",
+				Args: []any{
+					slog.Any("issuer", a.Providers[cacheData.providerIdx].Issuer),
+					slog.Any("error", err),
+				},
+			}}
+		}
+		return idToken, cacheData.providerIdx, []*loggingpkg.LogEntry{{
+			Level:   slog.LevelDebug,
+			Message: "token verified successfully with cached verifier",
+			Args: []any{
+				slog.Any("issuer", a.Providers[cacheData.providerIdx].Issuer),
+			},
+		}}
+	}
+
 	var logEntries []*loggingpkg.LogEntry
 	for i, provider := range a.Providers {
 		verifier := provider.Provider.Verifier(&oidc.Config{
@@ -613,14 +652,20 @@ func (a *Authenticator) verifyOIDCToken(ctx context.Context, token string) (*oid
 			}
 		}
 
+		// cache the successful verifier for future tokens with the same hash
+		tokenCache.SetWithTTL(hashOfToken, tokenCacheData{
+			providerIdx: i,
+			verifier:    verifier,
+		}, time.Until(idToken.Expiry))
+
 		// token is valid for this provider
-		return idToken, i, nil /*[]*loggingpkg.LogEntry{{
+		return idToken, i, []*loggingpkg.LogEntry{{
 			Level:   slog.LevelDebug,
 			Message: "token verified successfully",
 			Args: []any{
 				slog.String("issuer", provider.Issuer),
 			},
-		}}*/
+		}}
 	}
 
 	return nil, -1, logEntries

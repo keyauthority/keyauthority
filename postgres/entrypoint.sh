@@ -23,7 +23,12 @@ mkdir -p /run/postgresql /usr/share/zoneinfo
 # Initialize the database if it doesn't exist
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "Initializing database \"$POSTGRES_DB\"..."
-  initdb -D "$PGDATA" --username="$POSTGRES_USER" --auth-local=trust --auth-host=scram-sha-256
+  initdb -D "$PGDATA" \
+    --username="$POSTGRES_USER" \
+    --auth-local=trust \
+    --auth-host=scram-sha-256 \
+    --encoding=UTF8 \
+    --locale=C
 
   # Start with initdb bootstrap auth (trust local) so we can set initial password
   pg_ctl -D "$PGDATA" -o "-c listen_addresses=''" -w start
