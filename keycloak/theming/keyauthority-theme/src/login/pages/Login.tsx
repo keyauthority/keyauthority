@@ -33,6 +33,61 @@ export default function Login(
 
   const [isLoginButtonDisabled, setIsLoginButtonDisabled] = useState(false);
 
+  const getIconClasses = (alias: string) => {
+    const socials = [
+      "alexa",
+      "behance",
+      "bluesky",
+      "discord",
+      "dribbble",
+      "facebook",
+      "github",
+      "gitlab",
+      "google",
+      "instagram",
+      "line",
+      "linkedin",
+      "mastodon",
+      "medium",
+      "messenger",
+      "microsoft",
+      "opencollective",
+      "paypal",
+      "pinterest",
+      "quora",
+      "reddit",
+      "signal",
+      "sina-weibo",
+      "skype",
+      "slack",
+      "snapchat",
+      "sourceforge",
+      "spotify",
+      "stack-overflow",
+      "strava",
+      "substack",
+      "telegram",
+      "tencent-qq",
+      "threads",
+      "tiktok",
+      "twitch",
+      "twitter-x",
+      "twitter",
+      "vimeo",
+      "wechat",
+      "whatsapp",
+      "wordpress",
+      "yelp",
+      "youtube",
+    ];
+    for (const social of socials) {
+      if (alias.toLowerCase().startsWith(social)) {
+        return `bi-${social}`;
+      }
+    }
+    return "";
+  };
+
   return (
     <Template
       kcContext={kcContext}
@@ -92,12 +147,11 @@ export default function Login(
                       >
                         {p.iconClasses && (
                           <i
-                            className={
-                              /*clsx(kcClsx("kcCommonLogoIdP"), p.iconClasses)*/ clsx(
-                                "bi position-absolute start-0 ms-3",
-                                `bi-${p.alias.toLowerCase()}`,
-                              )
-                            }
+                            className={clsx(
+                              kcClsx("kcCommonLogoIdP") /*p.iconClasses*/,
+                              "bi position-absolute start-0 ms-3 " +
+                                getIconClasses(p.alias),
+                            )}
                             aria-hidden="true"
                           ></i>
                         )}
