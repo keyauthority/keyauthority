@@ -71,7 +71,7 @@ var (
 	// HTTP router -made global so pendingRequestHandler can access it
 	router = mux.NewRouter()
 
-	// cache environments for paths, to avoid hitting the store on every request
+	// cache urlPath -> environment
 	envCache = internalpkg.NewCache()
 )
 
@@ -123,7 +123,6 @@ func main() {
 	// Metrics
 	internalpkg.SetupMetrics()
 	startMetricsServer(metricsPort)
-	withMetrics := internalpkg.WithMetrics
 
 	// Handlers
 
@@ -195,23 +194,26 @@ func main() {
 		},
 		signerCSRHandler))
 
-	router.Handle("/v1/signers/{name}/sign", withMetrics("/v1/signers/{name}/sign", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodPost: internalpkg.RoleOperator, // sign certificate
-		},
-		signerSignHandler)))
+	router.Handle("/v1/signers/{name}/sign",
+		internalpkg.WithHttpMetrics("/v1/signers/{name}/sign", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPost: internalpkg.RoleOperator, // sign certificate
+			},
+			signerSignHandler)))
 
-	router.Handle("/v1/signers/{name}/sign-document", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodPost: internalpkg.RoleOperator, // sign document
-		},
-		signerSignDocumentHandler))
+	router.Handle("/v1/signers/{name}/sign-document",
+		internalpkg.WithHttpMetrics("/v1/signers/{name}/sign-document", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPost: internalpkg.RoleOperator, // sign document
+			},
+			signerSignDocumentHandler)))
 
-	router.Handle("/v1/signers/{name}/revoke", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodPost: internalpkg.RoleOperator, // revoke certificate
-		},
-		signerRevokeHandler))
+	router.Handle("/v1/signers/{name}/revoke",
+		internalpkg.WithHttpMetrics("/v1/signers/{name}/revoke", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPost: internalpkg.RoleOperator, // revoke certificate
+			},
+			signerRevokeHandler)))
 
 	router.PathPrefix("/v1/signers/{name}/acme").Handler(
 		signerACMEHandler)
@@ -229,21 +231,23 @@ func main() {
 		},
 		secretsHandler))
 
-	router.Handle("/v1/secrets/data/{name:.+}", withMetrics("/v1/secrets/data/{name}", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
-		},
-		secretHandler)))
+	router.Handle("/v1/secrets/data/{name:.+}",
+		internalpkg.WithHttpMetrics("/v1/secrets/data/{name}", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodGet: internalpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
+			},
+			secretHandler)))
 
-	router.Handle("/v1/secrets/{name:.+}", withMetrics("/v1/secrets/{name}", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodGet:    internalpkg.RoleOperator, // get secret
-			http.MethodPut:    internalpkg.RoleOperator, // insert secret
-			http.MethodPost:   internalpkg.RoleOperator, // update secret
-			http.MethodPatch:  internalpkg.RoleOperator, // patch secret
-			http.MethodDelete: internalpkg.RoleOperator, // delete secret
-		},
-		secretHandler)))
+	router.Handle("/v1/secrets/{name:.+}",
+		internalpkg.WithHttpMetrics("/v1/secrets/{name}", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodGet:    internalpkg.RoleOperator, // get secret
+				http.MethodPut:    internalpkg.RoleOperator, // insert secret
+				http.MethodPost:   internalpkg.RoleOperator, // update secret
+				http.MethodPatch:  internalpkg.RoleOperator, // patch secret
+				http.MethodDelete: internalpkg.RoleOperator, // delete secret
+			},
+			secretHandler)))
 
 	// ------------ Pending Requests ------------ //
 	router.Handle("/v1/pending-requests", withAuth(
@@ -555,7 +559,7 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 	)
 
 	// set cert expiration metrics
-	internalpkg.SetCertMetrics(cert)
+	internalpkg.RecordCertMetrics(cert)
 
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
@@ -994,6 +998,7 @@ var keyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete key", err)
 			return
 		}
+		envCache.Delete(r.URL.Path) // invalidate environment cache for this key
 		logger.Info(r, "key deleted if existed")
 		writeJSONOk(w, nil)
 	}
@@ -1069,6 +1074,7 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete signer", err)
 			return
 		}
+		envCache.Delete(r.URL.Path) // invalidate environment cache for this signer
 		logger.Info(r, "signer deleted")
 		writeJSONOk(w, nil)
 	}
@@ -1479,6 +1485,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 				"couldn't delete secret", err)
 			return
 		}
+		envCache.Delete(r.URL.Path) // invalidate environment cache for this secret
 		logger.Info(r, "secret deleted if existed")
 		writeJSONOk(w, nil)
 	}

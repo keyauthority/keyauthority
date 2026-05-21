@@ -3,7 +3,7 @@ module github.com/keyauthority/keyauthority
 go 1.26.3
 
 require (
-	github.com/ThalesGroup/crypto11 v1.6.0
+	github.com/ThalesGroup/crypto11 v1.6.1
 	github.com/cert-manager/cert-manager v1.20.2
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
