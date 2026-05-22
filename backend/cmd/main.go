@@ -1636,7 +1636,7 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
 		return
 	}
-	token, err := authenticator.GetToken(&b)
+	token, err := authenticator.ExchangeForToken(&b)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
 			"couldn't exchange credentials for Keycloak token", err)
