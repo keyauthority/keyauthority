@@ -1,13 +1,18 @@
-# IMG definition
-IMG_REGISTRY ?= registry.digitalocean.com/keyauthority
+IMG_REGISTRY ?= docker.io/keyauthoritydh
 ENTERPRISE ?= false
-ifeq (${ENTERPRISE},true)
-IMG_NAME=$(IMG_REGISTRY)/backend-enterprise
-else
-IMG_NAME=$(IMG_REGISTRY)/backend
-endif
-IMG_TAG=$(shell cat ./VERSION)$(TAG_SUFFIX)
-IMG=$(IMG_NAME):$(IMG_TAG)
+# if ENTERPRISE is false then use IMG_REPOSITORY=backend
+# otherwise use IMG_REPOSITORY=backend-enterprise
+IMG_REPOSITORY ?= backend$(if $(filter true,$(ENTERPRISE)),-enterprise)
+VERSION ?= $(shell cat ./VERSION)
+
+# if BETA_VERSION is empty then use IMG_TAG=VERSION, 
+# otherwise use IMG_TAG=VERSION-betaBETA_VERSION
+BETA_VERSION ?=
+IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-beta$(BETA_VERSION),)
+
+# if BETA_VERSION is empty then use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY):$(IMG_TAG)
+# otherwise use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)-beta:$(IMG_TAG)
+IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)$(if $(BETA_VERSION),-beta):$(IMG_TAG)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

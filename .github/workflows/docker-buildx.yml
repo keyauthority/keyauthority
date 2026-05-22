@@ -15,7 +15,7 @@ on:
           - tools
       platforms:
         description: Target Platforms (comma separated)
-        required: false
+        required: true
         default: linux/amd64,linux/arm64
       builder_mode:
         description: Build Mode
@@ -62,29 +62,13 @@ jobs:
           driver: cloud
           endpoint: ${{ secrets.DOCKER_BUILD_CLOUD_BUILDER }}
 
-      - name: Resolve registry
+      - name: Set beta version for non-main branches
         shell: bash
+        if: ${{ github.ref != 'refs/heads/main' }}
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "REGISTRY=DockerHub" >> "$GITHUB_ENV"
-            echo "IMG_REGISTRY=docker.io/keyauthoritydh" >> "$GITHUB_ENV"
-            echo "TAG_SUFFIX=" >> "$GITHUB_ENV"
-          else
-            echo "REGISTRY=DigitalOcean" >> "$GITHUB_ENV"
-            echo "IMG_REGISTRY=registry.digitalocean.com/keyauthority" >> "$GITHUB_ENV"
-            echo "TAG_SUFFIX=-beta${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
-          fi
-
-      - name: Log in to DigitalOcean
-        if: ${{ env.REGISTRY == 'DigitalOcean' }}
-        uses: docker/login-action@v3
-        with:
-          registry: registry.digitalocean.com
-          username: ${{ secrets.DIGITALOCEAN_USERNAME }}
-          password: ${{ secrets.DIGITALOCEAN_PASSWORD }}
+          echo "BETA_VERSION=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
 
       - name: Log in to DockerHub
-        if: ${{ env.REGISTRY == 'DockerHub' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -95,5 +79,5 @@ jobs:
         env:
           BUILDER: ${{ inputs.builder_mode == 'docker-cloud' && steps.buildx_cloud.outputs.name || '' }}
         run: |
-          make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }} IMG_REGISTRY=${{ env.IMG_REGISTRY }} TAG_SUFFIX=${{ env.TAG_SUFFIX }}
+          make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }} BETA_VERSION=${{ env.BETA_VERSION }}
           echo "✅ Built and pushed image: $(make print-img)"
