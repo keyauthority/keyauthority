@@ -1,5 +1,5 @@
 IMG_REGISTRY ?= docker.io/keyauthoritydh
-IMG_REPOSITORY ?= frontend
+IMG_REPOSITORY ?= tools
 VERSION ?= $(shell cat ./VERSION)
 
 # if BETA_VERSION is empty then use IMG_TAG=VERSION, 
