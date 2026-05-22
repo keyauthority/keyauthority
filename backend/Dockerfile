@@ -1,4 +1,3 @@
-# Global arguments
 ARG DEBIAN_VERSION=trixie
 ARG GO_VERSION=1.26
 ARG PRIMUS_VERSION=2.6.2
