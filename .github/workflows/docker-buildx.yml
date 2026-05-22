@@ -51,7 +51,7 @@ jobs:
         if: ${{ inputs.builder_mode == 'docker-cloud' }}
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_CLOUD_USERNAME }}
+          username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_CLOUD_ACCESS_TOKEN }}
 
       - name: Set up Docker Buildx (Build Cloud mode)
@@ -60,7 +60,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: cloud
-          endpoint: ${{ secrets.DOCKER_BUILD_CLOUD_BUILDER }}
+          endpoint: keyauthoritydh/docker-buildx
 
       - name: Set beta version for non-main branches
         shell: bash
@@ -71,8 +71,8 @@ jobs:
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push
         working-directory: ${{ inputs.directory }}
