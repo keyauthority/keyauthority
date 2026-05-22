@@ -19,6 +19,7 @@ package internal
 import (
 	"crypto/x509"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,7 +30,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	envURLPathsMasked = "METRICS_URL_PATHS_MASKED"
+)
+
 var (
+	pathsMasked = true
 	metricsOnce sync.Once
 
 	httpRequestsTotal = prometheus.NewCounterVec(
@@ -49,9 +55,25 @@ var (
 		[]string{"endpoint", "method"},
 	)
 
-	certExpirationTimestampSeconds = prometheus.NewGaugeVec(
+	httpRequestTimestampSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "keyauthority_cert_expiration_timestamp_seconds",
+			Name: "keyauthority_http_request_timestamp_seconds",
+			Help: "The Unix epoch timestamp (in seconds) of the most recent HTTP request for each endpoint and method.",
+		},
+		[]string{"endpoint", "method"},
+	)
+
+	certNotBeforeTimestampSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "keyauthority_certificate_not_before_timestamp_seconds",
+			Help: "The Unix epoch timestamp (in seconds) at which the certificate becomes valid.",
+		},
+		[]string{"dns_names", "issuer_cn"},
+	)
+
+	certNotAfterTimestampSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "keyauthority_certificate_not_after_timestamp_seconds",
 			Help: "The Unix epoch timestamp (in seconds) at which the certificate expires.",
 		},
 		[]string{"dns_names", "issuer_cn"},
@@ -70,10 +92,14 @@ func (r *statusRecorder) WriteHeader(code int) {
 
 func SetupMetrics() {
 	metricsOnce.Do(func() {
+		masked := strings.ToLower(strings.TrimSpace(os.Getenv(envURLPathsMasked)))
+		pathsMasked = masked == "" || masked == "true" || masked == "1" || masked == "yes"
 		prometheus.MustRegister(
 			httpRequestsTotal,
 			httpRequestDurationSeconds,
-			certExpirationTimestampSeconds,
+			httpRequestTimestampSeconds,
+			certNotBeforeTimestampSeconds,
+			certNotAfterTimestampSeconds,
 		)
 	})
 }
@@ -82,12 +108,17 @@ func MetricsHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-func WithMetrics(endpoint string, next http.Handler) http.Handler {
+func WithHttpMetrics(maskedEndpoint string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
 		next.ServeHTTP(rec, r)
+
+		endpoint := maskedEndpoint
+		if !pathsMasked {
+			endpoint = r.URL.Path
+		}
 
 		httpRequestsTotal.WithLabelValues(
 			endpoint,
@@ -99,10 +130,15 @@ func WithMetrics(endpoint string, next http.Handler) http.Handler {
 			endpoint,
 			r.Method,
 		).Observe(time.Since(start).Seconds())
+
+		httpRequestTimestampSeconds.WithLabelValues(
+			endpoint,
+			r.Method,
+		).Set(float64(time.Now().Unix()))
 	})
 }
 
-func SetCertMetrics(cert *x509.Certificate) {
+func RecordCertMetrics(cert *x509.Certificate) {
 	dnsNamesLabel := "none"
 	if len(cert.DNSNames) > 0 {
 		sortedDNSNames := make([]string, len(cert.DNSNames))
@@ -110,7 +146,12 @@ func SetCertMetrics(cert *x509.Certificate) {
 		sort.Strings(sortedDNSNames)
 		dnsNamesLabel = strings.Join(sortedDNSNames, ",")
 	}
-	certExpirationTimestampSeconds.WithLabelValues(
+	certNotBeforeTimestampSeconds.WithLabelValues(
+		dnsNamesLabel,
+		cert.Issuer.CommonName,
+	).Set(float64(cert.NotBefore.Unix()))
+
+	certNotAfterTimestampSeconds.WithLabelValues(
 		dnsNamesLabel,
 		cert.Issuer.CommonName,
 	).Set(float64(cert.NotAfter.Unix()))

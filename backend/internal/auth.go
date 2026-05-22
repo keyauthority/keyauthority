@@ -300,16 +300,21 @@ func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEnt
 	}, logEntries, nil
 }
 
-func (a *Authenticator) GetToken(reqBody *TokenRequest) (string, error) {
+func (a *Authenticator) ExchangeForToken(reqBody *TokenRequest) (string, error) {
+	// if JWT is provided in the request body, just send it back
+	if reqBody.Jwt != "" {
+		return reqBody.Jwt, nil
+	}
+	// otherwise, try to exchange for a token using the configured clients
 	for _, client := range a.Clients {
-		if token, err := a.getToken(client, reqBody); err == nil {
+		if token, err := a.exchangeForToken(client, reqBody); err == nil {
 			return token, nil
 		}
 	}
 	return "", fmt.Errorf("no client could exchange request for token")
 }
 
-func (a *Authenticator) getToken(client *clientDetail, reqBody *TokenRequest) (string, error) {
+func (a *Authenticator) exchangeForToken(client *clientDetail, reqBody *TokenRequest) (string, error) {
 	values := url.Values{}
 	switch client.AuthType {
 	case "client-secret":

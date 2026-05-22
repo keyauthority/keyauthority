@@ -123,14 +123,19 @@ docker-build: ## Build docker image with the manager.
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
 # PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 PLATFORMS ?= linux/amd64
+BUILDER ?=
 .PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
+docker-buildx: check-image-exists ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	$(CONTAINER_TOOL) buildx create --name keyauthority-builder
-	$(CONTAINER_TOOL) buildx use keyauthority-builder
-	$(CONTAINER_TOOL) buildx build --push --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .
-	$(CONTAINER_TOOL) buildx rm keyauthority-builder
+	@if [ -z "$(BUILDER)" ]; then \
+		$(CONTAINER_TOOL) buildx create --name keyauthority-builder; \
+		$(CONTAINER_TOOL) buildx use keyauthority-builder; \
+		$(CONTAINER_TOOL) buildx build --push --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
+		$(CONTAINER_TOOL) buildx rm keyauthority-builder; \
+	else \
+		$(CONTAINER_TOOL) buildx build --push --builder $(BUILDER) --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
+	fi
 	rm Dockerfile.cross
 
 .PHONY: build-installer
@@ -233,6 +238,7 @@ PWD = $(shell pwd)
 CORS_ORIGIN ?= http://localhost:$(FRONTEND_PORT)
 BACKEND_PORT ?= 8081
 METRICS_PORT ?= 9090
+METRICS_URL_PATHS_MASKED ?= false
 LOG_LEVEL ?= debug
 RESPOND_WITH_ERROR_DETAILS ?= true
 SOFTWARE_KEY_PASSPHRASE ?= passphrase
@@ -248,8 +254,8 @@ docker-run: load-shared-env
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
 		-e METRICS_PORT=$(METRICS_PORT) \
+		-e METRICS_URL_PATHS_MASKED=$(METRICS_URL_PATHS_MASKED) \
 		-e CORS_ORIGIN=$(CORS_ORIGIN) \
-		-e RESPOND_WITH_ERROR_DETAILS=$(RESPOND_WITH_ERROR_DETAILS) \
 		-e LOG_LEVEL=$(LOG_LEVEL) \
 		-e LOG_DB_ENABLED=true \
 		-e LOG_DB_BATCH_SIZE=10 \
@@ -273,9 +279,9 @@ docker-run: load-shared-env
 run: load-shared-env
 	HTTP_PORT=$(BACKEND_PORT) \
 	METRICS_PORT=$(METRICS_PORT) \
+	METRICS_URL_PATHS_MASKED=$(METRICS_URL_PATHS_MASKED) \
 	CORS_ORIGIN=$(CORS_ORIGIN) \
 	LOG_LEVEL=$(LOG_LEVEL) \
-	RESPOND_WITH_ERROR_DETAILS=$(RESPOND_WITH_ERROR_DETAILS) \
 	LOG_DB_ENABLED=true \
 	LOG_DB_BATCH_SIZE=10 \
 	LOG_DB_FLUSH_INTERVAL=2s \
