@@ -56,7 +56,7 @@ type SigningOptions struct {
 }
 
 func SignPDF(privateKey crypto.Signer, certificate *x509.Certificate, chain []*x509.Certificate, opts SigningOptions) error {
-	hash := crypto.SHA256
+	var hash crypto.Hash
 	switch opts.HashAlgo {
 	case "SHA256", "":
 		hash = crypto.SHA256
