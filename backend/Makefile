@@ -8,7 +8,7 @@ VERSION ?= $(shell cat ./VERSION)
 # if BETA_VERSION is empty then use IMG_TAG=VERSION, 
 # otherwise use IMG_TAG=VERSION-betaBETA_VERSION
 BETA_VERSION ?=
-IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-beta$(BETA_VERSION),)
+IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-$(BETA_VERSION),)
 
 # if BETA_VERSION is empty then use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY):$(IMG_TAG)
 # otherwise use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)-beta:$(IMG_TAG)
