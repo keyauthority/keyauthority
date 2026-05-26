@@ -61,8 +61,9 @@ const (
 )
 
 var (
-	secretsCache = NewCache()
-	crlCache     = NewCache()
+	keyCache = NewCache()
+	//secretCache = NewCache()
+	crlCache = NewCache()
 )
 
 // actual data used for replaying pending requests upon approval
@@ -454,10 +455,17 @@ func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) error {
 		DELETE FROM keys
 		WHERE id = $1
 	`, id)
+	if err == nil {
+		keyCache.Delete(id.String())
+	}
 	return err
 }
 
 func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
+	if cachedKey, found := keyCache.Get(id.String()); found {
+		return cachedKey.(*cryptopkg.Key), nil
+	}
+
 	var cfgJSON []byte
 	var softwareKey []byte
 	if err := s.DB.QueryRowContext(ctx, `
@@ -471,7 +479,13 @@ func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, erro
 	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
 		return nil, fmt.Errorf("invalid key config: %w", err)
 	}
-	return cryptopkg.NewKey(ctx, &cfg, softwareKey, s.SoftwareKeyPass)
+	key, err := cryptopkg.NewKey(&cfg, softwareKey, s.SoftwareKeyPass)
+	if err != nil {
+		return nil, err
+	}
+
+	keyCache.Set(id.String(), key)
+	return key, nil
 }
 
 /*****************************************************/
@@ -1039,9 +1053,9 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 }
 
 func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {
-	if cachedSecret, exists := secretsCache.Get(name); exists {
+	/*if cachedSecret, exists := secretCache.Get(name); exists {
 		return cachedSecret.(map[string]any), nil
-	}
+	}*/
 
 	var ct []byte
 	var environment string
@@ -1081,7 +1095,7 @@ func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, err
 		"data": data,
 	}
 
-	secretsCache.Set(name, resp)
+	//secretCache.Set(name, resp)
 	return resp, nil
 }
 
@@ -1137,7 +1151,7 @@ func (s *Store) UpdateSecret(ctx context.Context, name string, newData map[strin
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows affected: %s", name)
 	}
-	secretsCache.Delete(name)
+	//secretCache.Delete(name)
 	return nil
 }
 
@@ -1150,7 +1164,7 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 		return err
 	}
 
-	secretsCache.Delete(name)
+	//secretCache.Delete(name)
 	return nil
 }
 

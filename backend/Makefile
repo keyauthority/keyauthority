@@ -90,7 +90,7 @@ check-image-exists: ## Check if image already exists in registry
 	fi
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
+build: fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
@@ -122,12 +122,6 @@ docker-buildx: check-image-exists ## Build and push docker image for the manager
 		$(CONTAINER_TOOL) buildx build --push --builder $(BUILDER) --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
 	fi
 	rm Dockerfile.cross
-
-.PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
-	mkdir -p dist
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/default > dist/install.yaml
 
 ##@ Dependencies
 

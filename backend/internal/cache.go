@@ -22,7 +22,7 @@ import (
 )
 
 type Cache struct {
-	sync.Mutex
+	sync.RWMutex
 	data      map[string]any
 	expiresAt map[string]time.Time
 
@@ -38,10 +38,23 @@ func NewCache() *Cache {
 }
 
 func (c *Cache) Get(key string) (any, bool) {
+	now := time.Now()
+
+	// Fast path: read lock only.
+	c.RLock()
+	exp, hasExp := c.expiresAt[key]
+	if !hasExp || now.Before(exp) {
+		value, exists := c.data[key]
+		c.RUnlock()
+		return value, exists
+	}
+	c.RUnlock()
+
+	// Slow path: key appears expired, upgrade to write lock and re-check.
 	c.Lock()
 	defer c.Unlock()
 
-	if c.isExpiredLocked(key) {
+	if exp2, ok := c.expiresAt[key]; ok && !time.Now().Before(exp2) {
 		delete(c.data, key)
 		delete(c.expiresAt, key)
 		return nil, false
@@ -136,6 +149,13 @@ func (c *Cache) StartJanitor(interval time.Duration) bool {
 // StopJanitor stops the background cleanup if running.
 // Returns false if no janitor was running.
 func (c *Cache) StopJanitor() bool {
+	return c.StopJanitorWithTimeout(0) // blocking wait
+}
+
+// StopJanitorWithTimeout stops janitor and waits up to timeout.
+// timeout <= 0 means wait indefinitely.
+// Returns false if no janitor was running or if timeout elapsed before completion.
+func (c *Cache) StopJanitorWithTimeout(timeout time.Duration) bool {
 	c.Lock()
 	if c.janitorStop == nil {
 		c.Unlock()
@@ -149,16 +169,18 @@ func (c *Cache) StopJanitor() bool {
 	c.Unlock()
 
 	close(stop)
-	<-done
-	return true
-}
 
-func (c *Cache) isExpiredLocked(key string) bool {
-	exp, ok := c.expiresAt[key]
-	if !ok {
+	if timeout <= 0 {
+		<-done
+		return true
+	}
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
 		return false
 	}
-	return !time.Now().Before(exp)
 }
 
 func (c *Cache) purgeExpiredLocked(now time.Time) int {

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Button, Form, Modal, Spinner, Row, Col } from "react-bootstrap";
+import { Button, Form, Modal, Spinner, Row, Col, Table } from "react-bootstrap";
 import {
   showToast,
   decryptData,
   copyToClipboard,
   prettyCode,
   showImportResultToast,
+  withTooltipDescription,
 } from "../utils/utils";
 import { getApi } from "../axios";
 import { errorToString } from "../utils/error";
@@ -17,9 +18,8 @@ export default function ImportHashiVaultSecretsModal({
 }) {
   const [vaultAddr, setVaultAddr] = useState("");
   const [vaultToken, setVaultToken] = useState("");
-  const [environmentPrefix, setEnvironmentPrefix] = useState("hv-");
-  const [isImporting, setIsImporting] = useState(false);
-  const [onSecretExist, setOnSecretExist] = useState("skip");
+  const [vaultSecrets, setVaultSecrets] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const api = getApi();
 
@@ -27,8 +27,7 @@ export default function ImportHashiVaultSecretsModal({
     if (!show) {
       setVaultAddr("");
       setVaultToken("");
-      setEnvironmentPrefix("hv-");
-      setOnSecretExist("skip");
+      setVaultSecrets([]);
     }
   }, [show]);
 
@@ -80,6 +79,11 @@ export default function ImportHashiVaultSecretsModal({
                 mount,
                 path: path + key,
                 data: secretRes.data.data,
+                // defaults for target secret - can be customized by user in the UI
+                name: path + key,
+                environment: mount.replace(/\/$/, ""),
+                import: true,
+                onSecretExist: "skip",
               });
             }
           }
@@ -91,9 +95,8 @@ export default function ImportHashiVaultSecretsModal({
     return secrets;
   };
 
-  const handleImport = async () => {
-    setIsImporting(true);
-
+  const handleDiscoverSecrets = async () => {
+    setIsLoading(true);
     try {
       const res = await fetch(vaultAddr + "/v1/sys/mounts", {
         method: "GET",
@@ -115,25 +118,38 @@ export default function ImportHashiVaultSecretsModal({
           kvMounts[key] = mount;
       }
 
+      const vs = [];
+      for (const mount in kvMounts) {
+        const secrets = await fetchSecretsRecursively(mount, "");
+        vs.push(...secrets);
+      }
+
+      setVaultSecrets(vs);
+    } catch (error) {
+      showToast("error", errorToString(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImport = async () => {
+    setIsLoading(true);
+
+    try {
       // process each KV mount and fetch secrets
-      const vaultSecrets = [];
       const importedSecrets = new Set();
       const skippedSecrets = new Set();
       const failedSecrets = new Set();
       const missingSecrets = [];
 
-      for (const mount in kvMounts) {
-        const secrets = await fetchSecretsRecursively(mount, "");
-        vaultSecrets.push(...secrets);
-      }
-
       // Patch or update existing secrets
       for (const secret of vaultSecrets) {
-        const secretName = secret.mount + secret.path;
+        if (secret.import === false) continue; // skip if user unchecked import
+        const secretName = secret.name;
         try {
           await api.get(`/secrets/${secretName}`);
           try {
-            switch (onSecretExist) {
+            switch (secret.onSecretExist) {
               case "patch":
                 await api.patch(`/secrets/${secretName}`, secret.data);
                 importedSecrets.add(secretName);
@@ -161,8 +177,9 @@ export default function ImportHashiVaultSecretsModal({
       // Prepare keys and insert missing secrets
       const envToKey = {};
       for (const secret of missingSecrets) {
-        const secretName = secret.mount + secret.path;
-        const environment = environmentPrefix + secret.mount.replace(/\/$/, "");
+        if (secret.import === false) continue; // skip if user unchecked import
+        const secretName = secret.name;
+        const environment = secret.environment;
         if (!envToKey[environment]) {
           // if not found, create a key in the env
           try {
@@ -205,7 +222,7 @@ export default function ImportHashiVaultSecretsModal({
     } catch (error) {
       showToast("error", errorToString(error));
     } finally {
-      setIsImporting(false);
+      setIsLoading(false);
     }
   };
 
@@ -248,61 +265,126 @@ export default function ImportHashiVaultSecretsModal({
             The token must have permissions to list mounts and read secrets
           </Form.Text>
         </Form.Group>
-        <Form.Group className="mb-3">
-          <Form.Label>Environment Prefix</Form.Label>
-          <Form.Control
-            type="text"
-            placeholder="Enter prefix for environments"
-            value={environmentPrefix}
-            onChange={(e) => setEnvironmentPrefix(e.target.value)}
-          />
-          <Form.Text className="text-muted">
-            This value will be prepended to engine mount to compose the
-            environment for the newly-imported secrets. This does not affect
-            existing secrets. For example, if the prefix is <code>hv-</code> and
-            you have a secret with path <code>myapp/creds</code> in the KV2
-            secret mount <code>dev</code>, it will be imported with the name{" "}
-            <code>myapp/creds</code> and the environment <code>hv-dev</code>.
-          </Form.Text>
-        </Form.Group>
-        <Form.Group className="mb-3">
-          <Form.Label>On Secret Exist</Form.Label>
-          <Form.Select
-            value={onSecretExist}
-            onChange={(e) => setOnSecretExist(e.target.value)}
+
+        {vaultSecrets.length === 0 ? (
+          <Button
+            variant="primary"
+            onClick={handleDiscoverSecrets}
+            disabled={
+              !vaultAddr || !vaultToken || isLoading || vaultSecrets.length > 0
+            }
+            className="mb-3"
           >
-            <option value="skip">Skip (keep existing secret unchanged)</option>
-            <option value="patch">
-              Patch (merge new data with existing secret)
-            </option>
-            <option value="overwrite">
-              Overwrite (replace existing secret with new data)
-            </option>
-          </Form.Select>
-        </Form.Group>
+            {isLoading ? (
+              <>
+                <Spinner
+                  animation="border"
+                  size="sm"
+                  className="text-light me-2"
+                />
+                Finding...
+              </>
+            ) : (
+              "Find Secrets To Import"
+            )}
+          </Button>
+        ) : (
+          <>
+            <Table hover responsive striped className="align-middle mb-3">
+              <thead>
+                <tr>
+                  <th>Import</th>
+                  <th>Source Secret</th>
+                  <th>Target Name</th>
+                  <th>Target Environment</th>
+                  <th>
+                    {withTooltipDescription(
+                      "On Secret Exist",
+                      "Action to take if the secret already exists. Options are: Skip (Leave unchanged), Patch (Merge new data with existing secret), Overwrite (Replace existing secret with new data).",
+                    )}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {vaultSecrets.map((secret, index) => (
+                  <tr key={index}>
+                    <td>
+                      <Form.Check
+                        type="checkbox"
+                        checked={vaultSecrets[index].import}
+                        onChange={(e) => {
+                          const newSecrets = [...vaultSecrets];
+                          newSecrets[index].import = e.target.checked;
+                          setVaultSecrets(newSecrets);
+                        }}
+                      />
+                    </td>
+                    <td>{secret.mount + secret.path}</td>
+                    <td>
+                      <Form.Control
+                        type="text"
+                        value={vaultSecrets[index].name}
+                        onChange={(e) => {
+                          const newSecrets = [...vaultSecrets];
+                          newSecrets[index].name = e.target.value;
+                          setVaultSecrets(newSecrets);
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <Form.Control
+                        type="text"
+                        value={vaultSecrets[index].environment}
+                        onChange={(e) => {
+                          const newSecrets = [...vaultSecrets];
+                          newSecrets[index].environment = e.target.value;
+                          setVaultSecrets(newSecrets);
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <Form.Select
+                        value={vaultSecrets[index].onSecretExist}
+                        onChange={(e) => {
+                          const newSecrets = [...vaultSecrets];
+                          newSecrets[index].onSecretExist = e.target.value;
+                          setVaultSecrets(newSecrets);
+                        }}
+                      >
+                        <option value="skip">Skip</option>
+                        <option value="patch">Patch</option>
+                        <option value="overwrite">Overwrite</option>
+                      </Form.Select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            <Button
+              variant="primary"
+              disabled={!vaultAddr || !vaultToken || isLoading}
+              onClick={handleImport}
+            >
+              {isLoading ? (
+                <>
+                  <Spinner
+                    animation="border"
+                    size="sm"
+                    className="text-light me-2"
+                  />
+                  Importing...
+                </>
+              ) : (
+                "Import"
+              )}
+            </Button>
+          </>
+        )}
       </Modal.Body>
 
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>
           Close
-        </Button>
-        <Button
-          variant="primary"
-          disabled={!vaultAddr || !vaultToken || isImporting}
-          onClick={handleImport}
-        >
-          {isImporting ? (
-            <>
-              <Spinner
-                animation="border"
-                size="sm"
-                className="text-light me-2"
-              />
-              Importing...
-            </>
-          ) : (
-            "Import"
-          )}
         </Button>
       </Modal.Footer>
     </Modal>
