@@ -1,8 +1,15 @@
-# IMG definition
-IMG_REGISTRY ?= registry.digitalocean.com/keyauthority
-IMG_NAME=$(IMG_REGISTRY)/frontend
-IMG_TAG=$(shell cat ./VERSION)$(TAG_SUFFIX)
-IMG=$(IMG_NAME):$(IMG_TAG)
+IMG_REGISTRY ?= docker.io/keyauthoritydh
+IMG_REPOSITORY ?= frontend
+VERSION ?= $(shell cat ./VERSION)
+
+# if BETA_VERSION is empty then use IMG_TAG=VERSION, 
+# otherwise use IMG_TAG=VERSION-betaBETA_VERSION
+BETA_VERSION ?=
+IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-$(BETA_VERSION),)
+
+# if BETA_VERSION is empty then use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY):$(IMG_TAG)
+# otherwise use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)-beta:$(IMG_TAG)
+IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)$(if $(BETA_VERSION),-beta):$(IMG_TAG)
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is

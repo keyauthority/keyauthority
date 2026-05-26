@@ -93,6 +93,12 @@ export default function SignerModal({
     }
   }, [show, signerNameFromPath, editMode]);
 
+  useEffect(() => {
+    if (show) {
+      setManualAllowedKeyUsages(editMode);
+    }
+  }, [show, editMode]);
+
   const fetchSignerConfig = async (signerName) => {
     setSignerConfig(null);
     try {

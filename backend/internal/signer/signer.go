@@ -152,7 +152,7 @@ func (s *Signer) SetCAChain(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("parse certificate in CA chain: %w", err)
 		}
-		if cert.IsCA == false {
+		if !cert.IsCA {
 			return fmt.Errorf("non-CA certificate found in CA chain")
 		}
 

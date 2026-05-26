@@ -128,7 +128,7 @@ func cleanUpExpiredOrders() {
 
 func getOrder(id string) *Order {
 	orderStore.Lock()
-	order, _ := orderStore.orders[id]
+	order := orderStore.orders[id]
 	orderStore.Unlock()
 	return order
 }
@@ -141,7 +141,7 @@ func updateOrder(order *Order, update func(*Order)) {
 
 func getChallenge(token string) *Challenge {
 	challengeStore.Lock()
-	challenge, _ := challengeStore.challenges[token]
+	challenge := challengeStore.challenges[token]
 	challengeStore.Unlock()
 	return challenge
 }

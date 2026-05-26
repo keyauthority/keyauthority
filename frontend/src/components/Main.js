@@ -530,7 +530,7 @@ export default function Main() {
                             </Dropdown.Item>*/}
                             <Dropdown.Item eventKey="import-vault">
                               <i className="bi bi-upload me-1"></i> Import From
-                              HashiCorp Vault
+                              HC Vault / OpenBao
                             </Dropdown.Item>
                           </DropdownButton>
                         );

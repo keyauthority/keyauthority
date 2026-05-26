@@ -226,7 +226,7 @@ func (k *Key) InferConfig() (*KeyConfig, error) {
 }
 
 // NewKey creates a new Key instance based on the provided configuration and key data
-func NewKey(ctx context.Context, cfg *KeyConfig, data, password []byte) (*Key, error) {
+func NewKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 	// HSM key
 	if cfg.PKCS11Uri != "" {
 		return NewHSMKey(cfg)
