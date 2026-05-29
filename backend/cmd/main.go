@@ -300,8 +300,9 @@ func main() {
 	router.PathPrefix("/swagger/").Handler(
 		http.StripPrefix("/swagger/", http.FileServer(http.FS(swagger.Files))))
 
-	// ----- Start Periodic Tasks ----- //
-	startPeriodicTasks()
+	// ------------ One-Time & Periodic Tasks ----- //
+	runOneTimeTasks()
+	runPeriodicTasks()
 
 	// ------------ Start server ------------ //
 	logger.InfoWithContext(context.Background(), "server started",
@@ -346,7 +347,16 @@ func startMetricsServer(metricsPort string) {
 	}()
 }
 
-func startPeriodicTasks() {
+func runOneTimeTasks() {
+	go func() {
+		if err := store.RunOneTimeTasks(context.Background()); err != nil {
+			logger.WarnWithContext(context.Background(),
+				"couldn't run one-time tasks", "error", err)
+		}
+	}()
+}
+
+func runPeriodicTasks() {
 	// CRL re-creation
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
@@ -368,8 +378,8 @@ func startPeriodicTasks() {
 
 		for {
 			if err := setupAuthenticator(); err != nil {
-				logger.ErrorWithContext(context.Background(), "couldn't reload authenticator",
-					"error", err)
+				logger.ErrorWithContext(context.Background(),
+					"couldn't reload authenticator", "error", err)
 			}
 			<-ticker.C
 		}
@@ -381,9 +391,9 @@ func startPeriodicTasks() {
 		defer ticker.Stop()
 
 		for {
-			if err := store.PeriodicOps(context.Background()); err != nil {
-				logger.WarnWithContext(context.Background(), "couldn't perform periodic store ops",
-					"error", err)
+			if err := store.RunPeriodicTasks(context.Background()); err != nil {
+				logger.WarnWithContext(context.Background(),
+					"couldn't perform periodic store ops", "error", err)
 			}
 			<-ticker.C
 		}
@@ -557,6 +567,10 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.Any("notAfter", cert.NotAfter),
 		slog.String("comment", comment),
 	)
+
+	// set certificate-related metrics
+	environment, _ := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string)
+	internalpkg.SetCertificateMetrics(cert, environment)
 
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {

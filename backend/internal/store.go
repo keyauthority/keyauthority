@@ -1522,10 +1522,19 @@ func (s *Store) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
 }
 
 /*****************************************************/
-/*               Periodic Ops Functions               */
+/*            One-Time & Periodic Tasks              */
 /*****************************************************/
 
-func (s *Store) PeriodicOps(ctx context.Context) error {
+func (s *Store) RunOneTimeTasks(ctx context.Context) error {
+	// set certificate metrics
+	if err := s.setCertificateMetrics(ctx); err != nil {
+		return fmt.Errorf("set certificate metrics: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) RunPeriodicTasks(ctx context.Context) error {
 	// clean up certs that expired more than 30 days ago
 	if _, err := s.DB.ExecContext(ctx, `
 		DELETE FROM certs
@@ -1550,11 +1559,6 @@ func (s *Store) PeriodicOps(ctx context.Context) error {
 		AND id NOT IN (SELECT encryption_key_id FROM secrets)
 	`); err != nil {
 		return fmt.Errorf("cleanup keys: %w", err)
-	}
-
-	// set certificate metrics
-	if err := s.setCertificateMetrics(ctx); err != nil {
-		return fmt.Errorf("set certificate metrics: %w", err)
 	}
 
 	return nil
