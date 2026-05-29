@@ -60,7 +60,7 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/activity/certs" />} />
+      <Route path="/" element={<Navigate to="/secrets" />} />
       <Route path="*" element={<Main />} />
     </Routes>
   );

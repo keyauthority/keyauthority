@@ -63,20 +63,20 @@ var (
 		[]string{"endpoint", "method"},
 	)
 
-	certNotBeforeTimestampSeconds = prometheus.NewGaugeVec(
+	certificateNotBeforeTimestampSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "keyauthority_certificate_not_before_timestamp_seconds",
 			Help: "The Unix epoch timestamp (in seconds) at which the certificate becomes valid.",
 		},
-		[]string{"dns_names", "issuer_cn"},
+		[]string{"cn", "dns", "issuer_cn", "is_ca", "environment"},
 	)
 
-	certNotAfterTimestampSeconds = prometheus.NewGaugeVec(
+	certificateNotAfterTimestampSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "keyauthority_certificate_not_after_timestamp_seconds",
 			Help: "The Unix epoch timestamp (in seconds) at which the certificate expires.",
 		},
-		[]string{"dns_names", "issuer_cn"},
+		[]string{"cn", "dns", "issuer_cn", "is_ca", "environment"},
 	)
 )
 
@@ -94,12 +94,13 @@ func SetupMetrics() {
 	metricsOnce.Do(func() {
 		masked := strings.ToLower(strings.TrimSpace(os.Getenv(envURLPathsMasked)))
 		pathsMasked = masked == "" || masked == "true" || masked == "1" || masked == "yes"
+
 		prometheus.MustRegister(
 			httpRequestsTotal,
 			httpRequestDurationSeconds,
 			httpRequestTimestampSeconds,
-			certNotBeforeTimestampSeconds,
-			certNotAfterTimestampSeconds,
+			certificateNotBeforeTimestampSeconds,
+			certificateNotAfterTimestampSeconds,
 		)
 	})
 }
@@ -138,21 +139,23 @@ func WithHttpMetrics(maskedEndpoint string, next http.Handler) http.Handler {
 	})
 }
 
-func RecordCertMetrics(cert *x509.Certificate) {
-	dnsNamesLabel := "none"
+func SetCertificateMetrics(cert *x509.Certificate, environment string) {
+	cn := cert.Subject.CommonName
+	issuerCN := cert.Issuer.CommonName
+	isCA := strconv.FormatBool(cert.IsCA)
+	dns := ""
 	if len(cert.DNSNames) > 0 {
 		sortedDNSNames := make([]string, len(cert.DNSNames))
 		copy(sortedDNSNames, cert.DNSNames)
 		sort.Strings(sortedDNSNames)
-		dnsNamesLabel = strings.Join(sortedDNSNames, ",")
+		dns = strings.Join(sortedDNSNames, ",")
 	}
-	certNotBeforeTimestampSeconds.WithLabelValues(
-		dnsNamesLabel,
-		cert.Issuer.CommonName,
+
+	certificateNotBeforeTimestampSeconds.WithLabelValues(
+		cn, dns, issuerCN, isCA, environment,
 	).Set(float64(cert.NotBefore.Unix()))
 
-	certNotAfterTimestampSeconds.WithLabelValues(
-		dnsNamesLabel,
-		cert.Issuer.CommonName,
+	certificateNotAfterTimestampSeconds.WithLabelValues(
+		cn, dns, issuerCN, isCA, environment,
 	).Set(float64(cert.NotAfter.Unix()))
 }

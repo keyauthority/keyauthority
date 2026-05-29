@@ -166,12 +166,13 @@ export function Certificates({ isLoading, setIsLoading }) {
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
-              <td style={{ maxWidth: "12rem" }} className="text-truncate">
+              <td
+                style={{ maxWidth: "12rem" }}
+                className={`${cert.revoked ? "text-decoration-line-through" : ""} text-truncate`}
+              >
                 {cert.serial}
               </td>
-              <td
-                className={cert.revoked ? "text-decoration-line-through" : ""}
-              >
+              <td>
                 {cnAndSan(cert).length > 0 ? cnAndSan(cert).join(", ") : "-"}
               </td>
               <td>{prettyTime(cert.notBefore)}</td>

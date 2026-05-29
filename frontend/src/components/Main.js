@@ -573,6 +573,15 @@ export default function Main() {
 
               const content = () => {
                 switch (location.pathname) {
+                  case "/activity/dashboard":
+                    return (
+                      <Dashboard
+                        key={`${location.pathname}-${refreshTrigger}`}
+                        isLoading={isLoading}
+                        setIsLoading={setIsLoading}
+                        setSubtitle={setSubtitle}
+                      />
+                    );
                   case "/activity/certs":
                     return (
                       <Certificates

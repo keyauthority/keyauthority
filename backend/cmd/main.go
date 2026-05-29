@@ -558,9 +558,6 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.String("comment", comment),
 	)
 
-	// set cert expiration metrics
-	internalpkg.RecordCertMetrics(cert)
-
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
 		err := store.InsertCert(context.Background(), signerName, cert, comment)

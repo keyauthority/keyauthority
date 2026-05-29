@@ -1551,5 +1551,73 @@ func (s *Store) PeriodicOps(ctx context.Context) error {
 	`); err != nil {
 		return fmt.Errorf("cleanup keys: %w", err)
 	}
+
+	// set certificate metrics
+	if err := s.setCertificateMetrics(ctx); err != nil {
+		return fmt.Errorf("set certificate metrics: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) setCertificateMetrics(ctx context.Context) error {
+	// query all CA chains from signers
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT signers.ca_chain, keys.environment FROM signers
+		JOIN keys ON signers.private_key_id = keys.id
+		WHERE ca_chain IS NOT NULL
+	`)
+	if err != nil {
+		return fmt.Errorf("query CA certificates: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var caChainBytes []byte
+		var env string
+		if err := rows.Scan(&caChainBytes, &env); err != nil {
+			continue // skip if we can't read the CA chain
+		}
+
+		for {
+			var block *pem.Block
+			block, caChainBytes = pem.Decode(caChainBytes)
+			if block == nil {
+				break
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				//return fmt.Errorf("parse certificate in CA chain: %w", err)
+				continue
+			}
+			SetCertificateMetrics(cert, env)
+		}
+	}
+
+	// query all certs
+	rows, err = s.DB.QueryContext(ctx, `
+		SELECT certs.der, keys.environment
+			FROM certs
+			JOIN signers ON certs.signer_name = signers.name
+			JOIN keys ON signers.private_key_id = keys.id 
+			ORDER BY certs.not_before ASC
+	`)
+	if err != nil {
+		return fmt.Errorf("query certificates: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var der []byte
+		var env string
+		if err := rows.Scan(&der, &env); err != nil {
+			continue // skip if we can't read the cert
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			continue // skip if we can't parse the cert
+		}
+		SetCertificateMetrics(cert, env)
+	}
 	return nil
 }
