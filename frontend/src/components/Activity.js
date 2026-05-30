@@ -12,6 +12,7 @@ import {
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
 import Filters from "./Filters";
+import Dashboard from "./Dashboard";
 import Paginator from "./Paginator";
 import JSONModal from "./JSONModal";
 
@@ -21,6 +22,7 @@ export function Certificates({ isLoading, setIsLoading }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [totalCount, setTotalCount] = useState(0);
+  const [countByExpiringDays, setCountByExpiringDays] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
@@ -51,8 +53,35 @@ export function Certificates({ isLoading, setIsLoading }) {
     }
   }, [api, filters, page, pageSize, setIsLoading]);
 
+  const countExpiringInDays = async (days) => {
+    setIsLoading(true);
+    const nowInYYMMDD = new Date().toISOString().split("T")[0];
+    const daysFromNowInYYMMDD = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000,
+    )
+      .toISOString()
+      .split("T")[0];
+    try {
+      const res = await api.get(
+        `/certs?revoked=false&notAfterFrom=${nowInYYMMDD}&notAfterTo=${daysFromNowInYYMMDD}&pageSize=100000`,
+      );
+      setCountByExpiringDays((prev) => ({
+        ...prev,
+        [days]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      // showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCerts();
+    countExpiringInDays(1000000); // count all valid certs by using a very large number of days
+    countExpiringInDays(3);
+    countExpiringInDays(7);
+    countExpiringInDays(30);
   }, [fetchCerts]);
 
   const cnAndSan = (cert) => {
@@ -85,6 +114,31 @@ export function Certificates({ isLoading, setIsLoading }) {
       />
 
       {error && <Alert variant="danger">{error}</Alert>}
+
+      <Dashboard
+        colsPerRow={4}
+        cards={[
+          {
+            key: "Valid and not expiring soon",
+            value: countByExpiringDays[1000000],
+            valueClass: "text-success",
+          },
+          {
+            key: "Valid and expiring in ≤3 Days",
+            value: countByExpiringDays[3],
+            valueClass: "text-danger",
+          },
+          {
+            key: "Valid and expiring in ≤7 Days",
+            value: countByExpiringDays[7],
+            valueClass: "text-warning",
+          },
+          {
+            key: "Valid and expiring in ≤30 Days",
+            value: countByExpiringDays[30],
+          },
+        ]}
+      />
 
       <Filters
         filters={filters}
@@ -228,6 +282,9 @@ export function Logs({ isLoading, setIsLoading }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [totalCount, setTotalCount] = useState(0);
+  const [levelCounts, setLevelCounts] = useState({});
+  const [apiendpointCounts, setApiendpointCounts] = useState({});
+  const [msgCounts, setMsgCounts] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
@@ -260,8 +317,77 @@ export function Logs({ isLoading, setIsLoading }) {
     }
   }, [api, filters, page, pageSize, setIsLoading]);
 
+  const countLogsByLevel = async (level) => {
+    setIsLoading(true);
+    const nowInYYMMDD = new Date().toISOString().split("T")[0];
+    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const res = await api.get(
+        `/logs?level=${level}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+      );
+      setLevelCounts((prev) => ({
+        ...prev,
+        [level]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      // showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countLogsByApiEndpoint = async (endpoint) => {
+    setIsLoading(true);
+    const nowInYYMMDD = new Date().toISOString().split("T")[0];
+    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const res = await api.get(
+        `/logs?url=${endpoint}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+      );
+      setApiendpointCounts((prev) => ({
+        ...prev,
+        [endpoint]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      // showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countLogsByMsg = async (msg) => {
+    setIsLoading(true);
+    const nowInYYMMDD = new Date().toISOString().split("T")[0];
+    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const res = await api.get(
+        `/logs?msg=${msg}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+      );
+      setMsgCounts((prev) => ({
+        ...prev,
+        [msg]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      // showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
+    countLogsByLevel("ERROR");
+    //countLogsByApiEndpoint("/v1/secrets");
+    //countLogsByApiEndpoint("/v1/signers");
+    countLogsByMsg("secret read");
+    countLogsByMsg("certificate signed");
+    countLogsByMsg("key created");
   }, [fetchLogs]);
 
   const levelVariant = {
@@ -281,6 +407,29 @@ export function Logs({ isLoading, setIsLoading }) {
       />
 
       {error && <Alert variant="danger">{error}</Alert>}
+
+      <Dashboard
+        colsPerRow={4}
+        cards={[
+          {
+            key: "Errors in last 24h",
+            value: levelCounts.ERROR || 0,
+            valueClass: "text-danger",
+          },
+          {
+            key: "Secrets read in last 24h",
+            value: msgCounts["secret read"] || 0,
+          },
+          {
+            key: "Certificates signed in last 24h",
+            value: msgCounts["certificate signed"] || 0,
+          },
+          {
+            key: "Keys created in last 24h",
+            value: msgCounts["key created"] || 0,
+          },
+        ]}
+      />
 
       <Filters
         filters={filters}

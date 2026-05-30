@@ -1591,21 +1591,52 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 			}
 			cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
-				//return fmt.Errorf("parse certificate in CA chain: %w", err)
 				continue
 			}
 			SetCertificateMetrics(cert, env)
 		}
 	}
 
-	// query all certs
+	// close first result set before running next query
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close CA certificates rows: %w", err)
+	}
+
+	// query deduped certs by (environment, cn, sorted sans, signer_name),
+	// taking latest by not_before DESC, serial DESC
 	rows, err = s.DB.QueryContext(ctx, `
-		SELECT certs.der, keys.environment
-			FROM certs
-			JOIN signers ON certs.signer_name = signers.name
-			JOIN keys ON signers.private_key_id = keys.id 
-			ORDER BY certs.not_before ASC
-	`)
+    WITH normalized AS (
+      SELECT
+        c.der,
+        k.environment,
+        c.cn,
+        c.signer_name,
+        COALESCE(
+          ARRAY(
+            SELECT s
+            FROM unnest(c.sans) AS s
+            ORDER BY s
+          ),
+          ARRAY[]::text[]
+        ) AS sans_sorted,
+        c.not_before,
+        c.serial
+      FROM certs c
+      JOIN signers s ON s.name = c.signer_name
+      JOIN keys k ON k.id = s.private_key_id
+    )
+    SELECT DISTINCT ON (environment, cn, sans_sorted, signer_name)
+      der,
+      environment
+    FROM normalized
+    ORDER BY
+      environment,
+      cn,
+      sans_sorted,
+      signer_name,
+      not_before DESC NULLS LAST,
+      serial DESC
+  `)
 	if err != nil {
 		return fmt.Errorf("query certificates: %w", err)
 	}
@@ -1623,5 +1654,6 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 		}
 		SetCertificateMetrics(cert, env)
 	}
-	return nil
+
+	return rows.Err()
 }
