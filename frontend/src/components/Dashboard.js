@@ -1,4 +1,4 @@
-import { Row, Col, Card } from "react-bootstrap";
+import { Row, Col, Alert } from "react-bootstrap";
 
 /*
 
@@ -46,14 +46,12 @@ export default function Dashboard({ cards, colsPerRow = 4 }) {
               : undefined;
         return (
           <Col xs={12} md={md} key={card.key}>
-            <Card className="h-100">
-              <Card.Body>
-                <div className={`h4 mb-0 ${card.valueClass || ""}`}>
-                  {card.value}
-                </div>
-                <div className="text-muted small">{card.key}</div>
-              </Card.Body>
-            </Card>
+            <Alert variant="light" className="mb-2">
+              <h4 className={`mb-0 text-${card.variant || ""}`}>
+                {card.value}
+              </h4>
+              <div className="text-muted small">{card.key}</div>
+            </Alert>
           </Col>
         );
       })}

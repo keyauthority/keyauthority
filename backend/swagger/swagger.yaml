@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.17
+  version: 1.4.19
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -44,6 +44,33 @@ paths:
         Get the accessible keys.
       tags:
         - Keys
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: storage
+          in: query
+          schema:
+            type: string
+            enum: [Software, HSM]      
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Success
@@ -858,6 +885,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: comment
+          in: query
+          schema:
+            type: string
         - name: notBeforeFrom
           in: query
           schema:
@@ -961,6 +992,7 @@ paths:
           in: query
           schema:
             type: string
+            format: uuid
         - name: user
           in: query
           schema:
@@ -973,10 +1005,12 @@ paths:
           in: query
           schema:
             type: string
+            format: date-time
         - name: to
           in: query
           schema:
             type: string
+            format: date-time
         - name: page
           in: query
           schema:
@@ -1085,6 +1119,32 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: url
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Success
@@ -1111,6 +1171,11 @@ paths:
       tags:
         - Miscellaneous
       parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [INFO, WARN, ERROR]
         - name: user
           in: query
           schema:
@@ -1120,6 +1185,10 @@ paths:
           schema:
             type: string
         - name: url
+          in: query
+          schema:
+            type: string
+        - name: environment
           in: query
           schema:
             type: string

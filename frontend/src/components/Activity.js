@@ -63,7 +63,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       .split("T")[0];
     try {
       const res = await api.get(
-        `/certs?revoked=false&notAfterFrom=${nowInYYMMDD}&notAfterTo=${daysFromNowInYYMMDD}&pageSize=100000`,
+        `/certs?revoked=false&notAfterFrom=${nowInYYMMDD}&notAfterTo=${daysFromNowInYYMMDD}&totalCountOnly=true`,
       );
       setCountByExpiringDays((prev) => ({
         ...prev,
@@ -121,17 +121,17 @@ export function Certificates({ isLoading, setIsLoading }) {
           {
             key: "Valid and not expiring soon",
             value: countByExpiringDays[1000000],
-            valueClass: "text-success",
+            variant: "success",
           },
           {
             key: "Valid and expiring in ≤3 Days",
             value: countByExpiringDays[3],
-            valueClass: "text-danger",
+            variant: "danger",
           },
           {
             key: "Valid and expiring in ≤7 Days",
             value: countByExpiringDays[7],
-            valueClass: "text-warning",
+            variant: "warning",
           },
           {
             key: "Valid and expiring in ≤30 Days",
@@ -325,7 +325,7 @@ export function Logs({ isLoading, setIsLoading }) {
       .split("T")[0];
     try {
       const res = await api.get(
-        `/logs?level=${level}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+        `/logs?level=${level}&from=${_24hAgoInYYMMDD}&totalCountOnly=true`,
       );
       setLevelCounts((prev) => ({
         ...prev,
@@ -346,7 +346,7 @@ export function Logs({ isLoading, setIsLoading }) {
       .split("T")[0];
     try {
       const res = await api.get(
-        `/logs?url=${endpoint}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+        `/logs?url=${endpoint}&from=${_24hAgoInYYMMDD}&totalCountOnly=true`,
       );
       setApiendpointCounts((prev) => ({
         ...prev,
@@ -367,7 +367,7 @@ export function Logs({ isLoading, setIsLoading }) {
       .split("T")[0];
     try {
       const res = await api.get(
-        `/logs?msg=${msg}&from=${_24hAgoInYYMMDD}&pageSize=10000`,
+        `/logs?msg=${msg}&from=${_24hAgoInYYMMDD}&totalCountOnly=true`,
       );
       setMsgCounts((prev) => ({
         ...prev,
@@ -414,7 +414,7 @@ export function Logs({ isLoading, setIsLoading }) {
           {
             key: "Errors in last 24h",
             value: levelCounts.ERROR || 0,
-            valueClass: "text-danger",
+            variant: "danger",
           },
           {
             key: "Secrets read in last 24h",

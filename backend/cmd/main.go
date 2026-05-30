@@ -610,10 +610,15 @@ func getPaginatedListWithAccessibleEnvs(
 	}
 
 	filters := r.URL.Query()
-	items, limit, offset, err := getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-		return
+
+	var items []map[string]any
+	var limit, offset int
+	if filters.Get("totalCountOnly") != "true" {
+		items, limit, offset, err = getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
+		if err != nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
+			return
+		}
 	}
 
 	totalCount, err := countFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
@@ -643,10 +648,16 @@ func getPaginatedListWithoutAccessibleEnvs(
 	countFunc func(ctx context.Context, filters url.Values) (int, error),
 ) {
 	filters := r.URL.Query()
-	items, limit, offset, err := getFunc(r.Context(), filters)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-		return
+
+	var items []map[string]any
+	var limit, offset int
+	if filters.Get("totalCountOnly") != "true" {
+		var err error
+		items, limit, offset, err = getFunc(r.Context(), filters)
+		if err != nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
+			return
+		}
 	}
 
 	totalCount, err := countFunc(r.Context(), filters)
