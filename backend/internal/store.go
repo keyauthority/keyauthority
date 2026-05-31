@@ -508,6 +508,14 @@ func applySignerFilters(query string, args []any, idx int, filters url.Values) (
 		args = append(args, "%"+privateKeyID+"%")
 		idx++
 	}
+	if isRoot := parseBool(filters, "isRoot"); isRoot != nil {
+		// isRoot is either true or false, which we determine based on whether the signer has a CA template with a subject defined
+		if *isRoot {
+			query += " AND (signers.config->'isCA' = 'true')"
+		} else {
+			query += " AND (signers.config->'isCA' = 'false' OR signers.config->'isCA' IS NULL)"
+		}
+	}
 	return query, args, idx
 }
 
@@ -957,6 +965,11 @@ func applySecretFilters(query string, args []any, idx int, filters url.Values) (
 	if keyID := filters.Get("encryptionKeyID"); keyID != "" {
 		query += fmt.Sprintf(" AND secrets.encryption_key_id::text ILIKE $%d", idx)
 		args = append(args, "%"+keyID+"%")
+		idx++
+	}
+	if updatedFrom := parseTime(filters, "updatedFrom"); updatedFrom != nil {
+		query += fmt.Sprintf(" AND secrets.updated_at >= $%d", idx)
+		args = append(args, *updatedFrom)
 		idx++
 	}
 	return query, args, idx

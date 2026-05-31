@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.19
+  version: 1.4.20
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -209,6 +209,10 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: isRoot
+          in: query
+          schema:
+            type: boolean
         - name: page
           in: query
           schema:
@@ -655,6 +659,11 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: updatedFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
         - name: page
           in: query
           schema:

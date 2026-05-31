@@ -446,3 +446,13 @@ export const withTooltipDescription = (
     </div>
   );
 };
+
+export const buildURLParams = (filters, page, pageSize) => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.append(key, value);
+  });
+  params.append("page", page);
+  params.append("pageSize", pageSize);
+  return params;
+};

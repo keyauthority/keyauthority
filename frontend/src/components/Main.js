@@ -12,7 +12,7 @@ import {
 } from "react-bootstrap";
 import { ToastContainer } from "react-toastify";
 import Sidebar from "./Sidebar";
-import { Certificates, Logs, PendingRequests } from "./Activity";
+import { Dashboard, Certificates, Logs, PendingRequests } from "./Activity";
 import { Installation, Administration, UseSigners, UseSecrets } from "./Docs";
 import Keys from "./Keys";
 import Signers from "./Signers";
@@ -75,6 +75,12 @@ export default function Main() {
       title: "Activity",
       //icon: "bi-speedometer2",
       items: [
+        {
+          title: "Dashboard",
+          subtitle: "Get an overview of your system's resources and activity",
+          to: "/activity/dashboard",
+          icon: "bi-speedometer2",
+        },
         {
           title: "Certificates",
           subtitle: "View certificates issued by your CAs",
@@ -579,7 +585,6 @@ export default function Main() {
                         key={`${location.pathname}-${refreshTrigger}`}
                         isLoading={isLoading}
                         setIsLoading={setIsLoading}
-                        setSubtitle={setSubtitle}
                       />
                     );
                   case "/activity/certs":
