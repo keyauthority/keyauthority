@@ -413,7 +413,11 @@ export const getRoles = (token) => {
   return allRoles.filter((role) => role.startsWith("KEYAUTHORITY_"));
 };
 
-export const withTooltipDescription = (title, description) => {
+export const withTooltipDescription = (
+  title,
+  description,
+  placement = "top",
+) => {
   const tooltipId = `tooltip-${String(title)
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")}`;
@@ -424,7 +428,7 @@ export const withTooltipDescription = (title, description) => {
       {description ? (
         <div>
           <OverlayTrigger
-            placement="top"
+            placement={placement}
             overlay={<Tooltip id={tooltipId}>{description}</Tooltip>}
           >
             <span
@@ -441,4 +445,14 @@ export const withTooltipDescription = (title, description) => {
       ) : null}
     </div>
   );
+};
+
+export const buildURLParams = (filters, page, pageSize) => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.append(key, value);
+  });
+  params.append("page", page);
+  params.append("pageSize", pageSize);
+  return params;
 };

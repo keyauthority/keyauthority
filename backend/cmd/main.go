@@ -300,8 +300,9 @@ func main() {
 	router.PathPrefix("/swagger/").Handler(
 		http.StripPrefix("/swagger/", http.FileServer(http.FS(swagger.Files))))
 
-	// ----- Start Periodic Tasks ----- //
-	startPeriodicTasks()
+	// ------------ One-Time & Periodic Tasks ----- //
+	runOneTimeTasks()
+	runPeriodicTasks()
 
 	// ------------ Start server ------------ //
 	logger.InfoWithContext(context.Background(), "server started",
@@ -346,7 +347,16 @@ func startMetricsServer(metricsPort string) {
 	}()
 }
 
-func startPeriodicTasks() {
+func runOneTimeTasks() {
+	go func() {
+		if err := store.RunOneTimeTasks(context.Background()); err != nil {
+			logger.WarnWithContext(context.Background(),
+				"couldn't run one-time tasks", "error", err)
+		}
+	}()
+}
+
+func runPeriodicTasks() {
 	// CRL re-creation
 	go func() {
 		ticker := time.NewTicker(72 * time.Hour)
@@ -368,8 +378,8 @@ func startPeriodicTasks() {
 
 		for {
 			if err := setupAuthenticator(); err != nil {
-				logger.ErrorWithContext(context.Background(), "couldn't reload authenticator",
-					"error", err)
+				logger.ErrorWithContext(context.Background(),
+					"couldn't reload authenticator", "error", err)
 			}
 			<-ticker.C
 		}
@@ -381,9 +391,9 @@ func startPeriodicTasks() {
 		defer ticker.Stop()
 
 		for {
-			if err := store.PeriodicOps(context.Background()); err != nil {
-				logger.WarnWithContext(context.Background(), "couldn't perform periodic store ops",
-					"error", err)
+			if err := store.RunPeriodicTasks(context.Background()); err != nil {
+				logger.WarnWithContext(context.Background(),
+					"couldn't perform periodic store ops", "error", err)
 			}
 			<-ticker.C
 		}
@@ -558,8 +568,9 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.String("comment", comment),
 	)
 
-	// set cert expiration metrics
-	internalpkg.RecordCertMetrics(cert)
+	// set certificate-related metrics
+	environment, _ := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string)
+	internalpkg.SetCertificateMetrics(cert, environment)
 
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
@@ -599,10 +610,15 @@ func getPaginatedListWithAccessibleEnvs(
 	}
 
 	filters := r.URL.Query()
-	items, limit, offset, err := getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-		return
+
+	var items []map[string]any
+	var limit, offset int
+	if filters.Get("totalCountOnly") != "true" {
+		items, limit, offset, err = getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
+		if err != nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
+			return
+		}
 	}
 
 	totalCount, err := countFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
@@ -632,10 +648,16 @@ func getPaginatedListWithoutAccessibleEnvs(
 	countFunc func(ctx context.Context, filters url.Values) (int, error),
 ) {
 	filters := r.URL.Query()
-	items, limit, offset, err := getFunc(r.Context(), filters)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-		return
+
+	var items []map[string]any
+	var limit, offset int
+	if filters.Get("totalCountOnly") != "true" {
+		var err error
+		items, limit, offset, err = getFunc(r.Context(), filters)
+		if err != nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
+			return
+		}
 	}
 
 	totalCount, err := countFunc(r.Context(), filters)

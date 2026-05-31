@@ -3,7 +3,7 @@ import { Alert, Table } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import Filters from "./Filters";
 import Paginator from "./Paginator";
-import { prettyTime, prettyEnv } from "../utils/utils";
+import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
 import { getApi } from "../axios";
 
 export default function Secrets({ isLoading, setIsLoading }) {
@@ -21,13 +21,7 @@ export default function Secrets({ isLoading, setIsLoading }) {
     setError(null);
 
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/secrets?${params.toString()}`);
       setSecrets(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);
@@ -49,7 +43,7 @@ export default function Secrets({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 4 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "name",
@@ -68,6 +62,11 @@ export default function Secrets({ isLoading, setIsLoading }) {
             label: "Encryption Key ID",
             type: "text",
             placeholder: "e.g. 123e4567-e89b-12d3-a456-426614174000",
+          },
+          {
+            key: "updatedFrom",
+            label: "Updated After",
+            type: "date",
           },
         ]}
       />

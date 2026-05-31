@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.16
+  version: 1.4.20
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -44,6 +44,33 @@ paths:
         Get the accessible keys.
       tags:
         - Keys
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: storage
+          in: query
+          schema:
+            type: string
+            enum: [Software, HSM]      
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Success
@@ -182,6 +209,10 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: isRoot
+          in: query
+          schema:
+            type: boolean
         - name: page
           in: query
           schema:
@@ -628,6 +659,11 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: updatedFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
         - name: page
           in: query
           schema:
@@ -858,6 +894,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: comment
+          in: query
+          schema:
+            type: string
         - name: notBeforeFrom
           in: query
           schema:
@@ -961,6 +1001,7 @@ paths:
           in: query
           schema:
             type: string
+            format: uuid
         - name: user
           in: query
           schema:
@@ -973,10 +1014,12 @@ paths:
           in: query
           schema:
             type: string
+            format: date-time
         - name: to
           in: query
           schema:
             type: string
+            format: date-time
         - name: page
           in: query
           schema:
@@ -1085,6 +1128,32 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: url
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Success
@@ -1111,6 +1180,11 @@ paths:
       tags:
         - Miscellaneous
       parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [INFO, WARN, ERROR]
         - name: user
           in: query
           schema:
@@ -1120,6 +1194,10 @@ paths:
           schema:
             type: string
         - name: url
+          in: query
+          schema:
+            type: string
+        - name: environment
           in: query
           schema:
             type: string
@@ -1484,37 +1562,6 @@ components:
         token:
           issuer: https://auth.staging.keyauthority.net/realms/staging
           user: user@keyauthority.net
-
-    OIDCProvider:
-      type: object
-      properties:
-        clientID:
-          type: string
-          description: Keycloak Client ID of the OIDC provider
-        issuer:
-          type: string
-          format: uri
-          required: true
-          description: Issuer URL of the OIDC provider
-        verificationOpts:
-          type: object
-          properties:
-            skipIssuerCheck:
-              type: boolean
-              description: Whether to skip issuer check during token verification
-            requiredClaims:
-              type: object
-              description: Claims that the token must have for successful verification
-              example:
-                email: example@keyauthority.net
-                project: keyauthority/dev
-        overrideRoles:
-          type: array
-          items:
-            type: string
-          description: Roles to override for tokens issued by this provider
-          example:
-            [KEYAUTHORITY_PKI_OPERATOR_dev, KEYAUTHORITY_SECRETS_OPERATOR_prod]
 
     TokenRequest:
       type: object

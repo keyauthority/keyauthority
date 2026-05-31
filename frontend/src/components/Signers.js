@@ -3,7 +3,7 @@ import { Alert, Table } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { getApi } from "../axios";
 import Paginator from "./Paginator";
-import { prettyTime, prettyEnv } from "../utils/utils";
+import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
 import Filters from "./Filters";
 
 export default function Signers({ isLoading, setIsLoading }) {
@@ -21,13 +21,7 @@ export default function Signers({ isLoading, setIsLoading }) {
     setError(null);
 
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/signers?${params.toString()}`);
       setSigners(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);
@@ -49,7 +43,7 @@ export default function Signers({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 4 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "name",
@@ -71,6 +65,17 @@ export default function Signers({ isLoading, setIsLoading }) {
             label: "Private Key ID",
             placeholder: "e.g. 1234-5678-9012",
             value: filters.privateKeyID,
+          },
+          {
+            key: "isRoot",
+            type: "select",
+            label: "Is Root",
+            options: [
+              { value: "", label: "-" },
+              { value: "true", label: "Yes" },
+              { value: "false", label: "No" },
+            ],
+            value: filters.isRoot,
           },
         ]}
       />

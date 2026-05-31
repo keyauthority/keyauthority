@@ -6,7 +6,12 @@ import Filters from "./Filters";
 import JSONModal from "./JSONModal";
 
 import { getApi } from "../axios";
-import { prettyTime, prettyEnv, showToast } from "../utils/utils";
+import {
+  prettyTime,
+  prettyEnv,
+  showToast,
+  buildURLParams,
+} from "../utils/utils";
 
 export default function Keys({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
@@ -27,13 +32,7 @@ export default function Keys({ isLoading, setIsLoading }) {
     setError(null);
 
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/keys?${params.toString()}`);
       setKeys(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);

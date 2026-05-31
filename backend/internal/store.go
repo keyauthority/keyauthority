@@ -508,6 +508,14 @@ func applySignerFilters(query string, args []any, idx int, filters url.Values) (
 		args = append(args, "%"+privateKeyID+"%")
 		idx++
 	}
+	if isRoot := parseBool(filters, "isRoot"); isRoot != nil {
+		// isRoot is either true or false, which we determine based on whether the signer has a CA template with a subject defined
+		if *isRoot {
+			query += " AND (signers.config->'isCA' = 'true')"
+		} else {
+			query += " AND (signers.config->'isCA' = 'false' OR signers.config->'isCA' IS NULL)"
+		}
+	}
 	return query, args, idx
 }
 
@@ -957,6 +965,11 @@ func applySecretFilters(query string, args []any, idx int, filters url.Values) (
 	if keyID := filters.Get("encryptionKeyID"); keyID != "" {
 		query += fmt.Sprintf(" AND secrets.encryption_key_id::text ILIKE $%d", idx)
 		args = append(args, "%"+keyID+"%")
+		idx++
+	}
+	if updatedFrom := parseTime(filters, "updatedFrom"); updatedFrom != nil {
+		query += fmt.Sprintf(" AND secrets.updated_at >= $%d", idx)
+		args = append(args, *updatedFrom)
 		idx++
 	}
 	return query, args, idx
@@ -1522,10 +1535,19 @@ func (s *Store) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
 }
 
 /*****************************************************/
-/*               Periodic Ops Functions               */
+/*            One-Time & Periodic Tasks              */
 /*****************************************************/
 
-func (s *Store) PeriodicOps(ctx context.Context) error {
+func (s *Store) RunOneTimeTasks(ctx context.Context) error {
+	// set certificate metrics
+	if err := s.setCertificateMetrics(ctx); err != nil {
+		return fmt.Errorf("set certificate metrics: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) RunPeriodicTasks(ctx context.Context) error {
 	// clean up certs that expired more than 30 days ago
 	if _, err := s.DB.ExecContext(ctx, `
 		DELETE FROM certs
@@ -1551,5 +1573,100 @@ func (s *Store) PeriodicOps(ctx context.Context) error {
 	`); err != nil {
 		return fmt.Errorf("cleanup keys: %w", err)
 	}
+
 	return nil
+}
+
+func (s *Store) setCertificateMetrics(ctx context.Context) error {
+	// query all CA chains from signers
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT signers.ca_chain, keys.environment FROM signers
+		JOIN keys ON signers.private_key_id = keys.id
+		WHERE ca_chain IS NOT NULL
+	`)
+	if err != nil {
+		return fmt.Errorf("query CA certificates: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var caChainBytes []byte
+		var env string
+		if err := rows.Scan(&caChainBytes, &env); err != nil {
+			continue // skip if we can't read the CA chain
+		}
+
+		for {
+			var block *pem.Block
+			block, caChainBytes = pem.Decode(caChainBytes)
+			if block == nil {
+				break
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				continue
+			}
+			SetCertificateMetrics(cert, env)
+		}
+	}
+
+	// close first result set before running next query
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close CA certificates rows: %w", err)
+	}
+
+	// query deduped certs by (environment, cn, sorted sans, signer_name),
+	// taking latest by not_before DESC, serial DESC
+	rows, err = s.DB.QueryContext(ctx, `
+    WITH normalized AS (
+      SELECT
+        c.der,
+        k.environment,
+        c.cn,
+        c.signer_name,
+        COALESCE(
+          ARRAY(
+            SELECT s
+            FROM unnest(c.sans) AS s
+            ORDER BY s
+          ),
+          ARRAY[]::text[]
+        ) AS sans_sorted,
+        c.not_before,
+        c.serial
+      FROM certs c
+      JOIN signers s ON s.name = c.signer_name
+      JOIN keys k ON k.id = s.private_key_id
+    )
+    SELECT DISTINCT ON (environment, cn, sans_sorted, signer_name)
+      der,
+      environment
+    FROM normalized
+    ORDER BY
+      environment,
+      cn,
+      sans_sorted,
+      signer_name,
+      not_before DESC NULLS LAST,
+      serial DESC
+  `)
+	if err != nil {
+		return fmt.Errorf("query certificates: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var der []byte
+		var env string
+		if err := rows.Scan(&der, &env); err != nil {
+			continue // skip if we can't read the cert
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			continue // skip if we can't parse the cert
+		}
+		SetCertificateMetrics(cert, env)
+	}
+
+	return rows.Err()
 }

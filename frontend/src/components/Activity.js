@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Alert, Button, Table } from "react-bootstrap";
+import { Alert, Button, Card, Table, Row, Col } from "react-bootstrap";
 import {
   showToast,
   downloadOrCopy,
@@ -8,12 +8,379 @@ import {
   copyToClipboard,
   prettyEnv,
   boxedContent,
+  buildURLParams,
+  getRoles,
 } from "../utils/utils";
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
+import { getKeycloak } from "../keycloak";
 import Filters from "./Filters";
 import Paginator from "./Paginator";
 import JSONModal from "./JSONModal";
+
+export function Dashboard({ isLoading, setIsLoading }) {
+  const [error, setError] = useState(null);
+  const [certCountByExpiring, setCertCountByExpiring] = useState({});
+  const [logCountByLevel, setLogCountByLevel] = useState({});
+  const [logCountByMsg, setLogCountByMsg] = useState({});
+  const [keyCountByStorage, setKeyCountByStorage] = useState({});
+  const [keyCountByType, setKeyCountByType] = useState({});
+  const [signerCountByRoot, setSignerCountByRoot] = useState({});
+  const [secretCountByUpdated, setSecretCountByUpdated] = useState({});
+
+  const keycloak = getKeycloak();
+  const roles = getRoles(keycloak?.tokenParsed || {});
+  const isAuditor =
+    roles.findIndex((role) => role === "KEYAUTHORITY_AUDITOR") !== -1;
+
+  const api = getApi();
+  const infiniteDays = 1000000; // used to count all certs/secrets by using a very large number of days
+
+  const dashboardBody = (cards, colsPerRow = 4) => {
+    const safeColsPerRow =
+      Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
+
+    const baseSpan = 12 / safeColsPerRow;
+    const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
+    const remainder = supportsFill ? cards.length % safeColsPerRow : 0;
+
+    return (
+      <Row className="g-3">
+        {cards.map((card, index) => {
+          const isLast = index === cards.length - 1;
+
+          const md =
+            supportsFill && isLast && remainder !== 0
+              ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
+              : supportsFill
+                ? baseSpan
+                : undefined;
+          return (
+            <Col xs={12} md={md} key={index}>
+              <Alert variant="light">
+                <div className="text-muted small mb-1">{card.key}</div>
+                <h4 className={`mb-0 text-${card.variant || ""}`}>
+                  {card.value !== undefined ? card.value : "-"}
+                </h4>
+              </Alert>
+            </Col>
+          );
+        })}
+      </Row>
+    );
+  };
+
+  const dashboardSection = (title, iconClass, cards, colsPerRow) => (
+    <div className="mb-2">
+      <h6 className="mb-3">
+        {/* <i className={`${iconClass} me-2`}></i> */}
+        {title}
+      </h6>
+      {dashboardBody(cards, colsPerRow)}
+    </div>
+  );
+
+  const countCertsByExpiring = async (days) => {
+    setIsLoading(true);
+    const nowInYYMMDD = new Date().toISOString().split("T")[0];
+    const daysFromNowInYYMMDD = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000,
+    )
+      .toISOString()
+      .split("T")[0];
+    try {
+      const params = new URLSearchParams();
+      params.set("notAfterFrom", nowInYYMMDD);
+      params.set("notAfterTo", daysFromNowInYYMMDD);
+      params.set("revoked", "false");
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/certs?${params.toString()}`);
+      setCertCountByExpiring((prev) => ({
+        ...prev,
+        [days]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countLogsByLevel = async (level) => {
+    setIsLoading(true);
+    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const params = new URLSearchParams();
+      params.set("level", level);
+      params.set("from", _24hAgoInYYMMDD);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/logs?${params.toString()}`);
+      setLogCountByLevel((prev) => ({
+        ...prev,
+        [level]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countLogsByMsg = async (msg) => {
+    setIsLoading(true);
+    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const params = new URLSearchParams();
+      params.set("msg", msg);
+      params.set("from", _24hAgoInYYMMDD);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/logs?${params.toString()}`);
+      setLogCountByMsg((prev) => ({
+        ...prev,
+        [msg]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countKeysByStorage = async (storage) => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("storage", storage);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/keys?${params.toString()}`);
+      setKeyCountByStorage((prev) => ({
+        ...prev,
+        [storage]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countKeysByType = async (type) => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("type", type);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/keys?${params.toString()}`);
+      setKeyCountByType((prev) => ({
+        ...prev,
+        [type]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countSignersByRoot = async (isRoot) => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("isRoot", isRoot);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/signers?${params.toString()}`);
+      setSignerCountByRoot((prev) => ({
+        ...prev,
+        [isRoot]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const countSecretsByUpdated = async (daysAgo) => {
+    setIsLoading(true);
+    const daysAgoInYYMMDD = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    try {
+      const params = new URLSearchParams();
+      params.set("updatedFrom", daysAgoInYYMMDD);
+      params.set("totalCountOnly", "true");
+
+      const res = await api.get(`/secrets?${params.toString()}`);
+      setSecretCountByUpdated((prev) => ({
+        ...prev,
+        [daysAgo]: res.data.totalCount || 0,
+      }));
+    } catch (err) {
+      setError(errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuditor) {
+      countLogsByLevel("ERROR");
+      countLogsByMsg("secret read");
+      countLogsByMsg("certificate signed");
+      countLogsByMsg("key created");
+    }
+    countCertsByExpiring(infiniteDays);
+    countCertsByExpiring(3);
+    countCertsByExpiring(7);
+    countCertsByExpiring(30);
+    countKeysByStorage("Software");
+    countKeysByStorage("HSM");
+    countKeysByType("RSA");
+    countKeysByType("ECDSA");
+    countKeysByType("Ed25519");
+    countKeysByType("AES");
+    countSignersByRoot(true);
+    countSignersByRoot(false);
+    countSecretsByUpdated(infiniteDays); // count all secrets by using a very large number of days
+    countSecretsByUpdated(90);
+  }, [api, isAuditor]);
+
+  return (
+    <>
+      {error && <Alert variant="danger">{error}</Alert>}
+
+      {isAuditor &&
+        dashboardSection(
+          "Recent Activity",
+          "bi bi-clock-history",
+          [
+            {
+              key: "Errors in the last 24h",
+              value: logCountByLevel["ERROR"],
+              variant: "danger",
+            },
+            {
+              key: "Secrets read in the last 24h",
+              value: logCountByMsg["secret read"],
+            },
+            {
+              key: "Certificates signed in the last 24h",
+              value: logCountByMsg["certificate signed"],
+            },
+            // {
+            //   key: "Keys created in the last 24h",
+            //   value: logCountByMsg["key created"],
+            // },
+          ],
+          3,
+        )}
+
+      {dashboardSection(
+        "Certificates",
+        "bi bi-award",
+        [
+          {
+            key: "Valid and not expiring soon",
+            value: certCountByExpiring[infiniteDays],
+            variant: "success",
+          },
+          {
+            key: "Valid and expiring in ≤3 days",
+            value: certCountByExpiring[3],
+            variant: "danger",
+          },
+          // {
+          //   key: "Valid and expiring in ≤7 days",
+          //   value: certCountByExpiring[7],
+          //   // variant: "warning",
+          // },
+          {
+            key: "Valid and expiring in ≤30 days",
+            value: certCountByExpiring[30],
+          },
+        ],
+        3,
+      )}
+
+      {dashboardSection(
+        "Keys",
+        "bi bi-key",
+        [
+          {
+            key: "Software",
+            value: keyCountByStorage["Software"],
+          },
+          {
+            key: "HSM",
+            value: keyCountByStorage["HSM"],
+          },
+          {
+            key: "RSA",
+            value: keyCountByType["RSA"],
+          },
+          {
+            key: "ECDSA",
+            value: keyCountByType["ECDSA"],
+          },
+          {
+            key: "Ed25519",
+            value: keyCountByType["Ed25519"],
+          },
+          {
+            key: "AES",
+            value: keyCountByType["AES"],
+          },
+        ],
+        6,
+      )}
+
+      {dashboardSection(
+        "Signers",
+        "bi bi-pen",
+        [
+          {
+            key: "Root CAs",
+            value: signerCountByRoot[true],
+          },
+          {
+            key: "Intermediate CAs",
+            value: signerCountByRoot[false],
+          },
+        ],
+        2,
+      )}
+
+      {dashboardSection(
+        "Secrets",
+        "bi bi-three-dots",
+        [
+          {
+            key: "Updated in the last 90 days",
+            value: secretCountByUpdated[90],
+            variant: "success",
+          },
+          {
+            key: "Not updated in the last 90 days",
+            value:
+              secretCountByUpdated[infiniteDays] - secretCountByUpdated[90],
+            variant: "warning",
+          },
+        ],
+        2,
+      )}
+    </>
+  );
+}
 
 export function Certificates({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
@@ -34,13 +401,7 @@ export function Certificates({ isLoading, setIsLoading }) {
     setCerts([]);
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/certs?${params.toString()}`);
       setCerts(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);
@@ -155,6 +516,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Table hover responsive striped>
         <thead>
           <tr>
+            <th>Status</th>
             <th>Serial</th>
             <th>CN/SAN</th>
             <th>Valid From</th>
@@ -166,12 +528,21 @@ export function Certificates({ isLoading, setIsLoading }) {
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
-              <td style={{ maxWidth: "12rem" }} className="text-truncate">
-                {cert.serial}
+              <td>
+                {cert.revoked
+                  ? boxedContent("Revoked", "danger")
+                  : new Date(cert.notAfter) < new Date()
+                    ? boxedContent("Expired", "danger")
+                    : boxedContent("Valid", "success")}
               </td>
               <td
-                className={cert.revoked ? "text-decoration-line-through" : ""}
+                style={{ maxWidth: "12rem" }}
+                className="text-truncate"
+                //className={`${cert.revoked ? "text-decoration-line-through" : ""} text-truncate`}
               >
+                {cert.serial}
+              </td>
+              <td>
                 {cnAndSan(cert).length > 0 ? cnAndSan(cert).join(", ") : "-"}
               </td>
               <td>{prettyTime(cert.notBefore)}</td>
@@ -241,13 +612,7 @@ export function Logs({ isLoading, setIsLoading }) {
     // const loadingToast = showLoadingToast("Loading logs...");
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/logs?${params.toString()}`);
       setLogs(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);
@@ -429,13 +794,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
     // const loadingToast = showLoadingToast("Loading requests...");
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      params.append("page", page);
-      params.append("pageSize", pageSize);
-
+      const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/pending-requests?${params.toString()}`);
       setRequests(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);

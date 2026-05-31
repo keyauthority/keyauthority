@@ -17,9 +17,11 @@ limitations under the License.
 package internal
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/x509"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,12 +32,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	envURLPathsMasked = "METRICS_URL_PATHS_MASKED"
-)
-
 var (
-	pathsMasked = true
 	metricsOnce sync.Once
 
 	httpRequestsTotal = prometheus.NewCounterVec(
@@ -63,20 +60,20 @@ var (
 		[]string{"endpoint", "method"},
 	)
 
-	certNotBeforeTimestampSeconds = prometheus.NewGaugeVec(
+	certificateNotBeforeTimestampSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "keyauthority_certificate_not_before_timestamp_seconds",
 			Help: "The Unix epoch timestamp (in seconds) at which the certificate becomes valid.",
 		},
-		[]string{"dns_names", "issuer_cn"},
+		[]string{"cn", "dns", "issuer_cn", "is_ca", "environment", "key_algorithm", "key_bits"},
 	)
 
-	certNotAfterTimestampSeconds = prometheus.NewGaugeVec(
+	certificateNotAfterTimestampSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "keyauthority_certificate_not_after_timestamp_seconds",
 			Help: "The Unix epoch timestamp (in seconds) at which the certificate expires.",
 		},
-		[]string{"dns_names", "issuer_cn"},
+		[]string{"cn", "dns", "issuer_cn", "is_ca", "environment", "key_algorithm", "key_bits"},
 	)
 )
 
@@ -92,14 +89,12 @@ func (r *statusRecorder) WriteHeader(code int) {
 
 func SetupMetrics() {
 	metricsOnce.Do(func() {
-		masked := strings.ToLower(strings.TrimSpace(os.Getenv(envURLPathsMasked)))
-		pathsMasked = masked == "" || masked == "true" || masked == "1" || masked == "yes"
 		prometheus.MustRegister(
 			httpRequestsTotal,
 			httpRequestDurationSeconds,
 			httpRequestTimestampSeconds,
-			certNotBeforeTimestampSeconds,
-			certNotAfterTimestampSeconds,
+			certificateNotBeforeTimestampSeconds,
+			certificateNotAfterTimestampSeconds,
 		)
 	})
 }
@@ -108,17 +103,12 @@ func MetricsHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-func WithHttpMetrics(maskedEndpoint string, next http.Handler) http.Handler {
+func WithHttpMetrics(endpoint string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
 		next.ServeHTTP(rec, r)
-
-		endpoint := maskedEndpoint
-		if !pathsMasked {
-			endpoint = r.URL.Path
-		}
 
 		httpRequestsTotal.WithLabelValues(
 			endpoint,
@@ -138,21 +128,38 @@ func WithHttpMetrics(maskedEndpoint string, next http.Handler) http.Handler {
 	})
 }
 
-func RecordCertMetrics(cert *x509.Certificate) {
-	dnsNamesLabel := "none"
+func SetCertificateMetrics(cert *x509.Certificate, environment string) {
+	cn := cert.Subject.CommonName
+	issuerCN := cert.Issuer.CommonName
+	isCA := strconv.FormatBool(cert.IsCA)
+	alg := cert.PublicKeyAlgorithm.String()
+	bits := getBitsFromCertificate(cert)
+	dns := ""
 	if len(cert.DNSNames) > 0 {
 		sortedDNSNames := make([]string, len(cert.DNSNames))
 		copy(sortedDNSNames, cert.DNSNames)
 		sort.Strings(sortedDNSNames)
-		dnsNamesLabel = strings.Join(sortedDNSNames, ",")
+		dns = strings.Join(sortedDNSNames, ",")
 	}
-	certNotBeforeTimestampSeconds.WithLabelValues(
-		dnsNamesLabel,
-		cert.Issuer.CommonName,
+
+	certificateNotBeforeTimestampSeconds.WithLabelValues(
+		cn, dns, issuerCN, isCA, environment, alg, strconv.Itoa(bits),
 	).Set(float64(cert.NotBefore.Unix()))
 
-	certNotAfterTimestampSeconds.WithLabelValues(
-		dnsNamesLabel,
-		cert.Issuer.CommonName,
+	certificateNotAfterTimestampSeconds.WithLabelValues(
+		cn, dns, issuerCN, isCA, environment, alg, strconv.Itoa(bits),
 	).Set(float64(cert.NotAfter.Unix()))
+}
+
+func getBitsFromCertificate(cert *x509.Certificate) int {
+	switch pub := cert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		return pub.N.BitLen()
+	case *ecdsa.PublicKey:
+		return pub.Curve.Params().BitSize
+	case ed25519.PublicKey:
+		return 256
+	default:
+		return 0
+	}
 }
