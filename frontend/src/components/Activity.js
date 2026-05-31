@@ -60,7 +60,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
               <Alert variant="light">
                 <div className="text-muted small mb-1">{card.key}</div>
                 <h4 className={`mb-0 text-${card.variant || ""}`}>
-                  {card.value}
+                  {card.value !== undefined ? card.value : "-"}
                 </h4>
               </Alert>
             </Col>
