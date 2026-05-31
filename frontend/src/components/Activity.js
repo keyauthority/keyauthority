@@ -56,10 +56,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
                 ? baseSpan
                 : undefined;
           return (
-            <Col xs={12} md={md} key={card.key}>
+            <Col xs={12} md={md} key={index}>
               <Alert variant="light">
-                <h4 className={`text-${card.variant || ""}`}>{card.value}</h4>
-                <div className="text-muted small">{card.key}</div>
+                <div className="text-muted small mb-1">{card.key}</div>
+                <h4 className={`mb-0 text-${card.variant || ""}`}>
+                  {card.value}
+                </h4>
               </Alert>
             </Col>
           );
@@ -258,47 +260,57 @@ export function Dashboard({ isLoading, setIsLoading }) {
       {error && <Alert variant="danger">{error}</Alert>}
 
       {isAuditor &&
-        dashboardSection("Recent Activity", "bi bi-clock-history", [
+        dashboardSection(
+          "Recent Activity",
+          "bi bi-clock-history",
+          [
+            {
+              key: "Errors in the last 24h",
+              value: logCountByLevel["ERROR"],
+              variant: "danger",
+            },
+            {
+              key: "Secrets read in the last 24h",
+              value: logCountByMsg["secret read"],
+            },
+            {
+              key: "Certificates signed in the last 24h",
+              value: logCountByMsg["certificate signed"],
+            },
+            // {
+            //   key: "Keys created in the last 24h",
+            //   value: logCountByMsg["key created"],
+            // },
+          ],
+          3,
+        )}
+
+      {dashboardSection(
+        "Certificates",
+        "bi bi-award",
+        [
           {
-            key: "Errors in the last 24h",
-            value: logCountByLevel["ERROR"],
+            key: "Valid and not expiring soon",
+            value: certCountByExpiring[infiniteDays],
+            variant: "success",
+          },
+          {
+            key: "Valid and expiring in ≤3 days",
+            value: certCountByExpiring[3],
             variant: "danger",
           },
+          // {
+          //   key: "Valid and expiring in ≤7 days",
+          //   value: certCountByExpiring[7],
+          //   // variant: "warning",
+          // },
           {
-            key: "Secrets read in the last 24h",
-            value: logCountByMsg["secret read"],
+            key: "Valid and expiring in ≤30 days",
+            value: certCountByExpiring[30],
           },
-          {
-            key: "Certificates signed in the last 24h",
-            value: logCountByMsg["certificate signed"],
-          },
-          {
-            key: "Keys created in the last 24h",
-            value: logCountByMsg["key created"],
-          },
-        ])}
-
-      {dashboardSection("Certificates", "bi bi-award", [
-        {
-          key: "Valid and not expiring soon",
-          value: certCountByExpiring[infiniteDays],
-          variant: "success",
-        },
-        {
-          key: "Valid and expiring in ≤3 days",
-          value: certCountByExpiring[3],
-          variant: "danger",
-        },
-        {
-          key: "Valid and expiring in ≤7 days",
-          value: certCountByExpiring[7],
-          // variant: "warning",
-        },
-        {
-          key: "Valid and expiring in ≤30 days",
-          value: certCountByExpiring[30],
-        },
-      ])}
+        ],
+        3,
+      )}
 
       {dashboardSection(
         "Keys",
@@ -337,11 +349,11 @@ export function Dashboard({ isLoading, setIsLoading }) {
         "bi bi-pen",
         [
           {
-            key: "Root",
+            key: "Root CAs",
             value: signerCountByRoot[true],
           },
           {
-            key: "Intermediate",
+            key: "Intermediate CAs",
             value: signerCountByRoot[false],
           },
         ],
