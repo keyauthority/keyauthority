@@ -69,8 +69,8 @@ export function Dashboard({ isLoading, setIsLoading }) {
   };
 
   const dashboardSection = (title, iconClass, cards, colsPerRow) => (
-    <div className="mb-2 border-top pt-3">
-      <h6 className="text-muted mb-3">
+    <div className="mb-2">
+      <h6 className="mb-3">
         {/* <i className={`${iconClass} me-2`}></i> */}
         {title}
       </h6>
@@ -504,6 +504,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Table hover responsive striped>
         <thead>
           <tr>
+            <th>Status</th>
             <th>Serial</th>
             <th>CN/SAN</th>
             <th>Valid From</th>
@@ -515,9 +516,17 @@ export function Certificates({ isLoading, setIsLoading }) {
         <tbody>
           {certs.map((cert) => (
             <tr key={cert.serial}>
+              <td>
+                {cert.revoked
+                  ? boxedContent("Revoked", "danger")
+                  : new Date(cert.notAfter) < new Date()
+                    ? boxedContent("Expired", "danger")
+                    : boxedContent("Valid", "success")}
+              </td>
               <td
                 style={{ maxWidth: "12rem" }}
-                className={`${cert.revoked ? "text-decoration-line-through" : ""} text-truncate`}
+                className="text-truncate"
+                //className={`${cert.revoked ? "text-decoration-line-through" : ""} text-truncate`}
               >
                 {cert.serial}
               </td>
