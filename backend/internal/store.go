@@ -228,7 +228,8 @@ func parseTime(q url.Values, key string) *time.Time {
 	if val == "" {
 		return nil
 	}
-	t, err := time.Parse("2006-01-02", val)
+	// value is in RFC3339 format (e.g. 2026-06-01T15:13:07.236Z)
+	t, err := time.Parse(time.RFC3339, val)
 	if err != nil {
 		return nil
 	}

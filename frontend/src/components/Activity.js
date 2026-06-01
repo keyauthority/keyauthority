@@ -82,16 +82,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countCertsByExpiring = async (days) => {
     setIsLoading(true);
-    const nowInYYMMDD = new Date().toISOString().split("T")[0];
-    const daysFromNowInYYMMDD = new Date(
-      Date.now() + days * 24 * 60 * 60 * 1000,
-    )
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
-      params.set("notAfterFrom", nowInYYMMDD);
-      params.set("notAfterTo", daysFromNowInYYMMDD);
+      params.set("notAfterFrom", now.toISOString());
+      params.set("notAfterTo", d.toISOString());
       params.set("revoked", "false");
       params.set("totalCountOnly", "true");
 
@@ -101,7 +97,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [days]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -109,13 +105,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countLogsByLevel = async (level) => {
     setIsLoading(true);
-    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
       params.set("level", level);
-      params.set("from", _24hAgoInYYMMDD);
+      params.set("from", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/logs?${params.toString()}`);
@@ -124,7 +119,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [level]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -132,13 +127,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countLogsByMsg = async (msg) => {
     setIsLoading(true);
-    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
       params.set("msg", msg);
-      params.set("from", _24hAgoInYYMMDD);
+      params.set("from", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/logs?${params.toString()}`);
@@ -147,7 +141,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [msg]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +160,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [storage]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +179,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [type]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -204,7 +198,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [isRoot]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -212,12 +206,11 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countSecretsByUpdated = async (daysAgo) => {
     setIsLoading(true);
-    const daysAgoInYYMMDD = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
-      params.set("updatedFrom", daysAgoInYYMMDD);
+      params.set("updatedFrom", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/secrets?${params.toString()}`);
@@ -226,7 +219,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [daysAgo]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -533,7 +526,9 @@ export function Certificates({ isLoading, setIsLoading }) {
                   ? boxedContent("Revoked", "danger")
                   : new Date(cert.notAfter) < new Date()
                     ? boxedContent("Expired", "danger")
-                    : boxedContent("Valid", "success")}
+                    : new Date(cert.notBefore) > new Date()
+                      ? boxedContent("Not Valid Yet", "warning")
+                      : boxedContent("Valid", "success")}
               </td>
               <td
                 style={{ maxWidth: "12rem" }}

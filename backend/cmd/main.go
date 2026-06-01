@@ -134,12 +134,13 @@ func main() {
 		},
 		keysHandler))
 
-	router.Handle("/v1/keys/{id}", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodGet:    internalpkg.RoleOperator, // get key
-			http.MethodDelete: internalpkg.RoleOperator, // delete key
-		},
-		keyHandler))
+	router.Handle("/v1/keys/{id}",
+		internalpkg.WithHttpMetrics("/v1/keys/{id}", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodGet:    internalpkg.RoleOperator, // get key
+				http.MethodDelete: internalpkg.RoleOperator, // delete key
+			},
+			keyHandler)))
 
 	// ---------- Certificates ---------- //
 	router.Handle("/v1/certs", withAuth(
@@ -256,12 +257,13 @@ func main() {
 		},
 		pendingRequestsHandler))
 
-	router.Handle("/v1/pending-requests/{id}", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodPost:   internalpkg.RoleApprover, // approve pending request
-			http.MethodDelete: internalpkg.RoleApprover, // reject pending request
-		},
-		pendingRequestHandler))
+	router.Handle("/v1/pending-requests/{id}",
+		internalpkg.WithHttpMetrics("/v1/pending-requests/{id}", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPost:   internalpkg.RoleApprover, // approve pending request
+				http.MethodDelete: internalpkg.RoleApprover, // reject pending request
+			},
+			pendingRequestHandler)))
 
 	router.Handle("/v1/pending-requests/{id}/body", withAuth(
 		map[string]internalpkg.Role{

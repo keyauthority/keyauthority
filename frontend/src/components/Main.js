@@ -82,16 +82,16 @@ export default function Main() {
           icon: "bi-speedometer2",
         },
         {
-          title: "Certificates",
-          subtitle: "View certificates issued by your CAs",
-          to: "/activity/certs",
-          icon: "bi-award",
-        },
-        {
           title: "Application Logs",
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
           icon: "bi-file-text",
+        },
+        {
+          title: "Issued Certificates",
+          subtitle: "View certificates issued by your CAs",
+          to: "/activity/certs",
+          icon: "bi-award",
         },
         {
           title: "Pending Requests",
@@ -587,16 +587,16 @@ export default function Main() {
                         setIsLoading={setIsLoading}
                       />
                     );
+                  case "/activity/logs":
+                    return (
+                      <Logs isLoading={isLoading} setIsLoading={setIsLoading} />
+                    );
                   case "/activity/certs":
                     return (
                       <Certificates
                         isLoading={isLoading}
                         setIsLoading={setIsLoading}
                       />
-                    );
-                  case "/activity/logs":
-                    return (
-                      <Logs isLoading={isLoading} setIsLoading={setIsLoading} />
                     );
                   case "/activity/pending-requests":
                     return (
