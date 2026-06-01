@@ -13,25 +13,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 
 	thalesp11 "github.com/ThalesGroup/crypto11"
+	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	certstrap "github.com/square/certstrap/pkix"
 	stepuri "go.step.sm/crypto/kms/uri"
 )
 
-type hsmConnections struct {
-	sync.RWMutex
-	connections map[string]*thalesp11.Context
-}
-
 var (
-	Enterprise bool
-	hsmConns   = &hsmConnections{
-		connections: make(map[string]*thalesp11.Context),
-	}
+	Enterprise  bool
+	p11CtxCache = cachepkg.NewCache()
 )
 
 type KeyType string
@@ -261,11 +254,11 @@ func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, error) {
 	// HSM key
 	if cfg.PKCS11Uri != "" {
-		p11, err := getP11Ctx(cfg.PKCS11Uri)
+		p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
 		if err != nil {
-			return nil, fmt.Errorf("get PKCS11 token: %w", err)
+			return nil, fmt.Errorf("get PKCS11 context: %w", err)
 		}
-		return nil, generateHSMKey(p11, cfg)
+		return nil, generateHSMKey(p11Ctx, cfg)
 	}
 
 	// Software key
@@ -314,9 +307,9 @@ func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, 
 }
 
 func NewHSMKey(cfg *KeyConfig) (*Key, error) {
-	p11, err := getP11Ctx(cfg.PKCS11Uri)
+	p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
 	if err != nil {
-		return nil, fmt.Errorf("get PKCS11 token: %w", err)
+		return nil, fmt.Errorf("get PKCS11 context: %w", err)
 	}
 
 	u, err := stepuri.ParseWithScheme("pkcs11", cfg.PKCS11KeyUri)
@@ -330,7 +323,7 @@ func NewHSMKey(cfg *KeyConfig) (*Key, error) {
 	}
 
 	if cfg.IsSymmetric() {
-		keyHandle, err := p11.FindKey(id, []byte(object))
+		keyHandle, err := p11Ctx.FindKey(id, []byte(object))
 		if err != nil {
 			return nil, fmt.Errorf("find key: %w", err)
 		}
@@ -344,7 +337,7 @@ func NewHSMKey(cfg *KeyConfig) (*Key, error) {
 	}
 
 	// Assymmetric key
-	keyHandle, err := p11.FindKeyPair(id, []byte(object))
+	keyHandle, err := p11Ctx.FindKeyPair(id, []byte(object))
 	if err != nil {
 		return nil, fmt.Errorf("find key pair: %w", err)
 	}
@@ -395,9 +388,9 @@ func createNewP11Ctx(uriStr string) (*thalesp11.Context, error) {
 	}
 
 	p11Config := &thalesp11.Config{
-		Path:        modulePath,
-		Pin:         pin,
-		MaxSessions: 1024,
+		Path: modulePath,
+		Pin:  pin,
+		// MaxSessions: 1024,
 	}
 
 	// Get slot-id and token
@@ -421,31 +414,29 @@ func createNewP11Ctx(uriStr string) (*thalesp11.Context, error) {
 		p11Config.TokenLabel = tokenLabel
 	}
 
-	p11, err := thalesp11.Configure(p11Config)
+	p11Ctx, err := thalesp11.Configure(p11Config)
 	if err != nil {
-		return nil, fmt.Errorf("configure PKCS11: %w", err)
+		return nil, fmt.Errorf("configure PKCS11 context: %w", err)
 	}
-	hsmConns.connections[uriStr] = p11
-	return p11, nil
+
+	p11CtxCache.Set(uriStr, p11Ctx)
+	return p11Ctx, nil
 }
 
 func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 	if !Enterprise {
 		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
 	}
-	hsmConns.Lock()
-	defer hsmConns.Unlock()
-
-	if token, ok := hsmConns.connections[uriStr]; ok {
-		return token, nil
+	if cached, found := p11CtxCache.Get(uriStr); found {
+		return cached.(*thalesp11.Context), nil
 	}
 
-	token, err := createNewP11Ctx(uriStr)
+	p11Ctx, err := createNewP11Ctx(uriStr)
 	if err != nil {
-		return nil, fmt.Errorf("create PKCS11 token: %w", err)
+		return nil, fmt.Errorf("create PKCS11 context: %w", err)
 	}
-	hsmConns.connections[uriStr] = token
-	return token, nil
+
+	return p11Ctx, nil
 }
 
 func extractIdAndLabel(uriStr string) ([]byte, []byte, error) {
