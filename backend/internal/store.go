@@ -41,6 +41,7 @@ import (
 	"github.com/keyauthority/keyauthority/migrations"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
@@ -61,9 +62,9 @@ const (
 )
 
 var (
-	keyCache = NewCache()
-	//secretCache = NewCache()
-	crlCache = NewCache()
+	keyCache = cachepkg.NewCache()
+	//secretCache = cachepkg.NewCache()
+	crlCache = cachepkg.NewCache()
 )
 
 // actual data used for replaying pending requests upon approval

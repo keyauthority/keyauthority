@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 )
 
@@ -75,7 +76,7 @@ var (
 	}
 
 	// cache tokenHash -> tokenCacheData
-	tokenCache = NewCache()
+	tokenCache = cachepkg.NewCache()
 )
 
 type TokenRequest struct {

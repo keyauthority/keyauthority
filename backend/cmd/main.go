@@ -45,6 +45,7 @@ import (
 	"github.com/keyauthority/keyauthority/swagger"
 
 	internalpkg "github.com/keyauthority/keyauthority/internal"
+	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
@@ -72,7 +73,7 @@ var (
 	router = mux.NewRouter()
 
 	// cache urlPath -> environment
-	envCache = internalpkg.NewCache()
+	envCache = cachepkg.NewCache()
 )
 
 func main() {
