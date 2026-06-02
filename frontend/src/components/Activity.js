@@ -1,6 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Alert, Button, Card, Table, Row, Col } from "react-bootstrap";
+import {
+  Alert,
+  Button,
+  Card,
+  Table,
+  Row,
+  Col,
+  Tooltip,
+  OverlayTrigger,
+} from "react-bootstrap";
 import {
   showToast,
   downloadOrCopy,
@@ -82,16 +91,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countCertsByExpiring = async (days) => {
     setIsLoading(true);
-    const nowInYYMMDD = new Date().toISOString().split("T")[0];
-    const daysFromNowInYYMMDD = new Date(
-      Date.now() + days * 24 * 60 * 60 * 1000,
-    )
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
-      params.set("notAfterFrom", nowInYYMMDD);
-      params.set("notAfterTo", daysFromNowInYYMMDD);
+      params.set("notAfterFrom", now.toISOString());
+      params.set("notAfterTo", d.toISOString());
       params.set("revoked", "false");
       params.set("totalCountOnly", "true");
 
@@ -101,7 +106,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [days]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -109,13 +114,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countLogsByLevel = async (level) => {
     setIsLoading(true);
-    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
       params.set("level", level);
-      params.set("from", _24hAgoInYYMMDD);
+      params.set("from", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/logs?${params.toString()}`);
@@ -124,7 +128,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [level]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -132,13 +136,12 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countLogsByMsg = async (msg) => {
     setIsLoading(true);
-    const _24hAgoInYYMMDD = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
       params.set("msg", msg);
-      params.set("from", _24hAgoInYYMMDD);
+      params.set("from", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/logs?${params.toString()}`);
@@ -147,7 +150,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [msg]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +169,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [storage]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +188,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [type]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -204,7 +207,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [isRoot]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -212,12 +215,11 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
   const countSecretsByUpdated = async (daysAgo) => {
     setIsLoading(true);
-    const daysAgoInYYMMDD = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const now = new Date();
+    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
     try {
       const params = new URLSearchParams();
-      params.set("updatedFrom", daysAgoInYYMMDD);
+      params.set("updatedFrom", d.toISOString());
       params.set("totalCountOnly", "true");
 
       const res = await api.get(`/secrets?${params.toString()}`);
@@ -226,7 +228,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [daysAgo]: res.data.totalCount || 0,
       }));
     } catch (err) {
-      setError(errorToString(err));
+      // setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
@@ -513,7 +515,7 @@ export function Certificates({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table hover responsive striped>
+      <Table hover responsive striped className="align-middle">
         <thead>
           <tr>
             <th>Status</th>
@@ -529,11 +531,23 @@ export function Certificates({ isLoading, setIsLoading }) {
           {certs.map((cert) => (
             <tr key={cert.serial}>
               <td>
-                {cert.revoked
-                  ? boxedContent("Revoked", "danger")
-                  : new Date(cert.notAfter) < new Date()
-                    ? boxedContent("Expired", "danger")
-                    : boxedContent("Valid", "success")}
+                {cert.revoked ? (
+                  <OverlayTrigger overlay={<Tooltip>Revoked</Tooltip>}>
+                    <i className="bi bi-x-circle-fill text-danger"></i>
+                  </OverlayTrigger>
+                ) : new Date(cert.notAfter) < new Date() ? (
+                  <OverlayTrigger overlay={<Tooltip>Expired</Tooltip>}>
+                    <i className="bi bi-clock-fill text-danger"></i>
+                  </OverlayTrigger>
+                ) : new Date(cert.notBefore) > new Date() ? (
+                  <OverlayTrigger overlay={<Tooltip>Not Valid Yet</Tooltip>}>
+                    <i className="bi bi-clock-fill text-warning"></i>
+                  </OverlayTrigger>
+                ) : (
+                  <OverlayTrigger overlay={<Tooltip>Valid</Tooltip>}>
+                    <i className="bi bi-check-circle-fill text-success"></i>
+                  </OverlayTrigger>
+                )}
               </td>
               <td
                 style={{ maxWidth: "12rem" }}
@@ -707,7 +721,7 @@ export function Logs({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table hover responsive striped>
+      <Table hover responsive striped className="align-middle">
         <thead>
           <tr>
             <th>Level</th>
@@ -723,10 +737,11 @@ export function Logs({ isLoading, setIsLoading }) {
           {logs.map((log, index) => (
             <tr key={index}>
               <td>
-                {boxedContent(
-                  log.level,
-                  levelVariant[log.level] || "secondary",
-                )}
+                <OverlayTrigger overlay={<Tooltip>{log.level}</Tooltip>}>
+                  <i
+                    className={`bi bi-circle-fill text-${levelVariant[log.level] || "secondary"}`}
+                  ></i>
+                </OverlayTrigger>
               </td>
               <td style={{ maxWidth: "12rem" }}>{log.msg}</td>
               <td>{log.token?.user || "-"}</td>

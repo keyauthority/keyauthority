@@ -25,7 +25,7 @@ func EncryptWithPwd(plainData, password []byte) ([]byte, error) {
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
-	cipherData, err := (&SoftwareAESGCMKey{Key: key}).Encrypt(plainData)
+	cipherData, err := (&symmetricSoftwareKey{key: key}).Encrypt(plainData)
 	if err != nil {
 		return nil, fmt.Errorf("create symmetric key: %w", err)
 	}
@@ -42,5 +42,5 @@ func DecryptWithPwd(cipherData, password []byte) ([]byte, error) {
 		return nil, fmt.Errorf("derive key: %w", err)
 	}
 
-	return (&SoftwareAESGCMKey{Key: key}).Decrypt(cipherData[pbkdf2SaltLength:])
+	return (&symmetricSoftwareKey{key: key}).Decrypt(cipherData[pbkdf2SaltLength:])
 }

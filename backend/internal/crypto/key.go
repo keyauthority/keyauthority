@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 
@@ -22,16 +21,8 @@ import (
 	stepuri "go.step.sm/crypto/kms/uri"
 )
 
-type hsmConnections struct {
-	sync.RWMutex
-	connections map[string]*thalesp11.Context
-}
-
 var (
 	Enterprise bool
-	hsmConns   = &hsmConnections{
-		connections: make(map[string]*thalesp11.Context),
-	}
 )
 
 type KeyType string
@@ -67,7 +58,9 @@ type SymmetricKey interface {
 }
 
 type Key struct {
+	// can be either an
 	AssymmetricKey
+	// or a
 	SymmetricKey
 }
 
@@ -81,12 +74,16 @@ func (k *Key) Public() crypto.PublicKey {
 	return nil
 }
 
-type SoftwareAESGCMKey struct {
-	Key []byte
+type symmetricSoftwareKey struct {
+	key []byte
 }
 
-func (k *SoftwareAESGCMKey) Encrypt(plaintext []byte) ([]byte, error) {
-	block, err := aes.NewCipher(k.Key)
+type symmetricHSMKey struct {
+	keyHandle *thalesp11.SecretKey
+}
+
+func (k *symmetricSoftwareKey) Encrypt(plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(k.key)
 	if err != nil {
 		return nil, fmt.Errorf("create cipher block: %w", err)
 	}
@@ -104,8 +101,8 @@ func (k *SoftwareAESGCMKey) Encrypt(plaintext []byte) ([]byte, error) {
 	return cipherData, nil
 }
 
-func (k *SoftwareAESGCMKey) Decrypt(ciphertext []byte) ([]byte, error) {
-	block, err := aes.NewCipher(k.Key)
+func (k *symmetricSoftwareKey) Decrypt(ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(k.key)
 	if err != nil {
 		return nil, fmt.Errorf("create cipher block: %w", err)
 	}
@@ -129,12 +126,8 @@ func (k *SoftwareAESGCMKey) Decrypt(ciphertext []byte) ([]byte, error) {
 	return plainData, nil
 }
 
-type HSMAESGCMKey struct {
-	KeyHandle *thalesp11.SecretKey
-}
-
-func (k *HSMAESGCMKey) Encrypt(plaintext []byte) ([]byte, error) {
-	aesGCM, err := k.KeyHandle.NewGCM()
+func (k *symmetricHSMKey) Encrypt(plaintext []byte) ([]byte, error) {
+	aesGCM, err := k.keyHandle.NewGCM()
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +141,8 @@ func (k *HSMAESGCMKey) Encrypt(plaintext []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func (k *HSMAESGCMKey) Decrypt(ciphertext []byte) ([]byte, error) {
-	aesGCM, err := k.KeyHandle.NewGCM()
+func (k *symmetricHSMKey) Decrypt(ciphertext []byte) ([]byte, error) {
+	aesGCM, err := k.keyHandle.NewGCM()
 	if err != nil {
 		return nil, err
 	}
@@ -172,22 +165,21 @@ func (k *HSMAESGCMKey) Decrypt(ciphertext []byte) ([]byte, error) {
 // InferConfig attempts to infer the key configuration from the Key instance
 func (k *Key) InferConfig() (*KeyConfig, error) {
 	if k.SymmetricKey != nil {
-		if softKey, ok := k.SymmetricKey.(*SoftwareAESGCMKey); ok {
+		if softKey, ok := k.SymmetricKey.(*symmetricSoftwareKey); ok {
 			return &KeyConfig{
 				Type: AES,
 				Mode: "GCM",
-				Bits: len(softKey.Key) * 8,
+				Bits: len(softKey.key) * 8,
 			}, nil
 		}
-		if hsmKey, ok := k.SymmetricKey.(*HSMAESGCMKey); ok {
+		if hsmKey, ok := k.SymmetricKey.(*symmetricHSMKey); ok {
 			return &KeyConfig{
 				Type: AES,
 				Mode: "GCM",
-				Bits: hsmKey.KeyHandle.Cipher.BlockSize * 8,
+				Bits: hsmKey.keyHandle.Cipher.BlockSize * 8,
 			}, nil
 		}
 		return nil, fmt.Errorf("unsupported symmetric key type")
-
 	}
 
 	// Assymmetric key
@@ -242,7 +234,7 @@ func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decrypt symmetric key: %w", err)
 		}
-		return &Key{SymmetricKey: &SoftwareAESGCMKey{Key: plainKey}}, nil
+		return &Key{SymmetricKey: &symmetricSoftwareKey{key: plainKey}}, nil
 	}
 
 	// Assymmetric key
@@ -261,11 +253,11 @@ func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, error) {
 	// HSM key
 	if cfg.PKCS11Uri != "" {
-		p11, err := getToken(cfg.PKCS11Uri)
+		p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
 		if err != nil {
-			return nil, fmt.Errorf("get PKCS11 token: %w", err)
+			return nil, fmt.Errorf("get PKCS11 context: %w", err)
 		}
-		return nil, generateHSMKey(p11, cfg)
+		return nil, generateHSMKey(p11Ctx, cfg)
 	}
 
 	// Software key
@@ -314,9 +306,9 @@ func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, 
 }
 
 func NewHSMKey(cfg *KeyConfig) (*Key, error) {
-	p11, err := getToken(cfg.PKCS11Uri)
+	p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
 	if err != nil {
-		return nil, fmt.Errorf("get PKCS11 token: %w", err)
+		return nil, fmt.Errorf("get PKCS11 context: %w", err)
 	}
 
 	u, err := stepuri.ParseWithScheme("pkcs11", cfg.PKCS11KeyUri)
@@ -330,7 +322,7 @@ func NewHSMKey(cfg *KeyConfig) (*Key, error) {
 	}
 
 	if cfg.IsSymmetric() {
-		keyHandle, err := p11.FindKey(id, []byte(object))
+		keyHandle, err := p11Ctx.FindKey(id, []byte(object))
 		if err != nil {
 			return nil, fmt.Errorf("find key: %w", err)
 		}
@@ -338,13 +330,13 @@ func NewHSMKey(cfg *KeyConfig) (*Key, error) {
 			return nil, fmt.Errorf("key not found")
 		}
 		return &Key{
-			SymmetricKey: &HSMAESGCMKey{KeyHandle: keyHandle},
+			SymmetricKey: &symmetricHSMKey{keyHandle: keyHandle},
 		}, nil
 
 	}
 
 	// Assymmetric key
-	keyHandle, err := p11.FindKeyPair(id, []byte(object))
+	keyHandle, err := p11Ctx.FindKeyPair(id, []byte(object))
 	if err != nil {
 		return nil, fmt.Errorf("find key pair: %w", err)
 	}
@@ -357,7 +349,7 @@ func NewHSMKey(cfg *KeyConfig) (*Key, error) {
 	}, nil
 }
 
-func createNewToken(uriStr string) (*thalesp11.Context, error) {
+func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 	if !Enterprise {
 		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
 	}
@@ -395,9 +387,9 @@ func createNewToken(uriStr string) (*thalesp11.Context, error) {
 	}
 
 	p11Config := &thalesp11.Config{
-		Path:        modulePath,
-		Pin:         pin,
-		MaxSessions: 1024,
+		Path: modulePath,
+		Pin:  pin,
+		// MaxSessions: 1024,
 	}
 
 	// Get slot-id and token
@@ -421,31 +413,12 @@ func createNewToken(uriStr string) (*thalesp11.Context, error) {
 		p11Config.TokenLabel = tokenLabel
 	}
 
-	p11, err := thalesp11.Configure(p11Config)
+	p11Ctx, err := thalesp11.Configure(p11Config)
 	if err != nil {
-		return nil, fmt.Errorf("configure PKCS11: %w", err)
-	}
-	hsmConns.connections[uriStr] = p11
-	return p11, nil
-}
-
-func getToken(uriStr string) (*thalesp11.Context, error) {
-	if !Enterprise {
-		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
-	}
-	hsmConns.Lock()
-	defer hsmConns.Unlock()
-
-	if token, ok := hsmConns.connections[uriStr]; ok {
-		return token, nil
+		return nil, fmt.Errorf("configure PKCS11 context: %w", err)
 	}
 
-	token, err := createNewToken(uriStr)
-	if err != nil {
-		return nil, fmt.Errorf("create PKCS11 token: %w", err)
-	}
-	hsmConns.connections[uriStr] = token
-	return token, nil
+	return p11Ctx, nil
 }
 
 func extractIdAndLabel(uriStr string) ([]byte, []byte, error) {

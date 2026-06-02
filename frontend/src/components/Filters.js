@@ -98,7 +98,7 @@ export default function Filters({
                       <>
                         <span className="input-group-text">{filter.label}</span>
                         <Form.Control
-                          type="date"
+                          type="datetime-local"
                           value={filters[filter.key] ?? ""}
                           onChange={(e) =>
                             setFilters((prev) => ({

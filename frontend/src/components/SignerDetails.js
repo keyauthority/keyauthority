@@ -340,7 +340,10 @@ function ConfigTab({
                               >
                                 <i className="bi bi-clipboard"></i>
                               </Button>
-                              <span className="overflow-auto text-truncate">
+                              <span
+                                className="overflow-auto text-truncate"
+                                style={{ maxWidth: "24rem" }}
+                              >
                                 {cdp}
                               </span>
                             </div>
@@ -560,7 +563,7 @@ function CSRAndChainTab({
         </Button>
         {caCSR &&
           downloadOrCopy(
-            "CA CSR created! Next, have it signed, then use the signed certificate with full CA chain to update this signer's CA chain.",
+            "CA CSR created! Next, have it signed and use the signed certificate with full CA chain to update this signer's CA chain.",
             caCSR,
             "ca-csr.pem",
             "mt-3 mb-0",

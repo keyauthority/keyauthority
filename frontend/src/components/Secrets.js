@@ -71,7 +71,7 @@ export default function Secrets({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table striped hover className="mb-3">
+      <Table striped hover className="align-middle mb-3">
         <thead>
           <tr>
             <th>Name</th>
