@@ -1,6 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Alert, Button, Card, Table, Row, Col } from "react-bootstrap";
+import {
+  Alert,
+  Button,
+  Card,
+  Table,
+  Row,
+  Col,
+  Tooltip,
+  OverlayTrigger,
+} from "react-bootstrap";
 import {
   showToast,
   downloadOrCopy,
@@ -506,7 +515,7 @@ export function Certificates({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table hover responsive striped>
+      <Table hover responsive striped className="align-middle">
         <thead>
           <tr>
             <th>Status</th>
@@ -522,13 +531,23 @@ export function Certificates({ isLoading, setIsLoading }) {
           {certs.map((cert) => (
             <tr key={cert.serial}>
               <td>
-                {cert.revoked
-                  ? boxedContent("Revoked", "danger")
-                  : new Date(cert.notAfter) < new Date()
-                    ? boxedContent("Expired", "danger")
-                    : new Date(cert.notBefore) > new Date()
-                      ? boxedContent("Not Valid Yet", "warning")
-                      : boxedContent("Valid", "success")}
+                {cert.revoked ? (
+                  <OverlayTrigger overlay={<Tooltip>Revoked</Tooltip>}>
+                    <i className="bi bi-x-circle-fill text-danger"></i>
+                  </OverlayTrigger>
+                ) : new Date(cert.notAfter) < new Date() ? (
+                  <OverlayTrigger overlay={<Tooltip>Expired</Tooltip>}>
+                    <i className="bi bi-clock-fill text-danger"></i>
+                  </OverlayTrigger>
+                ) : new Date(cert.notBefore) > new Date() ? (
+                  <OverlayTrigger overlay={<Tooltip>Not Valid Yet</Tooltip>}>
+                    <i className="bi bi-clock-fill text-warning"></i>
+                  </OverlayTrigger>
+                ) : (
+                  <OverlayTrigger overlay={<Tooltip>Valid</Tooltip>}>
+                    <i className="bi bi-check-circle-fill text-success"></i>
+                  </OverlayTrigger>
+                )}
               </td>
               <td
                 style={{ maxWidth: "12rem" }}
@@ -702,7 +721,7 @@ export function Logs({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table hover responsive striped>
+      <Table hover responsive striped className="align-middle">
         <thead>
           <tr>
             <th>Level</th>
@@ -718,10 +737,11 @@ export function Logs({ isLoading, setIsLoading }) {
           {logs.map((log, index) => (
             <tr key={index}>
               <td>
-                {boxedContent(
-                  log.level,
-                  levelVariant[log.level] || "secondary",
-                )}
+                <OverlayTrigger overlay={<Tooltip>{log.level}</Tooltip>}>
+                  <i
+                    className={`bi bi-circle-fill text-${levelVariant[log.level] || "secondary"}`}
+                  ></i>
+                </OverlayTrigger>
               </td>
               <td style={{ maxWidth: "12rem" }}>{log.msg}</td>
               <td>{log.token?.user || "-"}</td>
