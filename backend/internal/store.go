@@ -18,7 +18,9 @@ package internal
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
@@ -63,7 +65,6 @@ const (
 
 var (
 	keyCache = cachepkg.NewCache()
-	//secretCache = cachepkg.NewCache()
 	crlCache = cachepkg.NewCache()
 )
 
@@ -125,6 +126,10 @@ func NewStore(ctx context.Context) (*Store, error) {
 
 	return &Store{DB: db, SoftwareKeyPass: softwareKeyPass}, nil
 }
+
+/*****************************************************/
+/*                 Helper Functions                  */
+/*****************************************************/
 
 func runMigrations(db *sql.DB) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
@@ -221,9 +226,35 @@ func withSignerConfigDefaults(cfg *signerpkg.SignerConfig) *signerpkg.SignerConf
 	return cfg
 }
 
-/*****************************************************/
-/*                 General Functions                 */
-/*****************************************************/
+func (s *Store) loadKey(ctx context.Context, id uuid.UUID, checkCache bool) (*cryptopkg.Key, error) {
+	if checkCache {
+		if cachedKey, found := keyCache.Get(id.String()); found {
+			return cachedKey.(*cryptopkg.Key), nil
+		}
+	}
+
+	var cfgJSON []byte
+	var softwareKey []byte
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT config, software_key
+		FROM keys
+		WHERE id = $1
+	`, id).Scan(&cfgJSON, &softwareKey); err != nil {
+		return nil, fmt.Errorf("get key: %w", err)
+	}
+	var cfg cryptopkg.KeyConfig
+	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid key config: %w", err)
+	}
+	key, err := cryptopkg.NewKey(&cfg, softwareKey, s.SoftwareKeyPass)
+	if err != nil {
+		return nil, err
+	}
+
+	keyCache.SetWithTTL(id.String(), key, 30*time.Minute)
+	return key, nil
+}
+
 func parseTime(q url.Values, key string) *time.Time {
 	val := q.Get(key)
 	if val == "" {
@@ -464,30 +495,7 @@ func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
-	if cachedKey, found := keyCache.Get(id.String()); found {
-		return cachedKey.(*cryptopkg.Key), nil
-	}
-
-	var cfgJSON []byte
-	var softwareKey []byte
-	if err := s.DB.QueryRowContext(ctx, `
-		SELECT config, software_key
-		FROM keys
-		WHERE id = $1
-	`, id).Scan(&cfgJSON, &softwareKey); err != nil {
-		return nil, fmt.Errorf("get key: %w", err)
-	}
-	var cfg cryptopkg.KeyConfig
-	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid key config: %w", err)
-	}
-	key, err := cryptopkg.NewKey(&cfg, softwareKey, s.SoftwareKeyPass)
-	if err != nil {
-		return nil, err
-	}
-
-	keyCache.Set(id.String(), key)
-	return key, nil
+	return s.loadKey(ctx, id, true)
 }
 
 /*****************************************************/
@@ -715,7 +723,7 @@ func (s *Store) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, er
 		return nil, fmt.Errorf("get signer CRL: %w", err)
 	}
 
-	crlCache.Set(hash, crl)
+	crlCache.SetWithTTL(hash, crl, 1*time.Hour)
 	return crl, nil
 }
 
@@ -1068,10 +1076,6 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 }
 
 func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {
-	/*if cachedSecret, exists := secretCache.Get(name); exists {
-		return cachedSecret.(map[string]any), nil
-	}*/
-
 	var ct []byte
 	var environment string
 	var keyID uuid.UUID
@@ -1110,7 +1114,6 @@ func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, err
 		"data": data,
 	}
 
-	//secretCache.Set(name, resp)
 	return resp, nil
 }
 
@@ -1166,7 +1169,7 @@ func (s *Store) UpdateSecret(ctx context.Context, name string, newData map[strin
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows affected: %s", name)
 	}
-	//secretCache.Delete(name)
+
 	return nil
 }
 
@@ -1179,7 +1182,6 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 		return err
 	}
 
-	//secretCache.Delete(name)
 	return nil
 }
 
@@ -1576,6 +1578,11 @@ func (s *Store) RunPeriodicTasks(ctx context.Context) error {
 		return fmt.Errorf("cleanup keys: %w", err)
 	}
 
+	// set key readiness metrics
+	if err := s.setKeyReadinessMetrics(ctx); err != nil {
+		return fmt.Errorf("set key readiness metrics: %w", err)
+	}
+
 	return nil
 }
 
@@ -1668,6 +1675,58 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 			continue // skip if we can't parse the cert
 		}
 		SetCertificateMetrics(cert, env)
+	}
+
+	return rows.Err()
+}
+
+func (s *Store) setKeyReadinessMetrics(ctx context.Context) error {
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT id, environment, (config->>'pkcs11URI' IS NOT NULL AND config->>'pkcs11URI' != '') AS is_hsm
+		FROM keys
+	`)
+	if err != nil {
+		return fmt.Errorf("query keys: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		var env string
+		var isHSM bool
+		if err := rows.Scan(&id, &env, &isHSM); err != nil {
+			SetKeyReadiness(id, env, isHSM, false)
+			continue // skip if we can't read the key
+		}
+
+		key, err := s.loadKey(ctx, id, false)
+		if err != nil {
+			SetKeyReadiness(id, env, isHSM, false)
+			continue // skip if we can't load the key
+		}
+
+		if key.AssymmetricKey != nil {
+			// key is assymetric, try to create a CSR
+			if _, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+				Subject: pkix.Name{
+					CommonName: "test",
+				},
+			}, key.AssymmetricKey); err != nil {
+				SetKeyReadiness(id, env, isHSM, false)
+				continue // not ready if we can't create a CSR
+			}
+		} else if key.SymmetricKey != nil {
+			// key is symmetric, try to encrypt some test data
+			if _, err := key.Encrypt([]byte("test")); err != nil {
+				SetKeyReadiness(id, env, isHSM, false)
+				continue // not ready if we can't encrypt
+			}
+		} else {
+			SetKeyReadiness(id, env, isHSM, false)
+			continue // not ready if key has no usable material
+		}
+
+		SetKeyReadiness(id, env, isHSM, true)
 	}
 
 	return rows.Err()

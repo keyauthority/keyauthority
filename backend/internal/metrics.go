@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -75,6 +76,14 @@ var (
 		},
 		[]string{"cn", "dns", "issuer_cn", "is_ca", "environment", "key_algorithm", "key_bits"},
 	)
+
+	keyReadiness = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "keyauthority_key_readiness",
+			Help: "Indicates whether a key is ready for use (1 for ready, 0 for not ready).",
+		},
+		[]string{"id", "environment", "storage"},
+	)
 )
 
 type statusRecorder struct {
@@ -95,6 +104,7 @@ func SetupMetrics() {
 			httpRequestTimestampSeconds,
 			certificateNotBeforeTimestampSeconds,
 			certificateNotAfterTimestampSeconds,
+			keyReadiness,
 		)
 	})
 }
@@ -149,6 +159,18 @@ func SetCertificateMetrics(cert *x509.Certificate, environment string) {
 	certificateNotAfterTimestampSeconds.WithLabelValues(
 		cn, dns, issuerCN, isCA, environment, alg, strconv.Itoa(bits),
 	).Set(float64(cert.NotAfter.Unix()))
+}
+
+func SetKeyReadiness(keyID uuid.UUID, environment string, isHSM bool, ready bool) {
+	value := 0.0
+	if ready {
+		value = 1.0
+	}
+	storage := "Software"
+	if isHSM {
+		storage = "HSM"
+	}
+	keyReadiness.WithLabelValues(keyID.String(), environment, storage).Set(value)
 }
 
 func getBitsFromCertificate(cert *x509.Certificate) int {
