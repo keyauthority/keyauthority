@@ -340,7 +340,10 @@ function ConfigTab({
                               >
                                 <i className="bi bi-clipboard"></i>
                               </Button>
-                              <span className="overflow-auto text-truncate">
+                              <span
+                                className="overflow-auto text-truncate"
+                                style={{ maxWidth: "24rem" }}
+                              >
                                 {cdp}
                               </span>
                             </div>
