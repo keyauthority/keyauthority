@@ -452,7 +452,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
+        colsPerRow={4}
         filtersTemplate={[
           {
             key: "serial",
@@ -663,7 +663,7 @@ export function Logs({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
+        colsPerRow={4}
         filtersTemplate={[
           {
             key: "level",
@@ -919,7 +919,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
+        colsPerRow={3}
         filtersTemplate={[
           {
             key: "id",

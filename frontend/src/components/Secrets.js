@@ -43,7 +43,7 @@ export default function Secrets({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
+        colsPerRow={4}
         filtersTemplate={[
           {
             key: "name",

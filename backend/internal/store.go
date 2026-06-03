@@ -1695,38 +1695,40 @@ func (s *Store) setKeyReadinessMetrics(ctx context.Context) error {
 		var env string
 		var isHSM bool
 		if err := rows.Scan(&id, &env, &isHSM); err != nil {
-			SetKeyReadiness(id, env, isHSM, false)
+			SetKeyStatusReadyMetric(id, env, isHSM, false)
 			continue // skip if we can't read the key
 		}
 
 		key, err := s.loadKey(ctx, id, false)
 		if err != nil {
-			SetKeyReadiness(id, env, isHSM, false)
+			SetKeyStatusReadyMetric(id, env, isHSM, false)
 			continue // skip if we can't load the key
 		}
 
 		if key.AssymmetricKey != nil {
 			// key is assymetric, try to create a CSR
-			if _, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-				Subject: pkix.Name{
-					CommonName: "test",
+			if _, err := x509.CreateCertificateRequest(rand.Reader,
+				&x509.CertificateRequest{
+					Subject: pkix.Name{
+						CommonName: "test",
+					},
 				},
-			}, key.AssymmetricKey); err != nil {
-				SetKeyReadiness(id, env, isHSM, false)
+				key.AssymmetricKey); err != nil {
+				SetKeyStatusReadyMetric(id, env, isHSM, false)
 				continue // not ready if we can't create a CSR
 			}
 		} else if key.SymmetricKey != nil {
 			// key is symmetric, try to encrypt some test data
 			if _, err := key.Encrypt([]byte("test")); err != nil {
-				SetKeyReadiness(id, env, isHSM, false)
+				SetKeyStatusReadyMetric(id, env, isHSM, false)
 				continue // not ready if we can't encrypt
 			}
 		} else {
-			SetKeyReadiness(id, env, isHSM, false)
+			SetKeyStatusReadyMetric(id, env, isHSM, false)
 			continue // not ready if key has no usable material
 		}
 
-		SetKeyReadiness(id, env, isHSM, true)
+		SetKeyStatusReadyMetric(id, env, isHSM, true)
 	}
 
 	return rows.Err()
