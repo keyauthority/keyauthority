@@ -183,7 +183,7 @@ docker-create-db: load-shared-env
 PWD = $(shell pwd)
 CORS_ORIGIN ?= http://localhost:$(FRONTEND_PORT)
 BACKEND_PORT ?= 8081
-METRICS_PORT ?= 9090
+METRICS_PORT ?= 9000
 METRICS_URL_PATHS_MASKED ?= false
 LOG_LEVEL ?= debug
 RESPOND_WITH_ERROR_DETAILS ?= true

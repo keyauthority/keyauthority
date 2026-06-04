@@ -16,7 +16,6 @@ import {
   prettyTime,
   copyToClipboard,
   prettyEnv,
-  boxedContent,
   buildURLParams,
   getRoles,
 } from "../utils/utils";
@@ -254,7 +253,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
     countSignersByRoot(true);
     countSignersByRoot(false);
     countSecretsByUpdated(infiniteDays); // count all secrets by using a very large number of days
-    countSecretsByUpdated(90);
+    countSecretsByUpdated(60);
   }, [api, isAuditor]);
 
   return (
@@ -367,14 +366,14 @@ export function Dashboard({ isLoading, setIsLoading }) {
         "bi bi-three-dots",
         [
           {
-            key: "Updated in the last 90 days",
-            value: secretCountByUpdated[90],
+            key: "Updated in the last 60 days",
+            value: secretCountByUpdated[60],
             variant: "success",
           },
           {
-            key: "Not updated in the last 90 days",
+            key: "Not updated in the last 60 days",
             value:
-              secretCountByUpdated[infiniteDays] - secretCountByUpdated[90],
+              secretCountByUpdated[infiniteDays] - secretCountByUpdated[60],
             variant: "warning",
           },
         ],
@@ -738,9 +737,32 @@ export function Logs({ isLoading, setIsLoading }) {
             <tr key={index}>
               <td>
                 <OverlayTrigger overlay={<Tooltip>{log.level}</Tooltip>}>
-                  <i
-                    className={`bi bi-circle-fill text-${levelVariant[log.level] || "secondary"}`}
-                  ></i>
+                  {(() => {
+                    switch (log.level) {
+                      case "ERROR":
+                        return (
+                          <i className="bi bi-x-circle-fill text-danger"></i>
+                        );
+                      case "WARN":
+                        return (
+                          <i className="bi bi-exclamation-triangle-fill text-warning"></i>
+                        );
+                      case "INFO":
+                        return (
+                          <i className="bi bi-info-circle-fill text-info"></i>
+                        );
+                      case "DEBUG":
+                        return (
+                          <i className="bi bi-bug-fill text-secondary"></i>
+                        );
+                      default:
+                        return (
+                          <i
+                            className={`bi bi-circle-fill text-${levelVariant[log.level] || "secondary"}`}
+                          ></i>
+                        );
+                    }
+                  })()}
                 </OverlayTrigger>
               </td>
               <td style={{ maxWidth: "12rem" }}>{log.msg}</td>

@@ -1,6 +1,6 @@
 module github.com/keyauthority/keyauthority
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/ThalesGroup/crypto11 v1.6.1
@@ -73,7 +73,7 @@ require (
 	k8s.io/client-go v0.37.0-alpha.0 // indirect
 	k8s.io/component-base v0.36.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260520065146-aa012df4f4af // indirect
+	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
 	sigs.k8s.io/gateway-api v1.5.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect

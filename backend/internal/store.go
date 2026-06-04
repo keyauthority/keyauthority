@@ -46,6 +46,7 @@ import (
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
+	metricspkg "github.com/keyauthority/keyauthority/internal/metrics"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
 )
 
@@ -469,6 +470,35 @@ func (s *Store) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error
 		"config":      &cfg,
 		"createdAt":   createdAt,
 	}, nil
+}
+
+func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
+	key, err := s.loadKey(ctx, id, false)
+	if err != nil {
+		return fmt.Errorf("load key: %w", err)
+	}
+
+	if key.AssymmetricKey != nil {
+		// key is assymetric, try to create a CSR
+		if _, err := x509.CreateCertificateRequest(rand.Reader,
+			&x509.CertificateRequest{
+				Subject: pkix.Name{
+					CommonName: "test",
+				},
+			},
+			key.AssymmetricKey); err != nil {
+			return fmt.Errorf("create CSR with key: %w", err)
+		}
+	} else if key.SymmetricKey != nil {
+		// key is symmetric, try to encrypt some test data
+		if _, err := key.Encrypt([]byte("test")); err != nil {
+			return fmt.Errorf("encrypt with key: %w", err)
+		}
+	} else {
+		return fmt.Errorf("key has no usable material")
+	}
+
+	return nil
 }
 
 func (s *Store) GetKeyEnvironment(ctx context.Context, id uuid.UUID) (string, error) {
@@ -1538,20 +1568,11 @@ func (s *Store) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-/*****************************************************/
-/*            One-Time & Periodic Tasks              */
-/*****************************************************/
+/**********************************************************************/
+/*   One-Time & Periodic Tasks (Cleanup, Inventory, Metrics, etc...)  */
+/**********************************************************************/
 
-func (s *Store) RunOneTimeTasks(ctx context.Context) error {
-	// set certificate metrics
-	if err := s.setCertificateMetrics(ctx); err != nil {
-		return fmt.Errorf("set certificate metrics: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Store) RunPeriodicTasks(ctx context.Context) error {
+func (s *Store) RunCleanupTasks(ctx context.Context) error {
 	// clean up certs that expired more than 30 days ago
 	if _, err := s.DB.ExecContext(ctx, `
 		DELETE FROM certs
@@ -1578,15 +1599,85 @@ func (s *Store) RunPeriodicTasks(ctx context.Context) error {
 		return fmt.Errorf("cleanup keys: %w", err)
 	}
 
-	// set key readiness metrics
-	if err := s.setKeyReadinessMetrics(ctx); err != nil {
-		return fmt.Errorf("set key readiness metrics: %w", err)
-	}
-
 	return nil
 }
 
-func (s *Store) setCertificateMetrics(ctx context.Context) error {
+func ecdsaBitsFromCurve(curve string) int {
+	switch strings.ToUpper(strings.TrimSpace(curve)) {
+	case "P-224":
+		return 224
+	case "P-256":
+		return 256
+	case "P-384":
+		return 384
+	case "P-521":
+		return 521
+	default:
+		return 0
+	}
+}
+
+func (s *Store) collectKeyInventoryMetrics(ctx context.Context) (map[metricspkg.KeyInventoryBucket]float64, error) {
+	keysTotalAgg := map[metricspkg.KeyInventoryBucket]float64{}
+
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, environment, config FROM keys`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		var env string
+		var cfgJSON []byte
+		if err := rows.Scan(&id, &env, &cfgJSON); err != nil {
+			continue
+		}
+		var cfg cryptopkg.KeyConfig
+		if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
+			continue
+		}
+
+		bits := cfg.Bits
+		if bits == 0 {
+			switch cfg.Type {
+			case cryptopkg.ECDSA:
+				bits = ecdsaBitsFromCurve(cfg.Curve)
+			case cryptopkg.Ed25519:
+				bits = 256
+			}
+		}
+
+		storage := "Software"
+		if strings.TrimSpace(cfg.PKCS11Uri) != "" {
+			storage = "HSM"
+		}
+
+		ready := false
+		if err := s.CheckKeyReadiness(ctx, id); err == nil {
+			ready = true
+		}
+
+		keysTotalAgg[metricspkg.KeyInventoryBucket{
+			Environment: env,
+			KeyType:     string(cfg.Type),
+			Bits:        bits,
+			Curve:       cfg.Curve,
+			Storage:     storage,
+			Ready:       ready,
+		}]++
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return keysTotalAgg, nil
+}
+
+func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.CertInventoryItem, error) {
+	var inventory []metricspkg.CertInventoryItem
+
 	// query all CA chains from signers
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT signers.ca_chain, keys.environment FROM signers
@@ -1594,7 +1685,7 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 		WHERE ca_chain IS NOT NULL
 	`)
 	if err != nil {
-		return fmt.Errorf("query CA certificates: %w", err)
+		return nil, fmt.Errorf("query CA certificates: %w", err)
 	}
 	defer rows.Close()
 
@@ -1615,52 +1706,52 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 			if err != nil {
 				continue
 			}
-			SetCertificateMetrics(cert, env)
+			inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 		}
 	}
 
 	// close first result set before running next query
 	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close CA certificates rows: %w", err)
+		return nil, fmt.Errorf("close CA certificates rows: %w", err)
 	}
 
 	// query deduped certs by (environment, cn, sorted sans, signer_name),
 	// taking latest by not_before DESC, serial DESC
 	rows, err = s.DB.QueryContext(ctx, `
-    WITH normalized AS (
-      SELECT
-        c.der,
-        k.environment,
-        c.cn,
-        c.signer_name,
-        COALESCE(
-          ARRAY(
-            SELECT s
-            FROM unnest(c.sans) AS s
-            ORDER BY s
-          ),
-          ARRAY[]::text[]
-        ) AS sans_sorted,
-        c.not_before,
-        c.serial
-      FROM certs c
-      JOIN signers s ON s.name = c.signer_name
-      JOIN keys k ON k.id = s.private_key_id
-    )
-    SELECT DISTINCT ON (environment, cn, sans_sorted, signer_name)
-      der,
-      environment
-    FROM normalized
-    ORDER BY
-      environment,
-      cn,
-      sans_sorted,
-      signer_name,
-      not_before DESC NULLS LAST,
-      serial DESC
-  `)
+	  WITH normalized AS (
+	    SELECT
+	      c.der,
+	      k.environment,
+	      c.cn,
+	      c.signer_name,
+	      COALESCE(
+	        ARRAY(
+	          SELECT s
+	          FROM unnest(c.sans) AS s
+	          ORDER BY s
+	        ),
+	        ARRAY[]::text[]
+	      ) AS sans_sorted,
+	      c.not_before,
+	      c.serial
+	    FROM certs c
+	    JOIN signers s ON s.name = c.signer_name
+	    JOIN keys k ON k.id = s.private_key_id
+	  )
+	  SELECT DISTINCT ON (environment, cn, sans_sorted, signer_name)
+	    der,
+	    environment
+	  FROM normalized
+	  ORDER BY
+	    environment,
+	    cn,
+	    sans_sorted,
+	    signer_name,
+	    not_before DESC NULLS LAST,
+	    serial DESC
+	`)
 	if err != nil {
-		return fmt.Errorf("query certificates: %w", err)
+		return nil, fmt.Errorf("query certificates: %w", err)
 	}
 	defer rows.Close()
 
@@ -1674,62 +1765,40 @@ func (s *Store) setCertificateMetrics(ctx context.Context) error {
 		if err != nil {
 			continue // skip if we can't parse the cert
 		}
-		SetCertificateMetrics(cert, env)
+
+		inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 	}
 
-	return rows.Err()
+	return inventory, rows.Err()
 }
 
-func (s *Store) setKeyReadinessMetrics(ctx context.Context) error {
-	rows, err := s.DB.QueryContext(ctx, `
-		SELECT id, environment, (config->>'pkcs11URI' IS NOT NULL AND config->>'pkcs11URI' != '') AS is_hsm
-		FROM keys
-	`)
+func (s *Store) RefreshInventoryMetrics(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metricspkg.ObserveInventoryRefreshDuration(time.Since(start))
+	}()
+
+	keys, err := s.collectKeyInventoryMetrics(ctx)
 	if err != nil {
-		return fmt.Errorf("query keys: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id uuid.UUID
-		var env string
-		var isHSM bool
-		if err := rows.Scan(&id, &env, &isHSM); err != nil {
-			SetKeyStatusReadyMetric(id, env, isHSM, false)
-			continue // skip if we can't read the key
-		}
-
-		key, err := s.loadKey(ctx, id, false)
-		if err != nil {
-			SetKeyStatusReadyMetric(id, env, isHSM, false)
-			continue // skip if we can't load the key
-		}
-
-		if key.AssymmetricKey != nil {
-			// key is assymetric, try to create a CSR
-			if _, err := x509.CreateCertificateRequest(rand.Reader,
-				&x509.CertificateRequest{
-					Subject: pkix.Name{
-						CommonName: "test",
-					},
-				},
-				key.AssymmetricKey); err != nil {
-				SetKeyStatusReadyMetric(id, env, isHSM, false)
-				continue // not ready if we can't create a CSR
-			}
-		} else if key.SymmetricKey != nil {
-			// key is symmetric, try to encrypt some test data
-			if _, err := key.Encrypt([]byte("test")); err != nil {
-				SetKeyStatusReadyMetric(id, env, isHSM, false)
-				continue // not ready if we can't encrypt
-			}
-		} else {
-			SetKeyStatusReadyMetric(id, env, isHSM, false)
-			continue // not ready if key has no usable material
-		}
-
-		SetKeyStatusReadyMetric(id, env, isHSM, true)
+		metricspkg.IncInventoryRefreshErrors()
+		return fmt.Errorf("collect key inventory metrics: %w", err)
 	}
 
-	return rows.Err()
+	certs, err := s.collectCertInventoryMetrics(ctx)
+	if err != nil {
+		metricspkg.IncInventoryRefreshErrors()
+		return fmt.Errorf("collect cert inventory metrics: %w", err)
+	}
+
+	metricspkg.ResetInventorySnapshotMetrics()
+
+	for k, v := range keys {
+		metricspkg.SetKeysTotal(k, v)
+	}
+	for _, cert := range certs {
+		metricspkg.SetCertificateMetrics(cert)
+	}
+
+	metricspkg.SetInventoryRefreshTimestamp(time.Now())
+	return nil
 }

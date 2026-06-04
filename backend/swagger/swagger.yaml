@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.20
+  version: 1.4.21
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -58,7 +58,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [Software, HSM]      
+            enum: [Software, HSM]
         - name: environment
           in: query
           schema:
@@ -178,6 +178,31 @@ paths:
       responses:
         "200":
           description: Success
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/keys/{id}/ready:
+    get:
+      summary: Check key readiness
+      description: Check if the key with the specified ID is ready for use.
+      tags:
+        - Keys
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Key is ready
         "400":
           description: Failed
           content:
