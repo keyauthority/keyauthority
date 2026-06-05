@@ -194,7 +194,7 @@ export default function Keys({ isLoading, setIsLoading }) {
                     variant="outline-secondary"
                     onClick={() => handleCheckReadiness(key.id)}
                     disabled={isLoading}
-                    title="Check if key is ready"
+                    title="Check Key Readiness"
                   >
                     <i className="bi-check2-circle"></i>
                   </Button>
@@ -205,7 +205,7 @@ export default function Keys({ isLoading, setIsLoading }) {
                       handleDelete(key.id, key.environment, key.config.type)
                     }
                     disabled={isLoading}
-                    title="Delete key"
+                    title="Delete Key"
                   >
                     <i className="bi-trash"></i>
                   </Button>

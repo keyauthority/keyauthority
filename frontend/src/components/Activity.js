@@ -979,7 +979,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table hover responsive striped>
+      <Table hover responsive striped className="align-middle">
         <thead>
           <tr>
             <th>ID</th>

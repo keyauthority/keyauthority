@@ -186,7 +186,6 @@ BACKEND_PORT ?= 8081
 METRICS_PORT ?= 9000
 METRICS_URL_PATHS_MASKED ?= false
 LOG_LEVEL ?= debug
-RESPOND_WITH_ERROR_DETAILS ?= true
 SOFTWARE_KEY_PASSPHRASE ?= passphrase
 # KC_URL ?= http://localhost:$(KC_PORT)
 KC_URL = http://host.docker.internal:$(KC_PORT)
