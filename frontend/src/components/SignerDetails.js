@@ -82,12 +82,12 @@ function SignerDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
         <Tab
           eventKey="chain"
           title={
-            <div>
+            <>
               CA CSR & Chain{" "}
               {hasWarnings && (
                 <i className="bi bi-exclamation-triangle ms-1"></i>
               )}
-            </div>
+            </>
           }
         >
           <CSRAndChainTab

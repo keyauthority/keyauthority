@@ -106,7 +106,7 @@ export default function Keys({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 3, lg: 3 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",

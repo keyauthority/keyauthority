@@ -1,11 +1,4 @@
-import {
-  Accordion,
-  Button,
-  Card,
-  Col,
-  Form,
-  Row,
-} from "react-bootstrap";
+import { Accordion, Button, Card, Col, Form, Row } from "react-bootstrap";
 
 /*
 
