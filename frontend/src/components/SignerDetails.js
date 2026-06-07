@@ -224,7 +224,12 @@ function ConfigTab({
           {/* Private Key Section */}
           <Col md={6} className="mb-3">
             <Card>
-              <Card.Header>Private Key</Card.Header>
+              <Card.Header>
+                <h6 className="mb-0">Private Key</h6>
+                <span className="text-muted small">
+                  The private key backing this signer
+                </span>
+              </Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
@@ -268,10 +273,10 @@ function ConfigTab({
           <Col md={6} className="mb-3">
             <Card>
               <Card.Header>
-                {withTooltipDescription(
-                  "CA Template",
-                  "Fields of the certificate template used when creating CA CSRs",
-                )}
+                <h6 className="mb-0">CA Template</h6>
+                <span className="text-muted small">
+                  Fields of the certificate template used when creating CA CSRs
+                </span>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -313,10 +318,10 @@ function ConfigTab({
           <Col md={6} className="mb-3">
             <Card>
               <Card.Header>
-                {withTooltipDescription(
-                  "Certificate Template",
-                  "Fields included in the certificates issued by this signer",
-                )}
+                <h6 className="mb-0">Certificate Template</h6>
+                <span className="text-muted small">
+                  Fields included in the certificates issued by this signer
+                </span>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -325,27 +330,27 @@ function ConfigTab({
                     CDP:
                       signerConfig.cdp?.length > 0 ? (
                         <>
-                          {signerConfig.cdp.map((cdp, idx) => (
+                          {signerConfig.cdp.map((url, index) => (
                             <div
-                              key={idx}
-                              className="d-flex gap-2 align-items-start"
+                              className="d-flex justify-content-between gap-2"
+                              key={index}
                             >
+                              <span
+                                className="text-truncate"
+                                style={{ maxWidth: "24rem" }}
+                              >
+                                {url}
+                              </span>
                               <Button
                                 variant="link"
                                 size="sm"
-                                className="m-0 p-0"
+                                className="p-0 m-0"
                                 onClick={() => {
-                                  copyToClipboard(cdp, "CDP URL copied!");
+                                  copyToClipboard(url, "CDP URL copied!");
                                 }}
                               >
                                 <i className="bi bi-clipboard"></i>
                               </Button>
-                              <span
-                                className="overflow-auto text-truncate"
-                                style={{ maxWidth: "24rem" }}
-                              >
-                                {cdp}
-                              </span>
                             </div>
                           ))}
                         </>
@@ -363,26 +368,23 @@ function ConfigTab({
           <Col md={6} className="mb-3">
             <Card>
               <Card.Header>
-                {withTooltipDescription(
-                  "Policy",
-                  "Rules that control what this signer is allowed to issue and how it operates",
-                )}
+                <h6 className="mb-0">Policy</h6>
+                <span className="text-muted small">
+                  Rules that control what this signer is allowed to issue and
+                  how it operates
+                </span>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
                   body={{
                     "Allowed Key Usages":
                       signerConfig.allowedKeyUsages?.length > 0
-                        ? signerConfig.allowedKeyUsages.map((ku, idx) => (
-                            <div key={idx}>{ku}</div>
-                          ))
+                        ? signerConfig.allowedKeyUsages.join(", ")
                         : "-",
                     "Allowed Domains":
-                      signerConfig?.allowedDomains?.length > 0
-                        ? signerConfig.allowedDomains.map((d, idx) => (
-                            <div key={idx}>{d}</div>
-                          ))
-                        : ".*",
+                      signerConfig.allowedDomains?.length > 0
+                        ? signerConfig.allowedDomains.join(", ")
+                        : "-",
                     "Max TTL": signerConfig.maxTTL,
                     "Approval Required": signerConfig.approvalRequired ? (
                       <div className="d-flex gap-2 align-items-start">
@@ -577,9 +579,10 @@ function CSRAndChainTab({
             return (
               <Card className="mb-3" key={index}>
                 <Card.Header>
-                  {`Certificate ${index + 1} - ${
-                    cert.subject === cert.issuer ? "Root" : "Intermediate"
-                  }`}
+                  <h6 className="mb-0">Certificate {index + 1}</h6>
+                  <span className="text-muted small">
+                    {cert.subject === cert.issuer ? "Root" : "Intermediate"}
+                  </span>
                 </Card.Header>
                 <Card.Body>
                   <KeyValueTable

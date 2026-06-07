@@ -292,7 +292,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [
           {
             key: "Valid and not expiring soon",
-            value: certCountByExpiring[infiniteDays],
+            value: certCountByExpiring[infiniteDays] - certCountByExpiring[30], // all valid certs minus those expiring in ≤30 days
             variant: "success",
           },
           {

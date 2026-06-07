@@ -14,6 +14,11 @@ $primary: #c62828; // Primary color: deep red
   font-weight: 500 !important;
 }
 
+.card {
+  border: 1px solid var(--bs-border-color) !important;
+  //box-shadow: 0 1px 2px var(--bs-light-border-subtle) !important;
+}
+
 .card-header {
   border: none;
 }

@@ -28,7 +28,7 @@ export default function Filters({
   const remainder = supportsFill ? filtersTemplate.length % safeColsPerRow : 0;
 
   return (
-    <Card className="mb-3 border-light-subtle">
+    <Card className="mb-3">
       <Card.Header>
         <div className="d-flex justify-content-between align-items-center gap-2">
           <h6 className="mb-0">Filters</h6>
