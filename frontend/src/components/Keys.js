@@ -13,6 +13,8 @@ import {
   buildURLParams,
 } from "../utils/utils";
 
+import { errorToString } from "../utils/error";
+
 export default function Keys({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [keys, setKeys] = useState([]);
@@ -37,11 +39,54 @@ export default function Keys({ isLoading, setIsLoading }) {
       setKeys(res.data.data || []);
       setTotalCount(res.data.totalCount || 0);
     } catch (err) {
-      setError(err.message || "Failed to fetch keys");
+      setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
   }, [api, page, pageSize, filters, setIsLoading]);
+
+  const handleCheckReadiness = async (keyId) => {
+    setIsLoading(true);
+    try {
+      await api.get(`/keys/${keyId}/ready`);
+      showToast("success", `Key ${keyId} is ready`);
+    } catch (err) {
+      showToast("error", `Key ${keyId} not ready`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async (keyId, environment, type) => {
+    // ask user to enter enviornment and type to confirm deletion
+    const confirmed = window.prompt(
+      `To confirm deletion, please enter the key environment and type: ${environment} ${type}`,
+    );
+
+    // Cancel pressed: do nothing
+    if (confirmed === null) {
+      return;
+    }
+
+    if (confirmed !== `${environment} ${type}`) {
+      showToast(
+        "error",
+        "Environment and type do not match. Deletion cancelled.",
+      );
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.delete(`/keys/${keyId}`);
+      showToast("success", `Key ${keyId} deleted`);
+      fetchKeys();
+    } catch (err) {
+      showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchKeys();
@@ -61,7 +106,7 @@ export default function Keys({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        cols={{ xs: 12, md: 3, lg: 3 }}
+        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",
@@ -108,6 +153,7 @@ export default function Keys({ isLoading, setIsLoading }) {
             <th>Type</th>
             <th>Storage</th>
             <th>Created</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -141,6 +187,30 @@ export default function Keys({ isLoading, setIsLoading }) {
                 )}
               </td>
               <td>{prettyTime(key.createdAt)}</td>
+              <td>
+                <div className="d-flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => handleCheckReadiness(key.id)}
+                    disabled={isLoading}
+                    title="Check Key Readiness"
+                  >
+                    <i className="bi-check2-circle"></i>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() =>
+                      handleDelete(key.id, key.environment, key.config.type)
+                    }
+                    disabled={isLoading}
+                    title="Delete Key"
+                  >
+                    <i className="bi-trash"></i>
+                  </Button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

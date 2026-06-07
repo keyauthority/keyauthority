@@ -1,4 +1,4 @@
-import { Accordion, Button, Col, Form, Row } from "react-bootstrap";
+import { Accordion, Button, Card, Col, Form, Row } from "react-bootstrap";
 
 /*
 
@@ -28,112 +28,101 @@ export default function Filters({
   const remainder = supportsFill ? filtersTemplate.length % safeColsPerRow : 0;
 
   return (
-    <Accordion className="mb-2">
-      <Accordion.Item eventKey="filters">
-        <Accordion.Header>
-          <div className="d-flex justify-content-between align-items-center w-100 gap-3 me-3">
-            <span>
-              <i className="bi bi-funnel"></i> Filters
-            </span>
-            <span className="text-muted">
-              Applied {Object.values(filters).filter((v) => v).length} of{" "}
-              {filtersTemplate.length}
-            </span>
-          </div>
-        </Accordion.Header>
-        <Accordion.Body>
-          <Row className="g-3">
-            {filtersTemplate.map((filter, index) => {
-              const isLast = index === filtersTemplate.length - 1;
+    <Card className="mb-3">
+      <Card.Header>
+        <div className="d-flex justify-content-between align-items-center gap-2">
+          <h6 className="mb-0">Filters</h6>
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={() =>
+              setFilters((prev) => {
+                const newFilters = { ...prev };
+                Object.keys(newFilters).forEach((key) => {
+                  newFilters[key] = "";
+                });
+                return newFilters;
+              })
+            }
+          >
+            <i className="bi bi-x-lg"></i> Clear
+          </Button>
+        </div>
+      </Card.Header>
+      <Card.Body>
+        <Row className="g-3">
+          {filtersTemplate.map((filter, index) => {
+            const isLast = index === filtersTemplate.length - 1;
 
-              const md =
-                supportsFill && isLast && remainder !== 0
-                  ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
-                  : supportsFill
-                    ? baseSpan
-                    : undefined;
+            const md =
+              supportsFill && isLast && remainder !== 0
+                ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
+                : supportsFill
+                  ? baseSpan
+                  : undefined;
 
-              return (
-                <Col xs={12} md={md} key={filter.key}>
-                  <div className="input-group">
-                    {filter.type === "text" && (
-                      <>
-                        <span className="input-group-text">{filter.label}</span>
-                        <Form.Control
-                          type="text"
-                          value={filters[filter.key] ?? ""}
-                          placeholder={filter.placeholder}
-                          onChange={(e) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              [filter.key]: e.target.value,
-                            }))
-                          }
-                        />
-                      </>
-                    )}
+            return (
+              <Col xs={12} md={md} key={filter.key}>
+                <div className="input-group">
+                  {filter.type === "text" && (
+                    <>
+                      <span className="input-group-text">{filter.label}</span>
+                      <Form.Control
+                        type="text"
+                        value={filters[filter.key] ?? ""}
+                        placeholder={filter.placeholder}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            [filter.key]: e.target.value,
+                          }))
+                        }
+                      />
+                    </>
+                  )}
 
-                    {filter.type === "select" && (
-                      <>
-                        <span className="input-group-text">{filter.label}</span>
-                        <Form.Select
-                          value={filters[filter.key] ?? ""}
-                          onChange={(e) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              [filter.key]: e.target.value,
-                            }))
-                          }
-                        >
-                          {filter.options.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </Form.Select>
-                      </>
-                    )}
+                  {filter.type === "select" && (
+                    <>
+                      <span className="input-group-text">{filter.label}</span>
+                      <Form.Select
+                        value={filters[filter.key] ?? ""}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            [filter.key]: e.target.value,
+                          }))
+                        }
+                      >
+                        {filter.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </>
+                  )}
 
-                    {filter.type === "date" && (
-                      <>
-                        <span className="input-group-text">{filter.label}</span>
-                        <Form.Control
-                          type="datetime-local"
-                          value={filters[filter.key] ?? ""}
-                          onChange={(e) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              [filter.key]: e.target.value,
-                            }))
-                          }
-                        />
-                      </>
-                    )}
-                  </div>
-                </Col>
-              );
-            })}
-
-            <div className="col-12 d-flex justify-content-end align-items-center gap-2">
-              <Button
-                variant="outline-secondary"
-                onClick={() =>
-                  setFilters((prev) => {
-                    const newFilters = { ...prev };
-                    Object.keys(newFilters).forEach((key) => {
-                      newFilters[key] = "";
-                    });
-                    return newFilters;
-                  })
-                }
-                style={{ minWidth: "6rem" }}
-              >
-                <i className="bi bi-x-circle"></i> Clear
-              </Button>
-            </div>
-          </Row>
-        </Accordion.Body>
-      </Accordion.Item>
-    </Accordion>
+                  {filter.type === "date" && (
+                    <>
+                      <span className="input-group-text">{filter.label}</span>
+                      <Form.Control
+                        type="datetime-local"
+                        value={filters[filter.key] ?? ""}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            [filter.key]: e.target.value,
+                          }))
+                        }
+                      />
+                    </>
+                  )}
+                </div>
+              </Col>
+            );
+          })}
+        </Row>
+      </Card.Body>
+    </Card>
   );
 }

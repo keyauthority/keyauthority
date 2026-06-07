@@ -341,7 +341,7 @@ export default function SignerModal({
         {/* CA Template Section */}
         <Card className="mb-3">
           <Card.Header>
-            <div>CA Template</div>
+            <h6 className="mb-0">CA Template</h6>
             <div className="text-muted small">
               Fields of the certificate template used when creating CA CSRs
             </div>
@@ -439,7 +439,7 @@ export default function SignerModal({
         {/* Certificate Template Section */}
         <Card className="mb-3">
           <Card.Header>
-            <div>Certificate Template</div>
+            <h6 className="mb-0">Certificate Template</h6>
             <div className="text-muted small">
               Fields included in the certificates issued by this signer
             </div>
@@ -511,7 +511,7 @@ export default function SignerModal({
         {/* Policy Section */}
         <Card className="mb-3">
           <Card.Header>
-            <div>Policy</div>
+            <h6 className="mb-0">Policy</h6>
             <div className="text-muted small">
               Rules that control what this signer is allowed to issue and how it
               operates

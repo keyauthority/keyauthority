@@ -175,12 +175,18 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
         <Tabs className="mb-3">
           <Tab eventKey="data" title="Data">
             {secretData && Object.keys(secretData).length > 0 ? (
-              <KeyValueTable
-                body={keyValueTableBody}
-                borderBottom={true}
-                header={["Key", "Value"]}
-                minKeyLen={32}
-              />
+              <>
+                <KeyValueTable
+                  body={keyValueTableBody}
+                  borderBottom={true}
+                  header={["Key", "Value"]}
+                  minKeyLen={32}
+                />
+                <div className="text-muted small w-100 text-end">
+                  <i className="bi bi-clock me-1"></i> Last Updated:{" "}
+                  {prettyTime(secretMetadata.updatedAt)}
+                </div>
+              </>
             ) : (
               <Alert variant="info">No data available for this secret.</Alert>
             )}

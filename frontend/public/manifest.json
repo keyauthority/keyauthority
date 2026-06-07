@@ -1,6 +1,6 @@
 {
   "short_name": "KeyAuthority",
-  "name": "KeyAuthority",
+  "name": "KeyAuthority - PKI & Secrets Management",
   "icons": [
     {
       "src": "favicon.png",

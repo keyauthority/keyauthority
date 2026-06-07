@@ -79,25 +79,25 @@ export default function Main() {
           title: "Dashboard",
           subtitle: "Get an overview of your system's resources and activity",
           to: "/activity/dashboard",
-          icon: "bi-speedometer2",
+          icon: "bi-speedometer",
         },
         {
           title: "Application Logs",
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
-          icon: "bi-file-text",
+          icon: "bi-file-text-fill",
         },
         {
           title: "Issued Certificates",
           subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
-          icon: "bi-award",
+          icon: "bi-award-fill",
         },
         {
           title: "Pending Requests",
           subtitle: "Review and approve/reject pending requests",
           to: "/activity/pending-requests",
-          icon: "bi-clock",
+          icon: "bi-clock-fill",
         },
       ],
     },
@@ -110,13 +110,13 @@ export default function Main() {
           title: "Keys",
           subtitle: "View your cryptographic keys",
           to: "/keys",
-          icon: "bi-key",
+          icon: "bi-key-fill",
         },
         {
           title: "Signers",
           subtitle: "Manage your CAs",
           to: "/signers",
-          icon: "bi-pen",
+          icon: "bi-pen-fill",
         },
         {
           title: "Secrets",
@@ -134,30 +134,30 @@ export default function Main() {
         {
           title: "Installation",
           to: "https://artifacthub.io/packages/helm/keyauthority/keyauthority",
-          icon: "bi-box-seam",
+          icon: "bi-box-seam-fill",
         },
         {
           title: "Administration",
           subtitle: "Learn how to manage access for your KeyAuthority users",
           to: "/docs/admin",
-          icon: "bi-gear",
+          icon: "bi-gear-fill",
         },
         {
           title: "Rest API",
           to: swaggerUrl,
-          icon: "bi-braces",
+          icon: "bi-braces-asterisk",
         },
         {
           title: "Build a PKI",
           subtitle: "Learn how to use signers to build a PKI for Kubernetes",
           to: "/docs/signers",
-          icon: "bi-code-slash",
+          icon: "bi-award-fill",
         },
         {
           title: "Use Secrets",
           subtitle: "Learn how your applications can access secrets",
           to: "/docs/secrets",
-          icon: "bi-code-slash",
+          icon: "bi-three-dots",
         },
       ],
     },
@@ -410,7 +410,7 @@ export default function Main() {
 
               const top = () => (
                 <div
-                  className={`d-flex justify-content-between align-items-center pb-4`}
+                  className={`d-flex justify-content-between align-items-center mb-4`}
                 >
                   <div>
                     <h2 className="m-0">{title}</h2>
@@ -536,7 +536,7 @@ export default function Main() {
                             </Dropdown.Item>*/}
                             <Dropdown.Item eventKey="import-vault">
                               <i className="bi bi-upload me-1"></i> Import From
-                              HC Vault / OpenBao
+                              HC Vault
                             </Dropdown.Item>
                           </DropdownButton>
                         );

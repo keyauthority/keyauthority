@@ -1,6 +1,6 @@
 module github.com/keyauthority/keyauthority
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/ThalesGroup/crypto11 v1.6.1
@@ -11,12 +11,12 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lib/pq v1.12.3
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.81.1
+	go.step.sm/crypto v0.82.0
 	k8s.io/api v0.37.0-alpha.0
 )
 
@@ -47,7 +47,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.68.0 // indirect
+	github.com/prometheus/common v0.68.1 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -73,7 +73,7 @@ require (
 	k8s.io/client-go v0.37.0-alpha.0 // indirect
 	k8s.io/component-base v0.36.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260520065146-aa012df4f4af // indirect
+	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
 	sigs.k8s.io/gateway-api v1.5.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect

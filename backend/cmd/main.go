@@ -48,17 +48,22 @@ import (
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
+	metricspkg "github.com/keyauthority/keyauthority/internal/metrics"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
 )
 
 const (
-	envHTTPPort    = "HTTP_PORT"
-	envHTTPSPort   = "HTTPS_PORT"
-	envMetricsPort = "METRICS_PORT"
-	envCORSOrigin  = "CORS_ORIGIN"
-	envTruststore  = "TRUSTSTORE"
-	envTLSCert     = "TLS_CERT"
-	envTLSKey      = "TLS_KEY"
+	envHTTPPort                    = "HTTP_PORT"
+	envHTTPSPort                   = "HTTPS_PORT"
+	envMetricsPort                 = "METRICS_PORT"
+	envCORSOrigin                  = "CORS_ORIGIN"
+	envTruststore                  = "TRUSTSTORE"
+	envTLSCert                     = "TLS_CERT"
+	envTLSKey                      = "TLS_KEY"
+	envCRLRefreshInterval          = "CRL_REFRESH_INTERVAL"
+	envAuthenticatorReloadInterval = "AUTHENTICATOR_RELOAD_INTERVAL"
+	envStoreCleanupInterval        = "STORE_CLEANUP_INTERVAL"
+	envInventoryRefreshInterval    = "INVENTORY_REFRESH_INTERVAL"
 )
 
 var (
@@ -122,7 +127,7 @@ func main() {
 	logger.InfoWithContext(context.Background(), "ACME responder ready")
 
 	// Metrics
-	internalpkg.SetupMetrics()
+	metricspkg.SetupMetrics()
 	startMetricsServer(metricsPort)
 
 	// Handlers
@@ -135,26 +140,18 @@ func main() {
 		},
 		keysHandler))
 
-	router.Handle("/v1/keys/{id}",
-		internalpkg.WithHttpMetrics("/v1/keys/{id}", withAuth(
-			map[string]internalpkg.Role{
-				http.MethodGet:    internalpkg.RoleOperator, // get key
-				http.MethodDelete: internalpkg.RoleOperator, // delete key
-			},
-			keyHandler)))
-
-	// ---------- Certificates ---------- //
-	router.Handle("/v1/certs", withAuth(
+	router.Handle("/v1/keys/{id}", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAny, // get certs
+			http.MethodGet:    internalpkg.RoleOperator, // get key
+			http.MethodDelete: internalpkg.RoleOperator, // delete key
 		},
-		certsHandler))
+		keyHandler))
 
-	router.Handle("/v1/certs/{serial}/pem", withAuth(
+	router.Handle("/v1/keys/{id}/ready", withAuth(
 		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAny, // get cert PEM
+			http.MethodGet: internalpkg.RoleOperator, // get key readiness
 		},
-		certHandler))
+		keyReadinessHandler))
 
 	// ------------ Signers ------------ //
 	router.Handle("/v1/signers", withAuth(
@@ -197,21 +194,21 @@ func main() {
 		signerCSRHandler))
 
 	router.Handle("/v1/signers/{name}/sign",
-		internalpkg.WithHttpMetrics("/v1/signers/{name}/sign", withAuth(
+		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodPost: internalpkg.RoleOperator, // sign certificate
 			},
 			signerSignHandler)))
 
 	router.Handle("/v1/signers/{name}/sign-document",
-		internalpkg.WithHttpMetrics("/v1/signers/{name}/sign-document", withAuth(
+		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign-document", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodPost: internalpkg.RoleOperator, // sign document
 			},
 			signerSignDocumentHandler)))
 
 	router.Handle("/v1/signers/{name}/revoke",
-		internalpkg.WithHttpMetrics("/v1/signers/{name}/revoke", withAuth(
+		metricspkg.WithHttpMetrics("/v1/signers/{name}/revoke", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodPost: internalpkg.RoleOperator, // revoke certificate
 			},
@@ -234,14 +231,14 @@ func main() {
 		secretsHandler))
 
 	router.Handle("/v1/secrets/data/{name:.+}",
-		internalpkg.WithHttpMetrics("/v1/secrets/data/{name}", withAuth(
+		metricspkg.WithHttpMetrics("/v1/secrets/data/{name}", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodGet: internalpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
 			},
 			secretHandler)))
 
 	router.Handle("/v1/secrets/{name:.+}",
-		internalpkg.WithHttpMetrics("/v1/secrets/{name}", withAuth(
+		metricspkg.WithHttpMetrics("/v1/secrets/{name}", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodGet:    internalpkg.RoleOperator, // get secret
 				http.MethodPut:    internalpkg.RoleOperator, // insert secret
@@ -251,6 +248,19 @@ func main() {
 			},
 			secretHandler)))
 
+	// ---------- Certificates ---------- //
+	router.Handle("/v1/certs", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get certs
+		},
+		certsHandler))
+
+	router.Handle("/v1/certs/{serial}/pem", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get cert PEM
+		},
+		certHandler))
+
 	// ------------ Pending Requests ------------ //
 	router.Handle("/v1/pending-requests", withAuth(
 		map[string]internalpkg.Role{
@@ -259,7 +269,7 @@ func main() {
 		pendingRequestsHandler))
 
 	router.Handle("/v1/pending-requests/{id}",
-		internalpkg.WithHttpMetrics("/v1/pending-requests/{id}", withAuth(
+		metricspkg.WithHttpMetrics("/v1/pending-requests/{id}", withAuth(
 			map[string]internalpkg.Role{
 				http.MethodPost:   internalpkg.RoleApprover, // approve pending request
 				http.MethodDelete: internalpkg.RoleApprover, // reject pending request
@@ -303,8 +313,7 @@ func main() {
 	router.PathPrefix("/swagger/").Handler(
 		http.StripPrefix("/swagger/", http.FileServer(http.FS(swagger.Files))))
 
-	// ------------ One-Time & Periodic Tasks ----- //
-	runOneTimeTasks()
+	// ------------ Periodic Tasks ----- //
 	runPeriodicTasks()
 
 	// ------------ Start server ------------ //
@@ -338,7 +347,7 @@ func startMetricsServer(metricsPort string) {
 	}
 
 	metricsRouter := mux.NewRouter()
-	metricsRouter.Handle("/metrics", internalpkg.MetricsHandler())
+	metricsRouter.Handle("/metrics", metricspkg.MetricsHandler())
 
 	go func() {
 		logger.InfoWithContext(context.Background(), "metrics server started")
@@ -350,19 +359,22 @@ func startMetricsServer(metricsPort string) {
 	}()
 }
 
-func runOneTimeTasks() {
-	go func() {
-		if err := store.RunOneTimeTasks(context.Background()); err != nil {
-			logger.WarnWithContext(context.Background(),
-				"couldn't run one-time tasks", "error", err)
-		}
-	}()
-}
-
 func runPeriodicTasks() {
 	// CRL re-creation
 	go func() {
-		ticker := time.NewTicker(72 * time.Hour)
+		intervalStr := os.Getenv(envCRLRefreshInterval)
+		if intervalStr == "" {
+			intervalStr = "72h"
+		}
+		clrRecreationInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid CRL refresh interval, using default of 72h",
+				"error", err, "intervalStr", intervalStr)
+			clrRecreationInterval = 72 * time.Hour
+		}
+
+		ticker := time.NewTicker(clrRecreationInterval)
 		defer ticker.Stop()
 
 		for {
@@ -373,10 +385,20 @@ func runPeriodicTasks() {
 
 	// Authenticator Reloading
 	go func() {
-		interval := 30 * time.Minute
+		intervalStr := os.Getenv(envAuthenticatorReloadInterval)
+		if intervalStr == "" {
+			intervalStr = "30m"
+		}
+		authenticatorReloadInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid authenticator reload interval, using default of 30m",
+				"error", err, "intervalStr", intervalStr)
+			authenticatorReloadInterval = 30 * time.Minute
+		}
 
-		time.Sleep(interval)
-		ticker := time.NewTicker(interval)
+		time.Sleep(authenticatorReloadInterval) // initial delay before first reload
+		ticker := time.NewTicker(authenticatorReloadInterval)
 		defer ticker.Stop()
 
 		for {
@@ -388,15 +410,54 @@ func runPeriodicTasks() {
 		}
 	}()
 
-	// Store Ops
+	// Store Cleanup
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
+		intervalStr := os.Getenv(envStoreCleanupInterval)
+		if intervalStr == "" {
+			intervalStr = "24h"
+		}
+		storeCleanupInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid store cleanup interval, using default of 24h",
+				"error", err, "intervalStr", intervalStr)
+			storeCleanupInterval = 24 * time.Hour
+		}
+
+		time.Sleep(storeCleanupInterval) // initial delay before first cleanup
+		ticker := time.NewTicker(storeCleanupInterval)
 		defer ticker.Stop()
 
 		for {
-			if err := store.RunPeriodicTasks(context.Background()); err != nil {
+			if err := store.RunCleanupTasks(context.Background()); err != nil {
 				logger.WarnWithContext(context.Background(),
-					"couldn't perform periodic store ops", "error", err)
+					"couldn't perform store cleanup tasks", "error", err)
+			}
+			<-ticker.C
+		}
+	}()
+
+	// Store Inventory Refresh
+	go func() {
+		intervalStr := os.Getenv(envInventoryRefreshInterval)
+		if intervalStr == "" {
+			intervalStr = "30m"
+		}
+		inventoryRefreshInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid inventory refresh interval, using default of 30m",
+				"error", err, "intervalStr", intervalStr)
+			inventoryRefreshInterval = 30 * time.Minute
+		}
+
+		ticker := time.NewTicker(inventoryRefreshInterval)
+		defer ticker.Stop()
+
+		for {
+			if err := store.RefreshInventoryMetrics(context.Background()); err != nil {
+				logger.WarnWithContext(context.Background(),
+					"couldn't refresh inventory metrics", "error", err)
 			}
 			<-ticker.C
 		}
@@ -570,10 +631,6 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.Any("notAfter", cert.NotAfter),
 		slog.String("comment", comment),
 	)
-
-	// set certificate-related metrics
-	environment, _ := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string)
-	internalpkg.SetCertificateMetrics(cert, environment)
 
 	// insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
@@ -1027,6 +1084,23 @@ var keyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Info(r, "key deleted if existed")
 		writeJSONOk(w, nil)
 	}
+})
+
+var keyReadinessHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	keyIDStr := mux.Vars(r)["id"]
+	keyID, err := uuid.Parse(keyIDStr)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "invalid key ID", err)
+		return
+	}
+
+	if err := store.CheckKeyReadiness(r.Context(), keyID); err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "key is not ready", err)
+		return
+	}
+
+	logger.Debug(r, "key is ready")
+	writeHTTP(w, http.StatusOK, nil)
 })
 
 /******************************/

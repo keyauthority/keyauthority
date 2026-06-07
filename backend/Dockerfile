@@ -2,7 +2,7 @@ ARG DEBIAN_VERSION=trixie
 ARG GO_VERSION=1.26
 ARG PRIMUS_VERSION=2.6.2
 ARG UBI_MAJOR_VERSION=10
-ARG UBI_VERSION=10.2-1777462752
+ARG UBI_VERSION=10.2-1780550715
 ARG RUNTIME_GID=4001
 
 # Stage 1: Build the Go server binary
@@ -120,6 +120,6 @@ COPY --from=builder /workspace/server /usr/bin/server
 ENV PATH="/usr/local/primus/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/primus/lib"
 
-EXPOSE 8081 8443 9090
+EXPOSE 8081 8443 9000
 USER 1001
 CMD ["server"]
