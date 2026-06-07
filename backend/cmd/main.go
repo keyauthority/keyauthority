@@ -53,13 +53,17 @@ import (
 )
 
 const (
-	envHTTPPort    = "HTTP_PORT"
-	envHTTPSPort   = "HTTPS_PORT"
-	envMetricsPort = "METRICS_PORT"
-	envCORSOrigin  = "CORS_ORIGIN"
-	envTruststore  = "TRUSTSTORE"
-	envTLSCert     = "TLS_CERT"
-	envTLSKey      = "TLS_KEY"
+	envHTTPPort                    = "HTTP_PORT"
+	envHTTPSPort                   = "HTTPS_PORT"
+	envMetricsPort                 = "METRICS_PORT"
+	envCORSOrigin                  = "CORS_ORIGIN"
+	envTruststore                  = "TRUSTSTORE"
+	envTLSCert                     = "TLS_CERT"
+	envTLSKey                      = "TLS_KEY"
+	envCRLRefreshInterval          = "CRL_REFRESH_INTERVAL"
+	envAuthenticatorReloadInterval = "AUTHENTICATOR_RELOAD_INTERVAL"
+	envStoreCleanupInterval        = "STORE_CLEANUP_INTERVAL"
+	envInventoryRefreshInterval    = "INVENTORY_REFRESH_INTERVAL"
 )
 
 var (
@@ -358,7 +362,17 @@ func startMetricsServer(metricsPort string) {
 func runPeriodicTasks() {
 	// CRL re-creation
 	go func() {
-		clrRecreationInterval := 72 * time.Hour
+		intervalStr := os.Getenv(envCRLRefreshInterval)
+		if intervalStr == "" {
+			intervalStr = "72h"
+		}
+		clrRecreationInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid CRL refresh interval, using default of 72h",
+				"error", err, "intervalStr", intervalStr)
+			clrRecreationInterval = 72 * time.Hour
+		}
 
 		ticker := time.NewTicker(clrRecreationInterval)
 		defer ticker.Stop()
@@ -371,7 +385,17 @@ func runPeriodicTasks() {
 
 	// Authenticator Reloading
 	go func() {
-		authenticatorReloadInterval := 30 * time.Minute
+		intervalStr := os.Getenv(envAuthenticatorReloadInterval)
+		if intervalStr == "" {
+			intervalStr = "30m"
+		}
+		authenticatorReloadInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid authenticator reload interval, using default of 30m",
+				"error", err, "intervalStr", intervalStr)
+			authenticatorReloadInterval = 30 * time.Minute
+		}
 
 		time.Sleep(authenticatorReloadInterval) // initial delay before first reload
 		ticker := time.NewTicker(authenticatorReloadInterval)
@@ -388,7 +412,17 @@ func runPeriodicTasks() {
 
 	// Store Cleanup
 	go func() {
-		storeCleanupInterval := 24 * time.Hour
+		intervalStr := os.Getenv(envStoreCleanupInterval)
+		if intervalStr == "" {
+			intervalStr = "24h"
+		}
+		storeCleanupInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid store cleanup interval, using default of 24h",
+				"error", err, "intervalStr", intervalStr)
+			storeCleanupInterval = 24 * time.Hour
+		}
 
 		time.Sleep(storeCleanupInterval) // initial delay before first cleanup
 		ticker := time.NewTicker(storeCleanupInterval)
@@ -405,7 +439,17 @@ func runPeriodicTasks() {
 
 	// Store Inventory Refresh
 	go func() {
-		inventoryRefreshInterval := 30 * time.Minute
+		intervalStr := os.Getenv(envInventoryRefreshInterval)
+		if intervalStr == "" {
+			intervalStr = "30m"
+		}
+		inventoryRefreshInterval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			logger.WarnWithContext(context.Background(),
+				"invalid inventory refresh interval, using default of 30m",
+				"error", err, "intervalStr", intervalStr)
+			inventoryRefreshInterval = 30 * time.Minute
+		}
 
 		ticker := time.NewTicker(inventoryRefreshInterval)
 		defer ticker.Stop()
