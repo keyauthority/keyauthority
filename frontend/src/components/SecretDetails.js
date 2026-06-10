@@ -183,8 +183,7 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
                   minKeyLen={32}
                 />
                 <div className="text-muted small w-100 text-end">
-                  <i className="bi bi-clock me-1"></i> Last Updated:{" "}
-                  {prettyTime(secretMetadata.updatedAt)}
+                  Last Updated: {prettyTime(secretMetadata.updatedAt)}
                 </div>
               </>
             ) : (

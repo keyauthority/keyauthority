@@ -56,11 +56,7 @@ export default function Topbar() {
           </Navbar.Brand>
 
           <Dropdown as={ButtonGroup}>
-            <Dropdown.Toggle
-              id="user-dropdown"
-              as={Button}
-              variant="outline-secondary"
-            >
+            <Dropdown.Toggle id="user-dropdown" variant="outline-secondary">
               <i className="bi bi-person-fill"></i>
             </Dropdown.Toggle>
             <Dropdown.Menu align="end">
