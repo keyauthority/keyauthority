@@ -9,6 +9,7 @@ import {
   Col,
   Tooltip,
   OverlayTrigger,
+  Dropdown,
 } from "react-bootstrap";
 import {
   showToast,
@@ -65,12 +66,16 @@ export function Dashboard({ isLoading, setIsLoading }) {
                 : undefined;
           return (
             <Col xs={12} md={md} key={index}>
-              <Alert variant="light">
-                <div className="text-muted small mb-1">{card.key}</div>
-                <h4 className={`mb-0 text-${card.variant || ""}`}>
-                  {card.value !== undefined ? card.value : "-"}
-                </h4>
-              </Alert>
+              <Card>
+                <Card.Header>{card.key}</Card.Header>
+                <Card.Body>
+                  <h4 className={`m-0 text-${card.variant || ""}`}>
+                    {card.valueReady !== undefined && card.valueReady !== null
+                      ? card.value
+                      : "-"}
+                  </h4>
+                </Card.Body>
+              </Card>
             </Col>
           );
         })}
@@ -79,11 +84,8 @@ export function Dashboard({ isLoading, setIsLoading }) {
   };
 
   const dashboardSection = (title, iconClass, cards, colsPerRow) => (
-    <div className="mb-2">
-      <h6 className="mb-3">
-        {/* <i className={`${iconClass} me-2`}></i> */}
-        {title}
-      </h6>
+    <div className="mt-3">
+      <h6 className="mb-3">{title}</h6>
       {dashboardBody(cards, colsPerRow)}
     </div>
   );
@@ -266,22 +268,24 @@ export function Dashboard({ isLoading, setIsLoading }) {
           "bi bi-clock-history",
           [
             {
-              key: "Errors in the last 24h",
+              key: "Errors in Last 24h",
+              iconClass: "bi bi-x-circle-fill",
               value: logCountByLevel["ERROR"],
+              valueReady: logCountByLevel?.["ERROR"],
               variant: "danger",
             },
             {
-              key: "Secrets read in the last 24h",
-              value: logCountByMsg["secret read"],
+              key: "Certificates Signed in Last 24h",
+              iconClass: "bi bi-award-fill",
+              value: logCountByMsg["certificate signed"],
+              valueReady: logCountByMsg?.["certificate signed"],
             },
             {
-              key: "Certificates signed in the last 24h",
-              value: logCountByMsg["certificate signed"],
+              key: "Secrets Read in Last 24h",
+              iconClass: "bi bi-lock-fill",
+              value: logCountByMsg["secret read"],
+              valueReady: logCountByMsg?.["secret read"],
             },
-            // {
-            //   key: "Keys created in the last 24h",
-            //   value: logCountByMsg["key created"],
-            // },
           ],
           3,
         )}
@@ -291,23 +295,33 @@ export function Dashboard({ isLoading, setIsLoading }) {
         "bi bi-award",
         [
           {
-            key: "Valid and not expiring soon",
+            key: "Valid and Not Expiring Soon",
+            iconClass: "bi bi-check-circle-fill",
             value: certCountByExpiring[infiniteDays] - certCountByExpiring[30], // all valid certs minus those expiring in ≤30 days
+            valueReady:
+              certCountByExpiring?.[infiniteDays] && certCountByExpiring?.[30],
             variant: "success",
           },
           {
-            key: "Valid and expiring in ≤3 days",
+            key: "Valid and Expiring in ≤3d",
+            iconClass: "bi bi-exclamation-circle-fill",
             value: certCountByExpiring[3],
+            valueReady: certCountByExpiring?.[3],
             variant: "danger",
           },
           // {
-          //   key: "Valid and expiring in ≤7 days",
+          //   key: "Valid and Expiring in ≤7d",
+          //   iconClass: "bi bi-exclamation-triangle-fill",
           //   value: certCountByExpiring[7],
-          //   // variant: "warning",
+          //   valueReady: certCountByExpiring?.[7],
+          //   variant: "warning",
           // },
           {
-            key: "Valid and expiring in ≤30 days",
+            key: "Valid and Expiring in ≤30d",
+            iconClass: "bi bi-exclamation-triangle-fill",
             value: certCountByExpiring[30],
+            valueReady: certCountByExpiring?.[30],
+            variant: "warning",
           },
         ],
         3,
@@ -319,27 +333,35 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [
           {
             key: "Software",
+            iconClass: "bi bi-laptop",
             value: keyCountByStorage["Software"],
+            valueReady: keyCountByStorage?.["Software"],
           },
           {
             key: "HSM",
+            iconClass: "bi bi-safe",
             value: keyCountByStorage["HSM"],
+            valueReady: keyCountByStorage?.["HSM"],
           },
           {
             key: "RSA",
             value: keyCountByType["RSA"],
+            valueReady: keyCountByType?.["RSA"],
           },
           {
             key: "ECDSA",
             value: keyCountByType["ECDSA"],
+            valueReady: keyCountByType?.["ECDSA"],
           },
           {
             key: "Ed25519",
             value: keyCountByType["Ed25519"],
+            valueReady: keyCountByType?.["Ed25519"],
           },
           {
             key: "AES",
             value: keyCountByType["AES"],
+            valueReady: keyCountByType?.["AES"],
           },
         ],
         6,
@@ -351,11 +373,15 @@ export function Dashboard({ isLoading, setIsLoading }) {
         [
           {
             key: "Root CAs",
+            iconClass: "bi bi-award-fill",
             value: signerCountByRoot[true],
+            valueReady: signerCountByRoot?.[true],
           },
           {
             key: "Intermediate CAs",
+            iconClass: "bi bi-award",
             value: signerCountByRoot[false],
+            valueReady: signerCountByRoot?.[false],
           },
         ],
         2,
@@ -366,14 +392,20 @@ export function Dashboard({ isLoading, setIsLoading }) {
         "bi bi-three-dots",
         [
           {
-            key: "Updated in the last 60 days",
+            key: "Updated in Last 60d",
+            iconClass: "bi bi-check-circle-fill",
             value: secretCountByUpdated[60],
+            valueReady: secretCountByUpdated?.[60],
             variant: "success",
           },
           {
-            key: "Not updated in the last 60 days",
+            key: "Not Updated in Last 60d",
+            iconClass: "bi bi-clock-fill",
             value:
               secretCountByUpdated[infiniteDays] - secretCountByUpdated[60],
+            valueReady:
+              secretCountByUpdated?.[infiniteDays] &&
+              secretCountByUpdated?.[60],
             variant: "warning",
           },
         ],
@@ -523,7 +555,7 @@ export function Certificates({ isLoading, setIsLoading }) {
             <th>Valid From</th>
             <th>Valid To</th>
             <th>Signer</th>
-            <th>Actions</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -560,34 +592,37 @@ export function Certificates({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(cert.notBefore)}</td>
               <td>{prettyTime(cert.notAfter)}</td>
+              <td>{cert.signerName}</td>
               <td>
-                <Link to={`/signers/${encodeURIComponent(cert.signerName)}`}>
-                  {cert.signerName}
-                </Link>
-              </td>
-              <td>
-                <div className="d-flex gap-1">
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    title="View Details"
-                    onClick={() => {
-                      setModalData(cert);
-                      setModalTitle(`Certificate: ${cert.serial}`);
-                      setShowModal(true);
-                    }}
+                <Dropdown>
+                  <Dropdown.Toggle
+                    as={Link}
+                    className="no-caret"
+                    id={`dropdown-${cert.serial}`}
                   >
-                    <i className="bi bi-eye"></i>
-                  </Button>
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    title="Copy PEM"
-                    onClick={() => copyPEM(cert)}
-                  >
-                    <i className="bi bi-clipboard"></i>
-                  </Button>
-                </div>
+                    <i className="bi-three-dots-vertical mx-1"></i>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Item
+                      onClick={() => {
+                        setModalData(cert);
+                        setModalTitle(`Certificate: ${cert.serial}`);
+                        setShowModal(true);
+                      }}
+                    >
+                      <i className="bi bi-eye me-1"></i> View as JSON
+                    </Dropdown.Item>
+                    {/*<Dropdown.Item
+                      as={Link}
+                      to={`/signers/${encodeURIComponent(cert.signerName)}`}
+                    >
+                      <i className="bi bi-pen me-1"></i> Go to Signer
+                    </Dropdown.Item>*/}
+                    <Dropdown.Item onClick={() => copyPEM(cert)}>
+                      <i className="bi bi-clipboard me-1"></i> Copy PEM
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </td>
             </tr>
           ))}
@@ -729,7 +764,7 @@ export function Logs({ isLoading, setIsLoading }) {
             <th>Environment</th>
             <th>API Call</th>
             <th>Time</th>
-            <th>Actions</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -779,20 +814,26 @@ export function Logs({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(log.time)}</td>
               <td>
-                <div className="d-flex gap-1">
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    title="View Details"
-                    onClick={() => {
-                      setModalTitle(`Log Entry: ${log.msg}`);
-                      setModalData(log);
-                      setShowModal(true);
-                    }}
+                <Dropdown>
+                  <Dropdown.Toggle
+                    as={Link}
+                    className="no-caret"
+                    id={`dropdown-${index}`}
                   >
-                    <i className="bi bi-eye"></i>
-                  </Button>
-                </div>
+                    <i className="bi-three-dots-vertical mx-1"></i>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Item
+                      onClick={() => {
+                        setModalTitle(`Log Entry: ${log.msg}`);
+                        setModalData(log);
+                        setShowModal(true);
+                      }}
+                    >
+                      <i className="bi bi-eye me-1"></i> View as JSON
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </td>
             </tr>
           ))}
@@ -986,7 +1027,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             <th>Requester</th>
             <th>API Call</th>
             <th>Created</th>
-            <th>Actions</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -1007,40 +1048,37 @@ export function PendingRequests({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(req.createdAt)}</td>
               <td>
-                <div className="d-flex gap-1">
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    title="View Details"
-                    onClick={() => handleViewJSON(req)}
+                <Dropdown>
+                  <Dropdown.Toggle
+                    as={Link}
+                    className="no-caret"
+                    id={`dropdown-${req.id}`}
                   >
-                    <i className="bi bi-eye"></i>
-                  </Button>
-                  <Button
-                    variant="outline-success"
-                    size="sm"
-                    title="Approve and Execute with Requester's Token"
-                    onClick={() => handleApproveRequest(req.id, false)}
-                  >
-                    <i className="bi bi-check-lg"></i>
-                  </Button>
-                  <Button
-                    variant="outline-success"
-                    size="sm"
-                    title="Approve and Execute with My Own Token"
-                    onClick={() => handleApproveRequest(req.id, true)}
-                  >
-                    <i className="bi bi-person-check-fill"></i>
-                  </Button>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    title="Reject Request"
-                    onClick={() => handleRejectRequest(req.id)}
-                  >
-                    <i className="bi bi-x-lg"></i>
-                  </Button>
-                </div>
+                    <i className="bi-three-dots-vertical mx-1"></i>
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Item onClick={() => handleViewJSON(req)}>
+                      <i className="bi bi-eye me-1"></i> View as JSON
+                    </Dropdown.Item>
+                    <Dropdown.Divider />
+                    <Dropdown.Item
+                      onClick={() => handleApproveRequest(req.id, false)}
+                    >
+                      <i className="bi bi-check-lg me-1"></i> Approve with
+                      Requester's Token
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      onClick={() => handleApproveRequest(req.id, true)}
+                    >
+                      <i className="bi bi-person-check-fill me-1"></i> Approve
+                      with My Own Token
+                    </Dropdown.Item>
+                    <Dropdown.Divider />
+                    <Dropdown.Item onClick={() => handleRejectRequest(req.id)}>
+                      <i className="bi bi-x-lg me-1"></i> Reject
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </td>
             </tr>
           ))}

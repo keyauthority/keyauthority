@@ -51,3 +51,7 @@ td {
   --bs-btn-color: rgb(var(--bs-link-color-rgb));
   --bs-btn-border-color: rgb(var(--bs-link-color-rgb));
 }
+
+.no-caret::after {
+  display: none !important;
+}

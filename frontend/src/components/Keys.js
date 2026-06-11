@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
-import { Alert, Button, Table } from "react-bootstrap";
+import { Alert, Button, Table, Dropdown } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import Paginator from "./Paginator";
 import Filters from "./Filters";
@@ -11,6 +11,7 @@ import {
   prettyEnv,
   showToast,
   buildURLParams,
+  copyToClipboard,
 } from "../utils/utils";
 
 import { errorToString } from "../utils/error";
@@ -153,26 +154,13 @@ export default function Keys({ isLoading, setIsLoading }) {
             <th>Type</th>
             <th>Storage</th>
             <th>Created</th>
-            <th>Actions</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {keys.map((key, idx) => (
             <tr key={idx}>
-              <td>
-                <Link
-                  as={Button}
-                  //to={`/keys/${encodeURIComponent(key.id)}`}
-                  //className="fw-medium"
-                  onClick={() => {
-                    setModalTitle(`Key: ${key.id}`);
-                    setModalData(key);
-                    setShowModal(true);
-                  }}
-                >
-                  {key.id}
-                </Link>
-              </td>
+              <td>{key.id}</td>
               <td>{prettyEnv(key.environment)}</td>
               <td>{key.config.type}</td>
               <td>
@@ -188,28 +176,42 @@ export default function Keys({ isLoading, setIsLoading }) {
               </td>
               <td>{prettyTime(key.createdAt)}</td>
               <td>
-                <div className="d-flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => handleCheckReadiness(key.id)}
-                    disabled={isLoading}
-                    title="Check Key Readiness"
+                <Dropdown>
+                  <Dropdown.Toggle
+                    as={Link}
+                    className="no-caret"
+                    id={`dropdown-${idx}`}
                   >
-                    <i className="bi-check2-circle"></i>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() =>
-                      handleDelete(key.id, key.environment, key.config.type)
-                    }
-                    disabled={isLoading}
-                    title="Delete Key"
-                  >
-                    <i className="bi-trash"></i>
-                  </Button>
-                </div>
+                    <i className="bi-three-dots-vertical mx-1"></i>
+                  </Dropdown.Toggle>
+
+                  <Dropdown.Menu>
+                    <Dropdown.Item
+                      onClick={() => {
+                        setModalTitle(`Key: ${key.id}`);
+                        setModalData(key);
+                        setShowModal(true);
+                      }}
+                    >
+                      <i className="bi-eye me-1"></i> View as JSON
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      onClick={() => handleCheckReadiness(key.id)}
+                      disabled={isLoading}
+                    >
+                      <i className="bi-check2-circle me-1"></i> Check Readiness
+                    </Dropdown.Item>
+                    <Dropdown.Divider />
+                    <Dropdown.Item
+                      onClick={() =>
+                        handleDelete(key.id, key.environment, key.config.type)
+                      }
+                      disabled={isLoading}
+                    >
+                      <i className="bi-trash me-1"></i> Delete
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </td>
             </tr>
           ))}
