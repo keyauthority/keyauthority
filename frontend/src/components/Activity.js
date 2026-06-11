@@ -66,24 +66,16 @@ export function Dashboard({ isLoading, setIsLoading }) {
                 : undefined;
           return (
             <Col xs={12} md={md} key={index}>
-              <Alert
-                variant="light"
-                className="d-flex flex-column justify-content-between gap-1"
-              >
-                <div className="text-muted small d-flex justify-content-between align-items-start gap-1">
-                  {
-                    <i
-                      className={`${card.iconClass} text-${card.variant || ""}`}
-                    ></i>
-                  }
-                  {card.key}
-                </div>
-                <h4 className="m-0 text-end">
-                  {card.valueReady !== undefined && card.valueReady !== null
-                    ? card.value
-                    : "-"}
-                </h4>
-              </Alert>
+              <Card>
+                <Card.Header>{card.key}</Card.Header>
+                <Card.Body>
+                  <h4 className={`m-0 text-${card.variant || ""}`}>
+                    {card.valueReady !== undefined && card.valueReady !== null
+                      ? card.value
+                      : "-"}
+                  </h4>
+                </Card.Body>
+              </Card>
             </Col>
           );
         })}
@@ -92,11 +84,8 @@ export function Dashboard({ isLoading, setIsLoading }) {
   };
 
   const dashboardSection = (title, iconClass, cards, colsPerRow) => (
-    <div className="mb-2">
-      <h6 className="mb-3">
-        {/* <i className={`${iconClass} me-2`}></i> */}
-        {title}
-      </h6>
+    <div className="mt-3">
+      <h6 className="mb-3">{title}</h6>
       {dashboardBody(cards, colsPerRow)}
     </div>
   );
@@ -285,12 +274,6 @@ export function Dashboard({ isLoading, setIsLoading }) {
               valueReady: logCountByLevel?.["ERROR"],
               variant: "danger",
             },
-            // {
-            //   key: "Keys Created in Last 24h",
-            //   iconClass: "bi bi-key-fill",
-            //   value: logCountByMsg["key created"],
-            //   valueReady: logCountByMsg?.["key created"],
-            // },
             {
               key: "Certificates Signed in Last 24h",
               iconClass: "bi bi-award-fill",
