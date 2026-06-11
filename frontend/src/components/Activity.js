@@ -600,7 +600,7 @@ export function Certificates({ isLoading, setIsLoading }) {
                     className="no-caret"
                     id={`dropdown-${cert.serial}`}
                   >
-                    <i className="bi-three-dots-vertical"></i>
+                    <i className="bi-three-dots-vertical mx-1"></i>
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
                     <Dropdown.Item
@@ -820,7 +820,7 @@ export function Logs({ isLoading, setIsLoading }) {
                     className="no-caret"
                     id={`dropdown-${index}`}
                   >
-                    <i className="bi-three-dots-vertical"></i>
+                    <i className="bi-three-dots-vertical mx-1"></i>
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
                     <Dropdown.Item
@@ -1054,7 +1054,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
                     className="no-caret"
                     id={`dropdown-${req.id}`}
                   >
-                    <i className="bi-three-dots-vertical"></i>
+                    <i className="bi-three-dots-vertical mx-1"></i>
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
                     <Dropdown.Item onClick={() => handleViewJSON(req)}>

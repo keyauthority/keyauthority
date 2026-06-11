@@ -182,7 +182,7 @@ export default function Keys({ isLoading, setIsLoading }) {
                     className="no-caret"
                     id={`dropdown-${idx}`}
                   >
-                    <i className="bi-three-dots-vertical"></i>
+                    <i className="bi-three-dots-vertical mx-1"></i>
                   </Dropdown.Toggle>
 
                   <Dropdown.Menu>
