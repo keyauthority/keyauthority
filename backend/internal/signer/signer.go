@@ -64,8 +64,10 @@ type SignerConfig struct {
 	CATemplate *CATemplate `json:"caTemplate"`
 
 	// Certificate Template
-	CDP  []string `json:"cdp,omitempty"`
 	IsCA bool     `json:"isCA,omitempty"`
+	CDP  []string `json:"cdp,omitempty"`
+	AIA  []string `json:"aia,omitempty"`
+	OCSP []string `json:"ocsp,omitempty"`
 
 	// Signing Policy
 	MaxTTL           string          `json:"maxTTL,omitempty"`
@@ -77,10 +79,10 @@ type SignerConfig struct {
 }
 
 type Signer struct {
-	CAChain       []string
-	CATemplate    *CATemplate
-	CA            *CertificateAuthority
-	SigningPolicy *PermissiveSigningPolicy
+	CAChain    []string
+	CATemplate *CATemplate
+	CA         *CertificateAuthority
+	Policy     *SigningPolicy
 }
 
 func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain []byte, args ...any) (*Signer, error) {
@@ -103,11 +105,13 @@ func NewSigner(cfg *SignerConfig, privKey crypto.Signer, caChain []byte, args ..
 			// Now:        time.Now,
 		},
 		CATemplate: cfg.CATemplate,
-		SigningPolicy: &PermissiveSigningPolicy{
+		Policy: &SigningPolicy{
 			MaxTTL:         maxTTL,
 			AllowedUsages:  cfg.AllowedKeyUsages,
 			IsCA:           cfg.IsCA,
 			CDP:            cfg.CDP,
+			AIA:            cfg.AIA,
+			OCSP:           cfg.OCSP,
 			AllowedDomains: allowedDomains,
 		},
 	}
@@ -212,7 +216,7 @@ func (s *Signer) ValidateCACertificate(cert *x509.Certificate) bool {
 
 func (s *Signer) Sign(cr *x509.CertificateRequest, ttl time.Duration) (*x509.Certificate, []string, error) {
 	tmpl := certRequestToTemplate(cr)
-	certDER, err := s.CA.Sign(tmpl, ttl, s.SigningPolicy)
+	certDER, err := s.CA.Sign(tmpl, ttl, s.Policy)
 	if err != nil {
 		return nil, nil, fmt.Errorf("sign certificate: %w", err)
 	}

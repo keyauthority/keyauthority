@@ -74,10 +74,10 @@ var (
 	authenticator *internalpkg.Authenticator
 	acmeResponder *internalpkg.ACMEResponder
 
-	// HTTP router -made global so pendingRequestHandler can access it
+	// HTTP router, made global so pendingRequestHandler can access it
 	router = mux.NewRouter()
 
-	// cache urlPath -> environment
+	// Cache urlPath -> environment
 	envCache = cachepkg.NewCache()
 )
 
@@ -102,6 +102,7 @@ func main() {
 		fmt.Printf("couldn't set up store: %v", err)
 		return
 	}
+	defer store.Close()
 
 	// Create logger
 	if logger, err = loggingpkg.NewLogger(context.Background(), store.DB); err != nil {
@@ -114,7 +115,7 @@ func main() {
 	// Set default HTTP transport
 	setDefaultHttpTransport()
 
-	// Set up authenticator (first time, next will be in goroutine)
+	// Set up the authenticator once; periodic reloads run in a goroutine
 	if err := setupAuthenticator(); err != nil {
 		logger.ErrorWithContext(context.Background(),
 			"couldn't set up authenticator", "error", err)
@@ -221,6 +222,8 @@ func main() {
 	// When TLS is enabled, it gets its own plain HTTP listener (see bottom of main).
 	if !tlsEnabled {
 		router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+		router.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
+		router.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 	}
 
 	// ------------ Secrets ------------ //
@@ -323,13 +326,15 @@ func main() {
 	if tlsEnabled {
 		logger.InfoWithContext(context.Background(), "TLS enabled")
 
-		// CRL must always be served over plain HTTP
-		crlRouter := mux.NewRouter()
-		crlRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+		// CRL, AIA, and OCSP must always be served over plain HTTP
+		nonTLSRouter := mux.NewRouter()
+		nonTLSRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
+		nonTLSRouter.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
+		nonTLSRouter.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 		go func() {
-			logger.InfoWithContext(context.Background(), "CRL server started")
-			if err := http.ListenAndServe(":"+httpPort, crlRouter); err != nil {
-				logger.ErrorWithContext(context.Background(), "CRL server stopped", "error", err)
+			logger.InfoWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) started")
+			if err := http.ListenAndServe(":"+httpPort, nonTLSRouter); err != nil {
+				logger.ErrorWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) stopped", "error", err)
 			}
 		}()
 
@@ -360,21 +365,21 @@ func startMetricsServer(metricsPort string) {
 }
 
 func runPeriodicTasks() {
-	// CRL re-creation
+	// CRL recreation
 	go func() {
 		intervalStr := os.Getenv(envCRLRefreshInterval)
 		if intervalStr == "" {
 			intervalStr = "72h"
 		}
-		clrRecreationInterval, err := time.ParseDuration(intervalStr)
+		crlRecreationInterval, err := time.ParseDuration(intervalStr)
 		if err != nil {
 			logger.WarnWithContext(context.Background(),
 				"invalid CRL refresh interval, using default of 72h",
 				"error", err, "intervalStr", intervalStr)
-			clrRecreationInterval = 72 * time.Hour
+			crlRecreationInterval = 72 * time.Hour
 		}
 
-		ticker := time.NewTicker(clrRecreationInterval)
+		ticker := time.NewTicker(crlRecreationInterval)
 		defer ticker.Stop()
 
 		for {
@@ -595,8 +600,8 @@ func logErrorAndWriteHTTP(w http.ResponseWriter, r *http.Request, code int, msg 
 	}
 	m.Errors = []string{msg}
 
-	// include non-500 errors only in the response, to avoid leaking sensitive information
-	if code != http.StatusInternalServerError {
+	// Exclude 500+ errors
+	if code < http.StatusInternalServerError {
 		for _, err := range errors {
 			m.Errors = append(m.Errors, err.Error())
 		}
@@ -619,7 +624,7 @@ func decodeJSONBody(r *http.Request, dst any) error {
 	return nil
 }
 
-// hook to run when a certificate is signed
+// Hook called when a certificate is signed
 func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string) {
 	signerName := mux.Vars(r)["name"]
 	logger.Info(r, "certificate signed",
@@ -632,7 +637,7 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 		slog.String("comment", comment),
 	)
 
-	// insert cert in DB asynchronously, to avoid delaying the response to the client
+	// Insert cert in DB asynchronously, to avoid delaying the response to the client
 	go func() {
 		err := store.InsertCert(context.Background(), signerName, cert, comment)
 		if err != nil {
@@ -770,30 +775,11 @@ func isInsertSecretRequest(r *http.Request) bool {
 		r.URL.Path == fmt.Sprintf("/v1/secrets/%s", mux.Vars(r)["name"])
 }
 
-/*func isUpdateSecretRequest(r *http.Request) bool {
-	return r.Method != http.MethodGet &&
-		r.Method != http.MethodPut &&
-		r.URL.Path == fmt.Sprintf("/v1/secrets/%s", mux.Vars(r)["name"])
-}
-
-func isGetSecretRequest(r *http.Request) bool {
-	secretName := mux.Vars(r)["name"]
-	return r.Method == http.MethodGet &&
-		(r.URL.Path == fmt.Sprintf("/v1/secrets/%s", secretName) ||
-			strings.HasPrefix(r.URL.Path, fmt.Sprintf("/v1/secrets/data/%s", secretName)))
-}*/
-
 func requiresApproval(r *http.Request) bool {
 	// already approved, no need for approval again
 	if _, ok := r.Context().Value(loggingpkg.CtxKeyOriginalRequestID).(uuid.UUID); ok {
 		return false
 	}
-
-	/*if environment, ok := r.Context().Value(loggingpkg.CtxKeyEnvironment).(string); ok {
-		if isProtectedEnvironment(environment) {
-			return isUpdateSecretRequest(r) || isUpdateSignerRequest(r)
-		}
-	}*/
 
 	if isUpdateSignerRequest(r) || isSigningRequest(r) {
 		cfg, err := store.GetSignerConfig(r.Context(), mux.Vars(r)["name"])
@@ -884,7 +870,15 @@ func getEnvironment(r *http.Request) (string, error) {
 /******************************/
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/v1/crl/") {
+		ignoredPaths := []string{"/v1/crl/", "/v1/aia/", "/v1/ocsp/"}
+		shouldSetCORS := true
+		for _, p := range ignoredPaths {
+			if strings.HasPrefix(r.URL.Path, p) {
+				shouldSetCORS = false
+				break
+			}
+		}
+		if shouldSetCORS {
 			w.Header().Set("Access-Control-Allow-Origin", os.Getenv(envCORSOrigin))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
@@ -1022,7 +1016,7 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 		if cfg.PKCS11Uri != "" {
 			// it's an HSM key
 			if cfg.PKCS11KeyUri == "" {
-				// if the key is of type HSM and key URI is not defined, lets create it with a random ID
+				// If this is an HSM key and no key URI is defined, create one with a random ID
 				hsmKeyID := make([]byte, 16)
 				if _, err := rand.Read(hsmKeyID); err != nil {
 					logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
@@ -1225,15 +1219,15 @@ var signerCAChainHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.
 	signerName := mux.Vars(r)["name"]
 	switch r.Method {
 	case http.MethodGet: // get CA chain
-		crl, err := store.GetSignerCAChain(r.Context(), signerName)
+		caChain, err := store.GetSignerCAChain(r.Context(), signerName)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't get signer CA chain", err)
 			return
 		}
 
-		writeHTTPWithHeaders(w, http.StatusOK, crl, map[string]string{
+		writeHTTPWithHeaders(w, http.StatusOK, caChain, map[string]string{
 			"Content-Type":        "application/x-pem-file",
-			"Content-Disposition": fmt.Sprintf(`attachment; filename="%s-ca-chain.pem"`, signerName),
+			"Content-Disposition": "attachment; filename=ca-chain.pem",
 		})
 
 	case http.MethodPut: // update CA chain
@@ -1278,7 +1272,7 @@ var signerCSRHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 	logger.Info(r, "CA CSR created")
 	writeHTTPWithHeaders(w, http.StatusOK, csr, map[string]string{
 		"Content-Type":        "application/x-pem-file",
-		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s-ca-csr.pem"`, signerName),
+		"Content-Disposition": "attachment; filename=ca-csr.pem",
 	})
 })
 
@@ -1427,6 +1421,31 @@ var signerCRLHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 		})
 })
 
+var signerAIAHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hash := mux.Vars(r)["hashOfSignerName"]
+	caCert, err := store.GetSignerCACertByHash(r.Context(), hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			logErrorAndWriteHTTP(w, r, http.StatusNotFound, "CA certificate not found for signer", err)
+		} else {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get CA certificate for signer", err)
+		}
+		return
+	}
+	writeHTTPWithHeaders(w, http.StatusOK, caCert,
+		map[string]string{
+			"Content-Type":                "application/x-pem-file",
+			"Cache-Control":               "public, max-age=3600", // 1 hour cache
+			"X-Content-Type-Options":      "nosniff",
+			"Access-Control-Allow-Origin": "*", // Allow all origins
+			"Content-Disposition":         `attachment; filename="ca.pem"`,
+		})
+})
+
+var signerOCSPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	logErrorAndWriteHTTP(w, r, http.StatusNotImplemented, "OCSP responder is not implemented yet")
+})
+
 var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	signerName := mux.Vars(r)["name"]
 	signer, err := store.LoadSigner(r.Context(), signerName)
@@ -1528,7 +1547,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			writeHTTP(w, http.StatusOK, []byte(shell.String()))
 
 		default:
-			// for Hashicop-style response, we need to add an extra 'data' layer in the response
+			// for Hashicorp-style response, we need to add an extra 'data' layer in the response
 			if r.URL.Path == "/v1/secrets/data/"+secretName {
 				writeJSONOk(w, map[string]any{
 					"data": secret,
@@ -1646,15 +1665,15 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		// re-create the original request and process it through the router
+		// Recreate the original request and process it through the router
 		reqBody := bytes.NewReader(pendingReq.Body)
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyOriginalRequestID, id)
 
-		// remove the writeToDB flag from context to prevent double logging
+		// Remove the writeToDB flag from context to prevent double logging
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, false)
 
-		// logic for executing request with own token
+		// Execute the pending request using the approver's token
 		if useOwnToken := r.URL.Query().Get("useOwnToken"); useOwnToken == "true" {
 			prList, _, _, err := store.GetPendingRequests(r.Context(),
 				url.Values{
