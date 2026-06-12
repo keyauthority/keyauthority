@@ -28,40 +28,27 @@ import (
 	capi "k8s.io/api/certificates/v1beta1"
 )
 
-// SigningPolicy validates a CertificateRequest before it's signed by the
-// CertificateAuthority. It may default or otherwise mutate a certificate
-// template.
-type SigningPolicy interface {
-	// not-exporting apply forces signing policy implementations to be internal
-	// to this package.
-	apply(template *x509.Certificate) error
-}
-
-// PermissiveSigningPolicy is the signing policy historically used by the local
-// signer.
-//
-//   - It forwards all SANs from the original signing request.
-//   - It sets allowed usages as configured in the policy.
-//   - It sets NotAfter based on the TTL configured in the policy.
-//   - It zeros all extensions.
-//   - It sets BasicConstraints to true.
-//   - It sets IsCA as configured in the policy.
-//   - It sets CDP as configured in the policy.
-type PermissiveSigningPolicy struct {
-	// TTL is the certificate TTL. It's used to calculate the NotAfter value of
-	// the certificate.
+type SigningPolicy struct {
+	// TTL is the certificate TTL
 	MaxTTL time.Duration
-	// Usages are the allowed usages of a certificate.
+	// Usages are the allowed usages of a certificate
 	AllowedUsages []capi.KeyUsage
-	// IsCA
+	// IsCA indicates whether the certificate is a CA certificate
 	IsCA bool
 	// CRL distribution points
 	CDP []string
+	// AIA URIs
+	AIA []string
+	// OCSP Servers
+	OCSP []string
 	// Allowed domains
 	AllowedDomains []*regexp.Regexp
 }
 
-func (p PermissiveSigningPolicy) apply(tmpl *x509.Certificate) error {
+// apply applies the signing policy to the given certificate template, modifying
+// it in-place. It returns an error if the template is not compliant with the
+// policy.
+func (p *SigningPolicy) apply(tmpl *x509.Certificate) error {
 	if tmpl.NotAfter.After(tmpl.NotBefore.Add(p.MaxTTL)) {
 		tmpl.NotAfter = tmpl.NotBefore.Add(p.MaxTTL)
 	}
@@ -94,6 +81,8 @@ func (p PermissiveSigningPolicy) apply(tmpl *x509.Certificate) error {
 	tmpl.BasicConstraintsValid = true
 	tmpl.IsCA = p.IsCA
 	tmpl.CRLDistributionPoints = p.CDP
+	tmpl.IssuingCertificateURL = p.AIA
+	tmpl.OCSPServer = p.OCSP
 
 	for _, domain := range tmpl.DNSNames {
 		allowed := false

@@ -133,7 +133,6 @@ type Authenticator struct {
 func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEntry, error) {
 	// initialize token cache and start janitor
 	tokenCache.Clear()
-	tokenCache.StartJanitor(10 * time.Minute)
 
 	// prepare HTTP clients with tokens for OIDC discovery, if any
 	logEntries := createHttpClientsWithTokens()

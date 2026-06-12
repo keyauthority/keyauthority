@@ -65,8 +65,9 @@ const (
 )
 
 var (
-	keyCache = cachepkg.NewCache()
-	crlCache = cachepkg.NewCache()
+	keyCache    = cachepkg.NewCache()
+	crlCache    = cachepkg.NewCache()
+	caCertCache = cachepkg.NewCache()
 )
 
 // actual data used for replaying pending requests upon approval
@@ -126,6 +127,22 @@ func NewStore(ctx context.Context) (*Store, error) {
 	}
 
 	return &Store{DB: db, SoftwareKeyPass: softwareKeyPass}, nil
+}
+
+func (s *Store) Close() error {
+	// close DB first to prevent new key loads
+	var dbErr error
+	if s.DB != nil {
+		dbErr = s.DB.Close()
+	}
+
+	// then close any cached PKCS#11 contexts
+	hsErr := cryptopkg.CloseCachedP11Contexts()
+
+	if dbErr != nil {
+		return dbErr
+	}
+	return hsErr
 }
 
 /*****************************************************/
@@ -225,35 +242,6 @@ func withSignerConfigDefaults(cfg *signerpkg.SignerConfig) *signerpkg.SignerConf
 		cfg.CATemplate.Subject = &signerpkg.PKIXName{}
 	}
 	return cfg
-}
-
-func (s *Store) loadKey(ctx context.Context, id uuid.UUID, checkCache bool) (*cryptopkg.Key, error) {
-	if checkCache {
-		if cachedKey, found := keyCache.Get(id.String()); found {
-			return cachedKey.(*cryptopkg.Key), nil
-		}
-	}
-
-	var cfgJSON []byte
-	var softwareKey []byte
-	if err := s.DB.QueryRowContext(ctx, `
-		SELECT config, software_key
-		FROM keys
-		WHERE id = $1
-	`, id).Scan(&cfgJSON, &softwareKey); err != nil {
-		return nil, fmt.Errorf("get key: %w", err)
-	}
-	var cfg cryptopkg.KeyConfig
-	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid key config: %w", err)
-	}
-	key, err := cryptopkg.NewKey(&cfg, softwareKey, s.SoftwareKeyPass)
-	if err != nil {
-		return nil, err
-	}
-
-	keyCache.SetWithTTL(id.String(), key, 30*time.Minute)
-	return key, nil
 }
 
 func parseTime(q url.Values, key string) *time.Time {
@@ -472,8 +460,36 @@ func (s *Store) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error
 	}, nil
 }
 
+func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
+	if cachedKey, found := keyCache.Get(id.String()); found {
+		return cachedKey.(*cryptopkg.Key), nil
+	}
+
+	var cfgJSON []byte
+	var softwareKey []byte
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT config, software_key
+		FROM keys
+		WHERE id = $1
+	`, id).Scan(&cfgJSON, &softwareKey); err != nil {
+		return nil, fmt.Errorf("get key: %w", err)
+	}
+	var cfg cryptopkg.KeyConfig
+	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid key config: %w", err)
+	}
+	key, err := cryptopkg.NewKey(&cfg, softwareKey, s.SoftwareKeyPass)
+	if err != nil {
+		return nil, err
+	}
+
+	//keyCache.SetWithTTL(id.String(), key, 30*time.Minute)
+	keyCache.Set(id.String(), key)
+	return key, nil
+}
+
 func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
-	key, err := s.loadKey(ctx, id, false)
+	key, err := s.LoadKey(ctx, id)
 	if err != nil {
 		return fmt.Errorf("load key: %w", err)
 	}
@@ -522,10 +538,6 @@ func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) error {
 		keyCache.Delete(id.String())
 	}
 	return err
-}
-
-func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
-	return s.loadKey(ctx, id, true)
 }
 
 /*****************************************************/
@@ -718,13 +730,52 @@ func (s *Store) GetSignerCAChain(ctx context.Context, name string) ([]byte, erro
 	return caChain, nil
 }
 
+func (s *Store) GetSignerCACertByHash(ctx context.Context, hash string) ([]byte, error) {
+	if cachedCACert, found := caCertCache.Get(hash); found {
+		return cachedCACert.([]byte), nil
+	}
+
+	var caChain []byte
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT ca_chain
+		FROM signers
+		WHERE name_hash = $1
+	`, hash).Scan(&caChain); err != nil {
+		return nil, fmt.Errorf("get signer CA chain: %w", err)
+	}
+
+	var block *pem.Block
+	block, _ = pem.Decode(caChain)
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM in CA chain")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse certificate in CA chain: %w", err)
+	}
+
+	caCertPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	})
+
+	caCertCache.SetWithTTL(hash, caCertPEM, 1*time.Hour)
+	return caCertPEM, nil
+}
+
 func (s *Store) SetSignerCAChain(ctx context.Context, name string, caChain []byte) error {
-	_, err := s.DB.ExecContext(ctx, `
+	var hash string
+	if err := s.DB.QueryRowContext(ctx, `
 		UPDATE signers
 		SET ca_chain = $2, updated_at = now()
 		WHERE name = $1
-	`, name, caChain)
-	return err
+		RETURNING name_hash
+	`, name, caChain).Scan(&hash); err != nil {
+		return err
+	}
+
+	caCertCache.Delete(hash)
+	return nil
 }
 
 func (s *Store) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {

@@ -357,6 +357,62 @@ function ConfigTab({
                       ) : (
                         "-"
                       ),
+                    AIA:
+                      signerConfig.aia?.length > 0 ? (
+                        <>
+                          {signerConfig.aia.map((url, index) => (
+                            <div
+                              className="d-flex justify-content-between gap-2"
+                              key={index}
+                            >
+                              <span
+                                className="text-truncate"
+                                style={{ maxWidth: "24rem" }}
+                              >
+                                {url}
+                              </span>
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="p-0 m-0"
+                                onClick={() => {
+                                  copyToClipboard(url, "AIA URL copied!");
+                                }}
+                              >
+                                <i className="bi bi-clipboard"></i>
+                              </Button>
+                            </div>
+                          ))}
+                        </>
+                      ) : null,
+                    OCSP:
+                      signerConfig.ocsp?.length > 0 ? (
+                        <>
+                          {signerConfig.ocsp.map((url, index) => (
+                            <div
+                              className="d-flex justify-content-between gap-2"
+                              key={index}
+                            >
+                              <span
+                                className="text-truncate"
+                                style={{ maxWidth: "24rem" }}
+                              >
+                                {url}
+                              </span>
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="p-0 m-0"
+                                onClick={() => {
+                                  copyToClipboard(url, "OCSP URL copied!");
+                                }}
+                              >
+                                <i className="bi bi-clipboard"></i>
+                              </Button>
+                            </div>
+                          ))}
+                        </>
+                      ) : null,
                   }}
                   keysClass="fw-bold"
                 />

@@ -1,3 +1,19 @@
+/*
+Copyright 2025 KeyAuthority.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package crypto
 
 import (
@@ -14,15 +30,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	thalesp11 "github.com/ThalesGroup/crypto11"
+	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
+	"github.com/pkg/errors"
 	certstrap "github.com/square/certstrap/pkix"
 	stepuri "go.step.sm/crypto/kms/uri"
 )
 
 var (
-	Enterprise bool
+	Enterprise  bool
+	p11CtxCache = cachepkg.NewCache()
 )
 
 type KeyType string
@@ -218,17 +235,18 @@ func (k *Key) InferConfig() (*KeyConfig, error) {
 }
 
 // NewKey creates a new Key instance based on the provided configuration and key data
+// It does not generate the key, it only loads the key based on the configuration and data
 func NewKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 	// HSM key
 	if cfg.PKCS11Uri != "" {
-		return NewHSMKey(cfg)
+		return newHSMKey(cfg)
 	}
 
 	// Software key
-	return NewSoftwareKey(cfg, data, password)
+	return newSoftwareKey(cfg, data, password)
 }
 
-func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
+func newSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 	if cfg.IsSymmetric() {
 		plainKey, err := DecryptWithPwd(data, password)
 		if err != nil {
@@ -248,6 +266,50 @@ func NewSoftwareKey(cfg *KeyConfig, data, password []byte) (*Key, error) {
 	}
 
 	return nil, fmt.Errorf("unsupported key type")
+}
+
+func newHSMKey(cfg *KeyConfig) (*Key, error) {
+	p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
+	if err != nil {
+		return nil, fmt.Errorf("get PKCS11 context: %w", err)
+	}
+
+	u, err := stepuri.ParseWithScheme("pkcs11", cfg.PKCS11KeyUri)
+	if err != nil {
+		return nil, fmt.Errorf("parse PKCS11 Key URI: %w", err)
+	}
+
+	id, object := u.GetEncoded("id"), u.Get("object")
+	if len(id) == 0 || object == "" {
+		return nil, errors.Errorf("key with uri %s is not valid, id and object are required", cfg.PKCS11KeyUri)
+	}
+
+	if cfg.IsSymmetric() {
+		keyHandle, err := p11Ctx.FindKey(id, []byte(object))
+		if err != nil {
+			return nil, fmt.Errorf("find key: %w", err)
+		}
+		if keyHandle == nil {
+			return nil, fmt.Errorf("key not found")
+		}
+		return &Key{
+			SymmetricKey: &symmetricHSMKey{keyHandle: keyHandle},
+		}, nil
+
+	}
+
+	// Assymmetric key
+	keyHandle, err := p11Ctx.FindKeyPair(id, []byte(object))
+	if err != nil {
+		return nil, fmt.Errorf("find key pair: %w", err)
+	}
+	if keyHandle == nil {
+		return nil, fmt.Errorf("key pair not found")
+	}
+
+	return &Key{
+		AssymmetricKey: keyHandle,
+	}, nil
 }
 
 func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, error) {
@@ -305,48 +367,23 @@ func GenerateKey(ctx context.Context, cfg *KeyConfig, password []byte) ([]byte, 
 	return key.ExportEncryptedPrivate(password)
 }
 
-func NewHSMKey(cfg *KeyConfig) (*Key, error) {
-	p11Ctx, err := getP11Ctx(cfg.PKCS11Uri)
-	if err != nil {
-		return nil, fmt.Errorf("get PKCS11 context: %w", err)
-	}
+func CloseCachedP11Contexts() error {
+	items := p11CtxCache.Snapshot()
+	p11CtxCache.Clear()
 
-	u, err := stepuri.ParseWithScheme("pkcs11", cfg.PKCS11KeyUri)
-	if err != nil {
-		return nil, fmt.Errorf("parse PKCS11 Key URI: %w", err)
-	}
-
-	id, object := u.GetEncoded("id"), u.Get("object")
-	if len(id) == 0 || object == "" {
-		return nil, errors.Errorf("key with uri %s is not valid, id and object are required", cfg.PKCS11KeyUri)
-	}
-
-	if cfg.IsSymmetric() {
-		keyHandle, err := p11Ctx.FindKey(id, []byte(object))
-		if err != nil {
-			return nil, fmt.Errorf("find key: %w", err)
+	var firstErr error
+	for _, value := range items {
+		ctx, ok := value.(*thalesp11.Context)
+		if !ok || ctx == nil {
+			continue
 		}
-		if keyHandle == nil {
-			return nil, fmt.Errorf("key not found")
+
+		if err := ctx.Close(); err != nil && firstErr == nil {
+			firstErr = err
 		}
-		return &Key{
-			SymmetricKey: &symmetricHSMKey{keyHandle: keyHandle},
-		}, nil
-
 	}
 
-	// Assymmetric key
-	keyHandle, err := p11Ctx.FindKeyPair(id, []byte(object))
-	if err != nil {
-		return nil, fmt.Errorf("find key pair: %w", err)
-	}
-	if keyHandle == nil {
-		return nil, fmt.Errorf("key pair not found")
-	}
-
-	return &Key{
-		AssymmetricKey: keyHandle,
-	}, nil
+	return firstErr
 }
 
 func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
@@ -354,68 +391,80 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
 	}
 
-	u, err := stepuri.ParseWithScheme("pkcs11", uriStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse PKCS11 URI: %w", err)
-	}
-
-	// cfg.PKCS11Uri examples:
-	//   - pkcs11:module-path=/usr/local/primus/lib/libprimusP11.so;slot-id=0?pin-source=/etc/primus/.pin
-	//   - pkcs11:module-path=/usr/lib/softhsm/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin
-
-	// Get module-path
-	modulePath := u.Get("module-path")
-	if modulePath == "" {
-		return nil, fmt.Errorf("module-path is required in PKCS11 URI")
-	}
-
-	// Get PIN
-	var pin string
-	rawPin, pinPath := u.Get("pin"), u.Get("pin-source")
-	if rawPin == "" && pinPath == "" {
-		return nil, fmt.Errorf("pin or pin-source is required in PKCS11 URI")
-	}
-	if rawPin != "" {
-		pin = rawPin
-	} else {
-		pinPath = strings.TrimPrefix(pinPath, "file://")
-		pinBytes, err := os.ReadFile(pinPath)
+	value, err := p11CtxCache.GetOrSetFunc(uriStr, func() (any, error) {
+		u, err := stepuri.ParseWithScheme("pkcs11", uriStr)
 		if err != nil {
-			return nil, fmt.Errorf("read pin from %s: %w", pinPath, err)
+			return nil, fmt.Errorf("parse PKCS11 URI: %w", err)
 		}
-		pin = strings.TrimSpace(string(pinBytes))
-	}
 
-	p11Config := &thalesp11.Config{
-		Path: modulePath,
-		Pin:  pin,
-		// MaxSessions: 1024,
-	}
+		// cfg.PKCS11Uri examples:
+		//   - pkcs11:module-path=/usr/local/primus/lib/libprimusP11.so;slot-id=0?pin-source=/etc/primus/.pin
+		//   - pkcs11:module-path=/usr/lib/softhsm/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin
 
-	// Get slot-id and token
-	slotIDStr, tokenLabel := u.Get("slot-id"), u.Get("token")
-	if slotIDStr == "" && tokenLabel == "" {
-		return nil, fmt.Errorf("one of slot-id or token must be specified in PKCS11 URI")
-	}
-	if slotIDStr != "" && tokenLabel != "" {
-		return nil, fmt.Errorf("only one of slot-id or token can be specified in PKCS11 URI")
-	}
-
-	if slotIDStr != "" {
-		var slotID int
-		if _, err := fmt.Sscanf(slotIDStr, "%d", &slotID); err != nil {
-			return nil, fmt.Errorf("invalid slot-id in PKCS11 URI: %w", err)
+		// Get module-path
+		modulePath := u.Get("module-path")
+		if modulePath == "" {
+			return nil, fmt.Errorf("module-path is required in PKCS11 URI")
 		}
-		p11Config.SlotNumber = &slotID
-	}
 
-	if tokenLabel != "" {
-		p11Config.TokenLabel = tokenLabel
-	}
+		// Get PIN
+		var pin string
+		rawPin, pinPath := u.Get("pin"), u.Get("pin-source")
+		if rawPin == "" && pinPath == "" {
+			return nil, fmt.Errorf("pin or pin-source is required in PKCS11 URI")
+		}
+		if rawPin != "" {
+			pin = rawPin
+		} else {
+			pinPath = strings.TrimPrefix(pinPath, "file://")
+			pinBytes, err := os.ReadFile(pinPath)
+			if err != nil {
+				return nil, fmt.Errorf("read pin from %s: %w", pinPath, err)
+			}
+			pin = strings.TrimSpace(string(pinBytes))
+		}
 
-	p11Ctx, err := thalesp11.Configure(p11Config)
+		p11Config := &thalesp11.Config{
+			Path: modulePath,
+			Pin:  pin,
+			// MaxSessions: 1024,
+		}
+
+		// Get slot-id and token
+		slotIDStr, tokenLabel := u.Get("slot-id"), u.Get("token")
+		if slotIDStr == "" && tokenLabel == "" {
+			return nil, fmt.Errorf("one of slot-id or token must be specified in PKCS11 URI")
+		}
+		if slotIDStr != "" && tokenLabel != "" {
+			return nil, fmt.Errorf("only one of slot-id or token can be specified in PKCS11 URI")
+		}
+
+		if slotIDStr != "" {
+			var slotID int
+			if _, err := fmt.Sscanf(slotIDStr, "%d", &slotID); err != nil {
+				return nil, fmt.Errorf("invalid slot-id in PKCS11 URI: %w", err)
+			}
+			p11Config.SlotNumber = &slotID
+		}
+
+		if tokenLabel != "" {
+			p11Config.TokenLabel = tokenLabel
+		}
+
+		p11Ctx, err := thalesp11.Configure(p11Config)
+		if err != nil {
+			return nil, fmt.Errorf("configure PKCS11 context: %w", err)
+		}
+
+		return p11Ctx, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("configure PKCS11 context: %w", err)
+		return nil, err
+	}
+
+	p11Ctx, ok := value.(*thalesp11.Context)
+	if !ok || p11Ctx == nil {
+		return nil, fmt.Errorf("invalid cached PKCS#11 context for %s", uriStr)
 	}
 
 	return p11Ctx, nil

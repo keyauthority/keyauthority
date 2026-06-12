@@ -47,8 +47,10 @@ export default function SignerModal({
   const [postalCode, setPostalCode] = useState("");
 
   // Certificate Template
-  const [cdp, setCDP] = useState("");
   const [isCA, setIsCA] = useState(false);
+  const [cdp, setCDP] = useState("");
+  const [aia, setAIA] = useState("");
+  const [ocsp, setOCSP] = useState("");
 
   // Policy
   const [allowedDomains, setAllowedDomains] = useState("");
@@ -66,6 +68,8 @@ export default function SignerModal({
 
   const baseURL = new URL(api.defaults.baseURL);
   const defaultCDPBaseURL = "http://crl." + baseURL.hostname + "/v1/crl/";
+  const defaultAIABaseURL = "http://aia." + baseURL.hostname + "/v1/aia/";
+  const defaultOCSPBaseURL = "http://ocsp." + baseURL.hostname + "/v1/ocsp/";
 
   const toHours = (durationStr) => {
     if (!durationStr) return 0;
@@ -142,8 +146,10 @@ export default function SignerModal({
       setStreetAddress((subject.streetAddress || []).join(", "));
       setPostalCode((subject.postalCode || []).join(", "));
 
-      setCDP((signerConfig.cdp || []).join(", "));
       setIsCA(signerConfig.isCA || false);
+      setCDP((signerConfig.cdp || []).join(", "));
+      setAIA((signerConfig.aia || []).join(", "));
+      setOCSP((signerConfig.ocsp || []).join(", "));
 
       setAllowedDomains(signerConfig.allowedDomains?.join(", ") || "");
       setAllowedKeyUsages(signerConfig.allowedKeyUsages || []);
@@ -173,8 +179,10 @@ export default function SignerModal({
       setCurve("P-256");
       setPkcs11URI("");
 
-      setCDP("");
       setIsCA(false);
+      setCDP("");
+      setAIA("");
+      setOCSP("");
 
       setAllowedDomains("");
       setMaxTTL(720);
@@ -230,6 +238,14 @@ export default function SignerModal({
       maxTTL: `${maxTTL}h`,
       isCA,
       cdp: cdp
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      aia: aia
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ocsp: ocsp
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
@@ -473,8 +489,8 @@ export default function SignerModal({
                 }}
               />
               <Form.Text className="text-muted">
-                Defines what type of certificates this signer issues (CA or
-                leaf)
+                Defines what type of certificates this signer is allowed to
+                issue (CA vs. leaf)
               </Form.Text>
             </Form.Group>
             <Form.Group className="mb-3">
@@ -497,14 +513,73 @@ export default function SignerModal({
                     }
                   }}
                   disabled={!defaultCDPBaseURL || !signerName}
+                  title="Set default CDP URL"
                 >
-                  <i className="bi bi-arrow-clockwise"></i> Set Default
+                  <i className="bi bi-arrow-clockwise"></i>
                 </Button>
               </div>
               <Form.Text className="text-muted">
                 Comma-separated list of URLs
               </Form.Text>
             </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>AIA (Authority Information Access)</Form.Label>
+              <div className="input-group">
+                <Form.Control
+                  type="text"
+                  value={aia}
+                  placeholder="e.g. http://example.com/aia1, http://example.com/aia2"
+                  onChange={(e) => {
+                    setAIA(e.target.value);
+                  }}
+                />
+                <Button
+                  variant="outline-secondary"
+                  onClick={async () => {
+                    if (defaultAIABaseURL && signerName) {
+                      const hash = await createSignerHashForCRL(signerName);
+                      setAIA(defaultAIABaseURL + hash);
+                    }
+                  }}
+                  disabled={!defaultAIABaseURL || !signerName}
+                  title="Set default AIA URL"
+                >
+                  <i className="bi bi-arrow-clockwise"></i>
+                </Button>
+              </div>
+              <Form.Text className="text-muted">
+                Comma-separated list of URLs
+              </Form.Text>
+            </Form.Group>
+            {/*<Form.Group className="mb-3">
+              <Form.Label>OCSP (Online Certificate Status Protocol)</Form.Label>
+              <div className="input-group">
+                <Form.Control
+                  type="text"
+                  value={ocsp}
+                  placeholder="e.g. http://example.com/ocsp1, http://example.com/ocsp2"
+                  onChange={(e) => {
+                    setOCSP(e.target.value);
+                  }}
+                />
+                <Button
+                  variant="outline-secondary"
+                  title="Set default OCSP URL"
+                  onClick={async () => {
+                    if (defaultOCSPBaseURL && signerName) {
+                      const hash = await createSignerHashForCRL(signerName);
+                      setOCSP(defaultOCSPBaseURL + hash);
+                    }
+                  }}
+                  disabled={!defaultOCSPBaseURL || !signerName}
+                >
+                  <i className="bi bi-arrow-clockwise"></i>
+                </Button>
+              </div>
+              <Form.Text className="text-muted">
+                Comma-separated list of URLs
+              </Form.Text>
+            </Form.Group>*/}
           </Card.Body>
         </Card>
 

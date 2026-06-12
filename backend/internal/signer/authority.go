@@ -40,7 +40,7 @@ type CertificateAuthority struct {
 
 // Sign signs a certificate request, applying a SigningPolicy and returns a DER
 // encoded x509 certificate.
-func (ca *CertificateAuthority) Sign(tmpl *x509.Certificate, ttl time.Duration, policy SigningPolicy) ([]byte, error) {
+func (ca *CertificateAuthority) Sign(tmpl *x509.Certificate, ttl time.Duration, policy *SigningPolicy) ([]byte, error) {
 	caCert := ca.Certificate
 	now := time.Now()
 	if ca.Now != nil {
