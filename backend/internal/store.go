@@ -139,6 +139,11 @@ func (s *Store) Close() error {
 	// then close any cached PKCS#11 contexts
 	hsErr := cryptopkg.CloseCachedP11Contexts()
 
+	// clear in-memory caches
+	keyCache.Clear()
+	crlCache.Clear()
+	caCertCache.Clear()
+
 	if dbErr != nil {
 		return dbErr
 	}
@@ -462,7 +467,11 @@ func (s *Store) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error
 
 func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
 	if cachedKey, found := keyCache.Get(id.String()); found {
-		return cachedKey.(*cryptopkg.Key), nil
+		if key, ok := cachedKey.(*cryptopkg.Key); ok && key != nil {
+			return key, nil
+		}
+		// defensive: evict invalid entry instead of panic
+		keyCache.Delete(id.String())
 	}
 
 	var cfgJSON []byte
