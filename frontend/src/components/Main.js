@@ -163,6 +163,37 @@ export default function Main() {
     },
   ];
 
+  const handleExportLogs = async () => {
+    setIsLoading(true);
+
+    const flattenLogItem = (item) => {
+      // convert logs JSONs to .log format
+      // for example: [2024-01-01T00:00:00.000Z] INFO key created {...}
+      const { time, level, msg, ...rest } = item;
+      return `[${new Date(time).toISOString()}] ${level.toUpperCase()} ${msg} ${Object.keys(rest).length > 0 ? JSON.stringify(rest) : ""}`;
+    };
+
+    try {
+      const logs = await api
+        .get("/logs?pageSize=100000")
+        .then((res) => res.data.data);
+      const logContent = logs.map(flattenLogItem).join("\n");
+      const blob = new Blob([logContent], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `keyauthority-logs-${Date.now()}.log`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDeleteSigner = async () => {
     const signerName = decodeURIComponent(
       location.pathname.replace("/signers/", ""),
@@ -423,8 +454,26 @@ export default function Main() {
 
                   <div>
                     {(() => {
-                      if (location.pathname === "/keys") {
-                        return null; // No "New" button for keys, as they are created automatically when a secret is created
+                      if (location.pathname === "/activity/logs") {
+                        return (
+                          <DropdownButton
+                            title="Actions"
+                            //variant="outline-primary"
+                            onSelect={(key) => {
+                              switch (key) {
+                                case "export":
+                                  handleExportLogs();
+                                  break;
+                                default:
+                                  break;
+                              }
+                            }}
+                          >
+                            <Dropdown.Item eventKey="export">
+                              <i className="bi bi-download me-1"></i> Export
+                            </Dropdown.Item>
+                          </DropdownButton>
+                        );
                       }
 
                       if (location.pathname === "/signers") {

@@ -227,7 +227,7 @@ function ConfigTab({
               <Card.Header>
                 <h6 className="mb-0">Private Key</h6>
                 <span className="text-muted small">
-                  The private key backing this signer
+                  Key used by for signing operations
                 </span>
               </Card.Header>
               <Card.Body>

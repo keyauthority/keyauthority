@@ -534,9 +534,13 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
       <p>
         Below are example configurations for these issuers. You can choose the
         appropriate one based on your needs. In the case of Vault issuers, there
-        are two authentication methods supported: AppRole and Kubernetes Service
-        Account.
+        are two authentication methods supported: Kubernetes Service Account
+        (i.e. k8s token-based) and AppRole (i.e. credentials-based).
       </p>
+
+      <h5>Vault Issuer With Kubernetes Service Account Authentication</h5>
+
+      {vaultSAAuthIssuerExample(signerName, apiRootUrl)}
 
       <h5>Vault Issuer With AppRole Authentication</h5>
       {vaultAppRoleIssuerExample(
@@ -544,10 +548,6 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
         `${signerName}@keyauthority.net`,
         apiRootUrl,
       )}
-
-      <h5>Vault Issuer With Kubernetes Service Account Authentication</h5>
-
-      {vaultSAAuthIssuerExample(signerName, apiRootUrl)}
 
       <h5>ACME Issuer</h5>
 

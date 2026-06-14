@@ -25,6 +25,7 @@ $primary: #c62828; // Primary color: deep red
 
 .form-label {
   margin-bottom: 0.15rem;
+  //color: var(--bs-primary-text-emphasis) !important;
 }
 
 .no-wrap-first-col th:first-child,
