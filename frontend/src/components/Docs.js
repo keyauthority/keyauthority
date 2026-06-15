@@ -113,7 +113,7 @@ export function Administration() {
         borderBottom={true}
       />
 
-      <h5>Environment-Scoped Access Roles</h5>
+      <h5>Environment-Scoped Roles</h5>
       <p>
         In addition to the global roles mentioned above, KeyAuthority also
         supports scoped roles that can be assigned on a <i>per-environment</i>{" "}
@@ -130,12 +130,11 @@ export function Administration() {
       <p>
         The environment-scoped role names are of the form{" "}
         <code>KEYAUTHORITY_OPERATOR_env</code>, where <code>env</code> is the
-        name of the environment. For example, a user with the a single role{" "}
-        <code>KEYAUTHORITY_OPERATOR_dev</code> has access to resources such as
-        signers and secrets within the <code>dev</code> environment only. To
-        assign scoped roles, navigate to the respective user or client in the
-        Keycloak admin interface and use the role assignment options to grant
-        the desired permissions.
+        name of the environment. For example, a user with a single role{" "}
+        <code>KEYAUTHORITY_OPERATOR_dev</code> has access to resources within
+        the <code>dev</code> environment only. To assign scoped roles, navigate
+        to the respective user or client in the Keycloak admin interface and use
+        the role assignment options to grant the desired permissions.
       </p>
 
       <p>
@@ -159,9 +158,9 @@ export function Administration() {
 
       <KeyValueTable
         body={{
-          "keyauthority-discovery": "Used for client discovery by the backend",
+          "keyauthority-discovery": "Used by the backend for client discovery.",
           "keyauthority-frontend":
-            "The web frontend client for user interactions",
+            "The web frontend client used for UI interactions.",
           "keyauthority-exchange":
             "Used by applications and services to exchange credentials (e.g. username and password) for KeyAuthority-verifiable tokens. This is relevant for non-UI access to the backend API since the API authenticates using these tokens.",
           "keyauthority-kubernetes":
@@ -857,7 +856,7 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
         The following example shows how to consume the secret in a GitLab job,
         using{" "}
         <a
-          href="https://docs.gitlab.com/ci/secrets/#use-vault-secrets-in-a-ci-job"
+          href="https://docs.gitlab.com/ci/secrets/hashicorp_vault/"
           target="_blank"
           rel="noopener noreferrer"
         >
