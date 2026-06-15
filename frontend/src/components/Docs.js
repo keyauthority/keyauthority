@@ -644,7 +644,7 @@ export function Architecture() {
         showing its components and their interactions. KeyAuthority components
         are the frontend, the backend, the identity provider (Keycloak), and the
         database. The diagram also shows the interactions with humans, machines,
-        and the HSMs.
+        and the HSM.
       </p>
       <div ref={rootRef} className="position-relative">
         {/* Connection layer */}

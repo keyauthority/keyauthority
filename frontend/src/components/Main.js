@@ -137,7 +137,7 @@ export default function Main() {
           subtitle: "Understand the architecture of KeyAuthority",
           to: "/docs/architecture",
           icon: "bi-diagram-3-fill",
-          // dontShowInSidebar: true,
+          dontShowInSidebar: true,
         },
         {
           title: "Useful Links",
