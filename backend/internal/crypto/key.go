@@ -193,12 +193,31 @@ func (k *symmetricSoftwareKey) Decrypt(ciphertext []byte) ([]byte, error) {
 	return plainData, nil
 }
 
+func closeCachedP11Context(pkcs11URI string) error {
+	value, exists := p11CtxCache.Get(pkcs11URI)
+	if !exists {
+		return nil
+	}
+
+	p11Ctx, ok := value.(*thalesp11.Context)
+	if !ok || p11Ctx == nil {
+		return fmt.Errorf("invalid cached PKCS#11 context for %s", pkcs11URI)
+	}
+
+	if err := p11Ctx.Close(); err != nil {
+		return fmt.Errorf("close PKCS#11 context: %w", err)
+	}
+
+	p11CtxCache.Delete(pkcs11URI)
+	return nil
+}
+
 func (k *symmetricHSMKey) reloadHandle(resetCtx bool) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
 	if resetCtx {
-		_ = CloseCachedP11Contexts()
+		_ = closeCachedP11Context(k.pkcs11URI)
 	}
 
 	p11Ctx, err := getP11Ctx(k.pkcs11URI)
@@ -319,7 +338,7 @@ func (k *asymmetricHSMKey) reloadSigner(resetCtx bool) error {
 	defer k.mu.Unlock()
 
 	if resetCtx {
-		_ = CloseCachedP11Contexts()
+		_ = closeCachedP11Context(k.pkcs11URI)
 	}
 
 	p11Ctx, err := getP11Ctx(k.pkcs11URI)
@@ -354,20 +373,20 @@ func (k *asymmetricHSMKey) Sign(r io.Reader, digest []byte, opts crypto.SignerOp
 
 	s := k.getSigner()
 	sig, err := s.Sign(r, digest, opts)
-	if err == nil {
-		return sig, nil
-	}
 
-	if !isRecoverableHSMError(err) {
-		return nil, err
+	if err != nil {
+		if isRecoverableHSMError(err) {
+			if rerr := k.reloadSigner(true); rerr != nil {
+				return nil, fmt.Errorf("reload HSM signer: %w", rerr)
+			}
+			s = k.getSigner()
+			sig, err = s.Sign(r, digest, opts)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	if rerr := k.reloadSigner(true); rerr != nil {
-		return nil, fmt.Errorf("reload HSM signer: %w", rerr)
-	}
-
-	s = k.getSigner()
-	return s.Sign(r, digest, opts)
+	return sig, nil
 }
 
 // InferConfig attempts to infer the key configuration from the Key instance

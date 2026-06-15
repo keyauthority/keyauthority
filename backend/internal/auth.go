@@ -131,7 +131,7 @@ type Authenticator struct {
 }
 
 func NewAuthenticator(ctx context.Context) (*Authenticator, []*loggingpkg.LogEntry, error) {
-	// initialize token cache and start janitor
+	// clear token cache
 	tokenCache.Clear()
 
 	// prepare HTTP clients with tokens for OIDC discovery, if any
@@ -577,7 +577,7 @@ func getHttpClientForIssuer(issuer string) *http.Client {
 	return http.DefaultClient
 }
 
-// VerifyToken tries to verify the token against all configured OIDC providers.
+// verifyOIDCToken tries to verify the token against all configured OIDC providers.
 // It returns the verified ID token and the index of the provider that verified it successfully.
 // If no provider could verify the token, it returns nil and -1.
 // IMPORTANT: caller must compare the returned index against -1 to check for verification failure.
