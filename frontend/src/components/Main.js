@@ -22,10 +22,7 @@ import SecretModal from "./SecretModal";
 import SignerDetails from "./SignerDetails";
 import SecretDetails from "./SecretDetails";
 import Footer from "./Footer";
-import ImportSignersModal from "./ImportSignersModal";
 import ImportSecretsModal from "./ImportSecretsModal";
-import ImportHashiVaultSecretsModal from "./ImportHashiVaultSecretsModal";
-import ExportModal from "./ExportModal";
 
 import { getApi } from "../axios";
 import { errorToString } from "../utils/error";
@@ -47,12 +44,7 @@ export default function Main() {
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [secretIsEdit, setSecretIsEdit] = useState(false);
 
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importData, setImportData] = useState(null);
-  const [importModalType, setImportModalType] = useState("");
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportData, setExportData] = useState(null);
-  const [exportModalType, setExportModalType] = useState("");
+  const [showImportSecretsModal, setShowImportSecretsModal] = useState(false);
 
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -257,7 +249,7 @@ export default function Main() {
   };
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
+    // window.scrollTo({ top: 0, behavior: "instant" });
 
     for (const section of sidebarSections) {
       const foundItem = section.items?.find(
@@ -286,79 +278,6 @@ export default function Main() {
     );
   };
 
-  const handleExportSigners = async () => {
-    setIsLoading(true);
-
-    const keyIDs = new Set();
-    const keys = [];
-
-    try {
-      const signers = await api
-        .get("/signers?pageSize=10000")
-        .then((res) => res.data.data);
-
-      for (const signer of signers) {
-        const caChain = await api
-          .get(`/signers/${signer.name}/ca-chain`)
-          .then((res) => res.data);
-
-        signer.caChain = caChain;
-
-        const privateKeyID = signer.privateKeyID;
-        if (!keyIDs.has(privateKeyID)) {
-          const keyDetails = await api
-            .get(`/keys/${privateKeyID}`)
-            .then((res) => res.data);
-          keys.push(keyDetails);
-          keyIDs.add(privateKeyID);
-        }
-      }
-
-      setExportModalType("signers");
-      setExportData(JSON.stringify({ keys, signers }));
-      setShowExportModal(true);
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleExportSecrets = async () => {
-    setIsLoading(true);
-    try {
-      const keyIDs = new Set();
-      const keys = [];
-      const secrets = await api
-        .get("/secrets?pageSize=10000")
-        .then((res) => res.data.data);
-
-      for (const secret of secrets) {
-        const secretDetails = await api
-          .get(`/secrets/${secret.name}`)
-          .then((res) => res.data);
-
-        secret.data = secretDetails.data;
-
-        const encryptionKeyID = secretDetails.encryptionKeyID;
-        if (!keyIDs.has(encryptionKeyID)) {
-          const keyDetails = await api
-            .get(`/keys/${encryptionKeyID}`)
-            .then((res) => res.data);
-          keys.push(keyDetails);
-          keyIDs.add(encryptionKeyID);
-        }
-      }
-      setExportModalType("secrets");
-      setExportData(JSON.stringify({ keys, secrets }));
-      setShowExportModal(true);
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <>
       <ToastContainer position="bottom-right" />
@@ -383,44 +302,15 @@ export default function Main() {
         }}
       />
 
-      <ImportSignersModal
-        show={showImportModal && importModalType === "signers"}
-        onHide={() => setShowImportModal(false)}
-        onSuccess={(imported, skipped, failed) => {
-          showImportResultToast(imported, skipped, failed);
-          if (imported.size > 0) {
-            setRefreshTrigger((prev) => prev + 1);
-          }
-        }}
-      />
-
       <ImportSecretsModal
-        show={showImportModal && importModalType === "secrets"}
-        onHide={() => setShowImportModal(false)}
+        show={showImportSecretsModal}
+        onHide={() => setShowImportSecretsModal(false)}
         onSuccess={(imported, skipped, failed) => {
           showImportResultToast(imported, skipped, failed);
           if (imported.size > 0) {
             setRefreshTrigger((prev) => prev + 1);
           }
         }}
-      />
-
-      <ImportHashiVaultSecretsModal
-        show={showImportModal && importModalType === "hashivault"}
-        onHide={() => setShowImportModal(false)}
-        onSuccess={(imported, skipped, failed) => {
-          showImportResultToast(imported, skipped, failed);
-          if (imported.size > 0) {
-            setRefreshTrigger((prev) => prev + 1);
-          }
-        }}
-      />
-
-      <ExportModal
-        show={showExportModal}
-        onHide={() => setShowExportModal(false)}
-        modalTitle={exportModalType === "signers" ? "Signers" : "Secrets"}
-        modalData={exportData}
       />
 
       <Container fluid>
@@ -487,13 +377,6 @@ export default function Main() {
                                   setSignerIsEdit(false);
                                   setShowSignerModal(true);
                                   break;
-                                case "import":
-                                  setImportModalType("signers");
-                                  setShowImportModal(true);
-                                  break;
-                                case "export":
-                                  handleExportSigners();
-                                  break;
                                 default:
                                   break;
                               }
@@ -502,13 +385,6 @@ export default function Main() {
                             <Dropdown.Item eventKey="new">
                               <i className="bi bi-plus-lg me-1"></i> New
                             </Dropdown.Item>
-                            {/*<Dropdown.Divider />
-                            <Dropdown.Item eventKey="import">
-                              <i className="bi bi-upload me-1"></i> Import
-                            </Dropdown.Item>
-                            <Dropdown.Item eventKey="export">
-                              <i className="bi bi-download me-1"></i> Export
-                            </Dropdown.Item>*/}
                           </DropdownButton>
                         );
                       }
@@ -554,15 +430,7 @@ export default function Main() {
                                   setShowSecretModal(true);
                                   break;
                                 case "import":
-                                  setImportModalType("secrets");
-                                  setShowImportModal(true);
-                                  break;
-                                case "import-vault":
-                                  setImportModalType("hashivault");
-                                  setShowImportModal(true);
-                                  break;
-                                case "export":
-                                  handleExportSecrets();
+                                  setShowImportSecretsModal(true);
                                   break;
                                 default:
                                   break;
@@ -572,18 +440,7 @@ export default function Main() {
                             <Dropdown.Item eventKey="new">
                               <i className="bi bi-plus-lg me-1"></i> New
                             </Dropdown.Item>
-                            {/*<Dropdown.Divider />
                             <Dropdown.Item eventKey="import">
-                              <i className="bi bi-upload me-1"></i> Import
-                            </Dropdown.Item>
-                            <Dropdown.Item eventKey="import-vault">
-                              <i className="bi bi-upload me-1"></i> Import From
-                              HashiCorp Vault
-                            </Dropdown.Item>
-                            <Dropdown.Item eventKey="export">
-                              <i className="bi bi-download me-1"></i> Export
-                            </Dropdown.Item>*/}
-                            <Dropdown.Item eventKey="import-vault">
                               <i className="bi bi-upload me-1"></i> Import From
                               HC Vault
                             </Dropdown.Item>
