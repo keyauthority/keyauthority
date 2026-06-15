@@ -229,7 +229,7 @@ export default function ImportSecretsModal({ show, onHide, onSuccess }) {
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>Import: Secrets</Modal.Title>
+        <Modal.Title>Import Secrets</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form.Group className="mb-3">

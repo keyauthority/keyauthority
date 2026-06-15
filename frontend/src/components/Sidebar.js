@@ -40,6 +40,7 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
                   key={item.to}
                   as={RouterNavLink}
                   to={item.to}
+                  className={item.dontShowInSidebar ? "d-none" : ""}
                 >
                   {item.icon && (
                     <i

@@ -1,12 +1,19 @@
 import { useCallback, useState, useEffect } from "react";
 import { Alert, Table } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Filters from "./Filters";
 import Paginator from "./Paginator";
 import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
 import { getApi } from "../axios";
 
-export default function Secrets({ isLoading, setIsLoading }) {
+import ImportSecretsModal from "./ImportSecretsModal";
+import SecretModal from "./SecretModal";
+
+export default function Secrets({
+  isLoading,
+  setIsLoading,
+  setDropdownActions,
+}) {
   const [error, setError] = useState(null);
   const [secrets, setSecrets] = useState([]);
   const [page, setPage] = useState(1);
@@ -14,7 +21,12 @@ export default function Secrets({ isLoading, setIsLoading }) {
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
 
+  const [showSecretModal, setShowSecretModal] = useState(false);
+  const [showImportSecretsModal, setShowImportSecretsModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   const api = getApi();
+  const navigate = useNavigate();
 
   const fetchSecrets = useCallback(async () => {
     setIsLoading(true);
@@ -36,8 +48,50 @@ export default function Secrets({ isLoading, setIsLoading }) {
     fetchSecrets();
   }, [fetchSecrets]);
 
+  useEffect(() => {
+    setDropdownActions?.([
+      {
+        key: "new-secret",
+        label: "New",
+        iconClass: "bi bi-plus-lg",
+        onClick: () => {
+          setShowSecretModal(true);
+        },
+      },
+      {
+        key: "import-secrets",
+        label: "Import From HC Vault",
+        iconClass: "bi bi-upload",
+        onClick: () => {
+          setShowImportSecretsModal(true);
+        },
+      },
+    ]);
+    return () => setDropdownActions?.([]);
+  }, [setDropdownActions]);
+
   return (
     <>
+      <SecretModal
+        show={showSecretModal}
+        editMode={false}
+        onHide={() => setShowSecretModal(false)}
+        onSuccess={(updatedSecret) => {
+          navigate(`/secrets/${encodeURIComponent(updatedSecret)}`);
+        }}
+      />
+
+      <ImportSecretsModal
+        show={showImportSecretsModal}
+        onHide={() => setShowImportSecretsModal(false)}
+        onSuccess={(imported, skipped, failed) => {
+          showImportResultToast(imported, skipped, failed);
+          if (imported.size > 0) {
+            setRefreshTrigger((prev) => prev + 1);
+          }
+        }}
+      />
+
       {error && <Alert variant="danger">{error}</Alert>}
 
       <Filters
@@ -71,7 +125,12 @@ export default function Secrets({ isLoading, setIsLoading }) {
         ]}
       />
 
-      <Table striped hover className="align-middle mb-3">
+      <Table
+        striped
+        hover
+        className="align-middle mb-3"
+        key={`secrets-${refreshTrigger}`}
+      >
         <thead>
           <tr>
             <th>Name</th>

@@ -1,24 +1,84 @@
-import { Alert, Table } from "react-bootstrap";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, Table } from "react-bootstrap";
 import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
-import { disclaimer, prettyCode } from "../utils/utils";
+import { copyToClipboard, disclaimer, prettyCode } from "../utils/utils";
 import KeyValueTable from "./KeyValueTable";
 
-export function Installation() {
+export function UsefulLinks() {
+  const api = getApi();
+  const apiUrl = new URL(api.defaults.baseURL);
+  const apiRootUrl = apiUrl.href.replace(/\/v1\/?$/, "");
+  const swaggerUrl = apiRootUrl + "/swagger/";
+  const keycloak = getKeycloak();
+
   return (
-    <>
-      <p>
-        KeyAuthority can be installed with Helm. See instructions in the{" "}
-        <a
-          href="https://artifacthub.io/packages/helm/keyauthority/keyauthority"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          KeyAuthority Helm Chart in Artifact Hub
-        </a>
-        .
-      </p>
-    </>
+    <Table responsive striped hover className="align-middle">
+      <thead>
+        <tr>
+          <th>Resource</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Project Home Page</td>
+          <td>
+            <a
+              href="https://keyauthority.net"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://keyauthority.net
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Project Docker Hub</td>
+          <td>
+            <a
+              href="https://hub.docker.com/u/keyauthoritydh"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://hub.docker.com/u/keyauthoritydh
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Helm Chart in Artifact Hub</td>
+          <td>
+            <a
+              href="https://artifacthub.io/packages/helm/keyauthority/keyauthority"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://artifacthub.io/packages/helm/keyauthority/keyauthority
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>REST API Swagger UI</td>
+          <td>
+            <a href={swaggerUrl} target="_blank" rel="noopener noreferrer">
+              {swaggerUrl}
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Integrated Keycloak's Admin Console</td>
+          <td>
+            <a
+              href={`${keycloak?.authServerUrl}/admin/master/console/#/${keycloak?.realm}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {keycloak?.authServerUrl}/admin/master/console/#/{keycloak?.realm}
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </Table>
   );
 }
 
@@ -499,6 +559,233 @@ EOF
         sampleSecret.data,
         apiRootUrl,
       )}
+    </>
+  );
+}
+
+export function Architecture() {
+  const rootRef = useRef(null);
+  const nodeRefs = useRef({});
+  const [points, setPoints] = useState({});
+
+  const setNodeRef = (key) => (el) => {
+    nodeRefs.current[key] = el;
+  };
+
+  useEffect(() => {
+    const updatePoints = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      const rootBox = root.getBoundingClientRect();
+
+      const next = {};
+      Object.entries(nodeRefs.current).forEach(([key, el]) => {
+        if (!el) return;
+        const box = el.getBoundingClientRect();
+        next[key] = {
+          x: box.left - rootBox.left + box.width / 2,
+          y: box.top - rootBox.top + box.height / 2,
+        };
+      });
+
+      setPoints(next);
+    };
+
+    updatePoints();
+    window.addEventListener("resize", updatePoints);
+
+    const ro = new ResizeObserver(updatePoints);
+    if (rootRef.current) ro.observe(rootRef.current);
+
+    return () => {
+      window.removeEventListener("resize", updatePoints);
+      ro.disconnect();
+    };
+  }, []);
+
+  const card = (variant = "secondary", title, description, icon, content) => (
+    <Alert
+      variant={variant}
+      className="rounded-4 p-4 mb-0 shadow-sm w-100 h-100 d-flex flex-column justify-content-center"
+      //style={{ minWidth: 120 }}
+    >
+      <div className="d-flex align-items-center mb-3">
+        <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
+        <div className="ms-3">
+          <h5 className="mb-0">{title}</h5>
+          <span className="small">{description}</span>
+        </div>
+      </div>
+      <div className="text-body small">{content}</div>
+    </Alert>
+  );
+
+  const line = (from, to, color = "#c62828", dashed = false) => {
+    if (!points[from] || !points[to]) return null;
+    return (
+      <line
+        key={`${from}-${to}`}
+        x1={points[from].x}
+        y1={points[from].y}
+        x2={points[to].x}
+        y2={points[to].y}
+        stroke={color}
+        strokeWidth="3"
+        //strokeDasharray={dashed ? "6 4" : "0"}
+        markerEnd="url(#archArrow)"
+      />
+    );
+  };
+
+  return (
+    <>
+      <p className="mb-4">
+        The following diagram illustrates the architecture of KeyAuthority,
+        showing its components and their interactions. KeyAuthority components
+        are the frontend, the backend, the identity provider (Keycloak), and the
+        database. The diagram also shows the interactions with humans, machines,
+        and the HSMs.
+      </p>
+      <div ref={rootRef} className="position-relative">
+        {/* Connection layer */}
+        <svg
+          className="position-absolute top-0 start-0 w-100 h-100"
+          style={{ pointerEvents: "none", zIndex: 0 }}
+        >
+          {line("humans", "frontend")}
+          {line("apps", "backend")}
+          {line("frontend", "backend")}
+          {line("keycloak", "frontend")}
+          {line("keycloak", "backend")}
+          {line("keycloak", "database")}
+          {line("backend", "database")}
+          {line("backend", "hsm")}
+        </svg>
+
+        {/* Nodes */}
+        <div
+          className="position-relative row g-4 align-items-center"
+          style={{ zIndex: 1, minHeight: 640 }}
+        >
+          <div className="col-12 col-xl-3 d-flex flex-column justify-content-center gap-4 h-100">
+            <div ref={setNodeRef("humans")} className="d-flex w-100">
+              {card(
+                "success",
+                "Humans",
+                "End Users",
+                "bi-people-fill",
+                <ul className="mb-0">
+                  <li>Operators</li>
+                  <li>Auditors</li>
+                  <li>Approvers</li>
+                </ul>,
+              )}
+            </div>
+
+            <div ref={setNodeRef("apps")} className="d-flex w-100">
+              {card(
+                "info",
+                "Machines",
+                "Applications & Services",
+                "bi-cpu-fill",
+                <ul className="mb-0">
+                  <li>CI/CD pipelines</li>
+                  <li>Kubernetes workloads</li>
+                  <li>External services</li>
+                </ul>,
+              )}
+            </div>
+
+            <div ref={setNodeRef("hsm")} className="d-flex w-100">
+              {card(
+                "dark",
+                "HSM",
+                "Hardware Security Module",
+                "bi-safe-fill",
+                <ul className="mb-0">
+                  <li>Secure key custody</li>
+                  <li>Cryptographic operations</li>
+                  <li>PKCS#11 integration</li>
+                </ul>,
+              )}
+            </div>
+          </div>
+
+          <div className="col-12 col-xl-9 d-flex flex-column justify-content-center gap-4 h-100">
+            <div className="row g-4">
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("frontend")}
+              >
+                {card(
+                  "warning",
+                  "Frontend",
+                  "Human Entry Point",
+                  "bi-browser-chrome",
+                  <ul className="mb-0">
+                    <li>Web UI</li>
+                    <li>Role-based views</li>
+                    <li>Environment-scoped access</li>
+                  </ul>,
+                )}
+              </div>
+
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("keycloak")}
+              >
+                {card(
+                  "primary",
+                  "Keycloak",
+                  "Authentication & Authorization",
+                  "bi-person-badge-fill",
+                  <ul className="mb-0">
+                    <li>OIDC/OAuth2 identity provider</li>
+                    <li>Role and client management</li>
+                    <li>Token issuance</li>
+                  </ul>,
+                )}
+              </div>
+            </div>
+
+            <div className="row g-4">
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("backend")}
+              >
+                {card(
+                  "secondary",
+                  "Backend",
+                  "API & Business Logic",
+                  "bi-hdd-rack-fill",
+                  <ul className="mb-0">
+                    <li>REST API</li>
+                    <li>Authorization enforcement</li>
+                    <li>Workflows and audit logs</li>
+                  </ul>,
+                )}
+              </div>
+
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("database")}
+              >
+                {card(
+                  "light",
+                  "Database",
+                  "Scalable Persistent Storage",
+                  "bi-database-fill",
+                  <ul className="mb-0">
+                    <li>User and config data</li>
+                    <li>Crypto resources and metadata</li>
+                    <li>Access and audit logs</li>
+                  </ul>,
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

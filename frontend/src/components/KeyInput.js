@@ -37,12 +37,12 @@ export default function KeyInput({
   return (
     <>
       <Row>
-        <Form.Group className="col-12 mb-3">
+        <Form.Group className="col-md mb-3">
           <Form.Label>Environment</Form.Label>
           {isGlobalOperator ? (
             <Form.Control
               value={environment}
-              placeholder="e.g. dev, git-runners, team2, qa, prod"
+              placeholder="e.g. dev, team2, qa, prod"
               onChange={(e) => {
                 const regex = /^[a-zA-Z0-9-_]*$/; // allow only letters, numbers, dashes and underscores
                 if (regex.test(e.target.value)) setEnvironment(e.target.value);
