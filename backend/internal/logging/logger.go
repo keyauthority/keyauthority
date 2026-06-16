@@ -48,14 +48,6 @@ const (
 	CtxKeyOriginalRequestID = ctxKey("originalRequestID")
 )
 
-// LogEntry represents a log entry with level, message, args, and whether to save to DB.
-// !IMPORTANT: To be used ONLY in functions that do not have direct access to the logger
-type LogEntry struct {
-	Level   slog.Level
-	Message string
-	Args    []any
-}
-
 type StdAndDBLogger struct {
 	stdLogger *slog.Logger
 	dbLogger  *slog.Logger
@@ -112,14 +104,6 @@ func removeErrorArgs(args []any) []any {
 func isError(val any) bool {
 	_, ok := val.(error)
 	return ok
-}
-
-func (l *StdAndDBLogger) LogWithContext(ctx context.Context, logEntry *LogEntry) {
-	args := append(attrsFromContext(ctx), logEntry.Args...)
-	l.stdLogger.Log(ctx, logEntry.Level, logEntry.Message, args...)
-	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
-		l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, removeErrorArgs(args)...)
-	}
 }
 
 func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {

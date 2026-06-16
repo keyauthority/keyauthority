@@ -71,7 +71,6 @@ var (
 	enterprise    string
 	logger        *loggingpkg.StdAndDBLogger
 	store         *internalpkg.Store
-	authenticator *internalpkg.Authenticator
 	acmeResponder *internalpkg.ACMEResponder
 
 	// HTTP router, made global so pendingRequestHandler can access it
@@ -115,12 +114,8 @@ func main() {
 	// Set default HTTP transport
 	setDefaultHttpTransport()
 
-	// Set up the authenticator once; periodic reloads run in a goroutine
-	if err := setupAuthenticator(); err != nil {
-		logger.ErrorWithContext(context.Background(),
-			"couldn't set up authenticator", "error", err)
-		return
-	}
+	// Set up the authenticator
+	internalpkg.SetupAuthenticator()
 	logger.InfoWithContext(context.Background(), "authenticator ready")
 
 	// Create ACME responder
@@ -388,33 +383,6 @@ func runPeriodicTasks() {
 		}
 	}()
 
-	// Authenticator Reloading
-	go func() {
-		intervalStr := os.Getenv(envAuthenticatorReloadInterval)
-		if intervalStr == "" {
-			intervalStr = "30m"
-		}
-		authenticatorReloadInterval, err := time.ParseDuration(intervalStr)
-		if err != nil {
-			logger.WarnWithContext(context.Background(),
-				"invalid authenticator reload interval, using default of 30m",
-				"error", err, "intervalStr", intervalStr)
-			authenticatorReloadInterval = 30 * time.Minute
-		}
-
-		time.Sleep(authenticatorReloadInterval) // initial delay before first reload
-		ticker := time.NewTicker(authenticatorReloadInterval)
-		defer ticker.Stop()
-
-		for {
-			if err := setupAuthenticator(); err != nil {
-				logger.ErrorWithContext(context.Background(),
-					"couldn't reload authenticator", "error", err)
-			}
-			<-ticker.C
-		}
-	}()
-
 	// Store Cleanup
 	go func() {
 		intervalStr := os.Getenv(envStoreCleanupInterval)
@@ -504,19 +472,6 @@ func recreateAllCRLs() {
 
 		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
 	}
-}
-
-func setupAuthenticator() error {
-	ctx := context.Background()
-	newAuthenticator, logEntries, err := internalpkg.NewAuthenticator(ctx)
-	if err != nil {
-		return err
-	}
-	for _, entry := range logEntries {
-		logger.LogWithContext(ctx, entry)
-	}
-	authenticator = newAuthenticator
-	return nil
 }
 
 func setDefaultHttpTransport() {
@@ -907,10 +862,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		// Verify token (once per request)
-		token, logEntries, providerRoles, err := authenticator.VerifyToken(r)
-		for _, entry := range logEntries {
-			logger.LogWithContext(r.Context(), entry)
-		}
+		token, err := internalpkg.VerifyToken(r)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
@@ -918,9 +870,6 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		// Parse immutable claims once, store in context
 		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
-		if len(providerRoles) > 0 { // override roles from token with provider roles
-			roles = providerRoles
-		}
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
@@ -941,7 +890,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		// RBAC check — use roles already extracted above
-		if !authenticator.HasRequiredRole(roles, environment, requiredRole) {
+		if !internalpkg.HasRequiredRole(roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -1754,7 +1703,7 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
 		return
 	}
-	token, err := authenticator.ExchangeForToken(&b)
+	token, err := internalpkg.ExchangeForToken(&b)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
 			"couldn't exchange credentials for Keycloak token", err)

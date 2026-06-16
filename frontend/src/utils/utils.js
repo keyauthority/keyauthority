@@ -338,46 +338,6 @@ export const boxedContent = (content, variant = "secondary") => (
   </Alert>
 );
 
-export const decryptData = async (encryptedData, password) => {
-  // AES GCM decryption
-  const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
-  const iv = combined.slice(0, 12); // Extract IV (first 12 bytes)
-  const salt = combined.slice(12, 28); // Extract salt (next 16 bytes)
-  const encrypted = combined.slice(28); // Extract encrypted data (remaining bytes)
-
-  const encoder = new TextEncoder();
-  const encodedPassword = encoder.encode(password);
-
-  // Use PBKDF2 to derive a 32-byte key from the password
-  const pwd = await window.crypto.subtle.importKey(
-    "raw",
-    encodedPassword,
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"],
-  );
-  const aesKey = await window.crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    pwd,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["decrypt"],
-  );
-
-  const decrypted = await window.crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    aesKey,
-    encrypted,
-  );
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
-};
-
 export const showImportResultToast = (succeeded, skipped, failed) => {
   showToast(
     "info",

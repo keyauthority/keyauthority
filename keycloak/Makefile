@@ -96,6 +96,7 @@ docker-run: load-shared-env
 		-e KC_BOOTSTRAP_ADMIN_PASSWORD=$(KC_ADMIN_PASSWORD) \
 		-e KC_HTTP_ENABLED=true \
 		-e KC_HOSTNAME_STRICT=false \
+		-e KC_LOG_LEVEL=info \
 		-e KC_DB_USERNAME=$(POSTGRES_USER) \
 		-e KC_DB_PASSWORD=$(POSTGRES_PASSWORD) \
 		-e KC_DB_URL=jdbc:postgresql://host.docker.internal:$(POSTGRES_PORT)/$(POSTGRES_DB) \

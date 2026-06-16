@@ -606,17 +606,17 @@ export function Architecture() {
   const card = (variant = "secondary", title, description, icon, content) => (
     <Alert
       variant={variant}
-      className="rounded-4 p-4 mb-0 shadow-sm w-100 h-100 d-flex flex-column justify-content-center"
+      className="rounded-4 p-4 mb-0 shadow w-100 h-100 d-flex flex-column justify-content-center"
       //style={{ minWidth: 120 }}
     >
       <div className="d-flex align-items-center mb-3">
         <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
         <div className="ms-3">
           <h5 className="mb-0">{title}</h5>
-          <span className="small">{description}</span>
+          <div className="small">{description}</div>
         </div>
       </div>
-      <div className="text-body small">{content}</div>
+      <div className="small">{content}</div>
     </Alert>
   );
 
@@ -633,13 +633,14 @@ export function Architecture() {
         strokeWidth="3"
         //strokeDasharray={dashed ? "6 4" : "0"}
         markerEnd="url(#archArrow)"
+        //className="shadow"
       />
     );
   };
 
   return (
     <>
-      <p className="mb-4">
+      <p className="mb-3">
         The following diagram illustrates the architecture of KeyAuthority,
         showing its components and their interactions. KeyAuthority components
         are the frontend, the backend, the identity provider (Keycloak), and the
@@ -686,7 +687,7 @@ export function Architecture() {
               {card(
                 "info",
                 "Machines",
-                "Applications & Services",
+                "Applications and Services",
                 "bi-cpu-fill",
                 <ul className="mb-0">
                   <li>CI/CD pipelines</li>
@@ -698,7 +699,7 @@ export function Architecture() {
 
             <div ref={setNodeRef("hsm")} className="d-flex w-100">
               {card(
-                "dark",
+                "secondary",
                 "HSM",
                 "Hardware Security Module",
                 "bi-safe-fill",
@@ -735,9 +736,9 @@ export function Architecture() {
                 ref={setNodeRef("keycloak")}
               >
                 {card(
-                  "primary",
+                  "dark",
                   "Keycloak",
-                  "Authentication & Authorization",
+                  "Authentication and Authorization",
                   "bi-person-badge-fill",
                   <ul className="mb-0">
                     <li>OIDC/OAuth2 identity provider</li>
@@ -754,9 +755,9 @@ export function Architecture() {
                 ref={setNodeRef("backend")}
               >
                 {card(
-                  "secondary",
+                  "primary",
                   "Backend",
-                  "API & Business Logic",
+                  "API and Business Logic",
                   "bi-hdd-rack-fill",
                   <ul className="mb-0">
                     <li>REST API</li>

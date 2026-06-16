@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Button, Form, Modal, Spinner, Row, Col, Table } from "react-bootstrap";
 import {
   showToast,
-  decryptData,
   copyToClipboard,
   prettyCode,
   showImportResultToast,
