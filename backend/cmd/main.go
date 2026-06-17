@@ -1707,8 +1707,17 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	}
 	token, err := internalpkg.ExchangeForToken(&b)
 	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
-			"couldn't exchange credentials for Keycloak token", err)
+		msg := "couldn't exchange credentials for Keycloak token"
+		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, msg, err)
+
+		if b.Jwt != "" {
+			go func() {
+				var claims map[string]any
+				internalpkg.InsecureClaims(b.Jwt, &claims)
+				logger.Debug(r, msg, "claims", claims, "error", err)
+			}()
+		}
+
 		return
 	}
 

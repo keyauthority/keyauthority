@@ -18,6 +18,7 @@ package internal
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -190,4 +191,23 @@ func HasRequiredRole(roles []string, environment string, requiredRole Role) bool
 		}
 	}
 	return (roleVal & requiredRole) == requiredRole
+}
+
+func InsecureClaims(token string, claims any) {
+	splitToken := strings.Split(token, ".")
+	if len(splitToken) != 3 {
+		return
+	}
+
+	payload, err := url.QueryUnescape(splitToken[1])
+	if err != nil {
+		return
+	}
+
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return
+	}
+
+	json.Unmarshal(decoded, claims)
 }

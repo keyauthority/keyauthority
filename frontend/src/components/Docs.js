@@ -1089,7 +1089,7 @@ metadata:
 ${template}
       {{ end }}
 spec:
-  serviceAccountName: my-sa # if not set, check default name for identity link in Keycloak
+  serviceAccountName: my-serviceaccount
   containers:
   - name: my-app
     image: my-app:0.1.0
@@ -1208,7 +1208,7 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         the permissions to access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with Kubernetes as
         the provider (likely with alias <code>jwt-kubernetes</code>) and User ID
-        set to <code>system:serviceaccount:my-namespace:my-sa</code>.
+        set to <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
       </p>
 
       {disclaimer()}
