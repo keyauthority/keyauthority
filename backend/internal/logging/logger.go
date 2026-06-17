@@ -214,16 +214,16 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
-		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
-			if user, ok := ctx.Value(CtxKeyUser).(string); ok {
-				attrs = append(attrs,
-					slog.Group("token",
-						slog.String("user", user),
-						slog.String("issuer", token.Issuer),
-					),
-				)
-			}
+		//if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
+		if user, ok := ctx.Value(CtxKeyUser).(string); ok {
+			attrs = append(attrs,
+				slog.Group("token",
+					slog.String("user", user),
+					//slog.String("issuer", token.Issuer),
+				),
+			)
 		}
+		//}
 		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
 			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
 		}
@@ -235,7 +235,7 @@ func attrsFromContext(ctx context.Context) []any {
 			attrs = append(attrs,
 				slog.Group("approverToken",
 					slog.String("user", user),
-					slog.String("issuer", approverToken.Issuer),
+					//slog.String("issuer", approverToken.Issuer),
 				),
 			)
 		}

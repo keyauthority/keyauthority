@@ -291,6 +291,8 @@ func main() {
 
 	router.Handle("/v1/health", healthHandler)
 
+	router.Handle("/v1/oidc/jwks/kubernetes", kubernetesJWKSHandler)
+
 	// ----- Other Hashicorp Vault compatible paths ----- //
 	router.Handle("/v1/auth/{mount}/login", tokenHandler)
 
@@ -1712,7 +1714,7 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 
 	if len(token) == 0 {
 		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
-			"empty token received from OIDC provider")
+			"empty token received from exchange", nil)
 		return
 	}
 
@@ -1721,6 +1723,51 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
+})
+
+var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwksURL := "https://kubernetes.default.svc.cluster.local/openid/v1/jwks"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, jwksURL, nil)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't create request to Kubernetes API", err)
+		return
+	}
+
+	// use the service account token to authenticate with the Kubernetes API server
+	tokenBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't read service account token", err)
+		return
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't get response from Kubernetes API", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			fmt.Sprintf("unexpected status code from Kubernetes API: %d", resp.StatusCode), nil)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't read response body from Kubernetes API", err)
+		return
+	}
+
+	writeHTTPWithHeaders(w, http.StatusOK, body,
+		map[string]string{"Content-Type": "application/json"})
 })
 
 var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

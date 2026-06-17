@@ -97,8 +97,10 @@ func ExchangeForToken(reqBody *TokenRequest) (string, error) {
 	}
 
 	values.Set("client_id", kcExchangeClientID)
-	values.Set("client_secret", kcExchangeClientSecret)
 
+	if kcExchangeClientSecret != "" {
+		values.Set("client_secret", kcExchangeClientSecret)
+	}
 	if username != "" {
 		values.Set("username", username)
 	}

@@ -208,25 +208,22 @@ export function Administration() {
       <h4>Clients</h4>
       <p>
         Applications and services that interact with KeyAuthority must be
-        registered as clients in Keycloak. These services include any automation
+        registered as users in Keycloak. These services include any automation
         tools, CI/CD pipelines, or Kubernetes clusters that need to request
-        certificates or manage secrets. All clients must be named with the
-        prefix <code>keyauthority-</code>.
+        certificates or manage secrets.
       </p>
 
-      <p>A KeyAuthority deployment defines five default clients:</p>
+      <p>
+        Users can access KeyAuthority resources via clients registered in
+        Keycloak. A KeyAuthority deployment defines two default clients:
+      </p>
 
       <KeyValueTable
         body={{
-          "keyauthority-discovery": "Used by the backend for client discovery.",
           "keyauthority-frontend":
             "The web frontend client used for UI interactions.",
           "keyauthority-exchange":
-            "Used by applications and services to exchange credentials (e.g. username and password) for KeyAuthority-verifiable tokens. This is relevant for non-UI access to the backend API since the API authenticates using these tokens.",
-          "keyauthority-kubernetes":
-            "Used by the local Kubernetes cluster to authenticate and request certificates and secrets via the Vault API. This client is configured to verify external tokens issued to Kubernetes service accounts, allowing pods to authenticate using their native Kubernetes identity without additional credential management.",
-          "keyauthority-gitlab":
-            "Used by GitLab CI/CD pipelines to authenticate and retrieve secrets. This client verifies external tokens issued by GitLab (such as CI/CD job tokens), enabling seamless integration with GitLab runners without requiring separate credential storage.",
+            "Used by applications and services to exchange credentials (e.g. username+password, JWTs) for Keycloak-issued access tokens. This is relevant for non-UI access to the backend API since the API authenticates using these tokens.",
         }}
         header={["Client", "Description"]}
         minKeyLen={30}
@@ -235,15 +232,13 @@ export function Administration() {
       />
 
       <p>
-        We recommend that the first three clients are never modified or deleted.
-        For most cases, these five clients should be enough for your needs and
-        you should not need to change anything here. However, you can also
-        create additional clients as needed for your specific use cases. When
-        setting up a new client, ensure that you assign the necessary roles to
-        enforce proper access control.
+        For most cases, these clients should be enough for your needs and you
+        should not need to change anything here. However, you can enrich these
+        clients with additional roles or additional JWT settings as needed for
+        your specific use cases.
       </p>
 
-      <h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
+      {/*<h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
       <p>
         For advanced use cases, you may need to customize the client settings
         further. This can include configuring protocol mappers to include
@@ -418,7 +413,7 @@ export function Administration() {
         external identity providers by configuring the appropriate claim
         requirements in Keycloak. You simply need to ensure that the claims used
         for scoping are present in the tokens issued by those providers.
-      </p>
+      </p>*/}
 
       <Alert variant="info">
         <Alert.Heading className="fw-bold fs-6">Tip</Alert.Heading>
@@ -741,9 +736,9 @@ export function Architecture() {
                   "Authentication and Authorization",
                   "bi-person-badge-fill",
                   <ul className="mb-0">
-                    <li>OIDC/OAuth2 identity provider</li>
+                    <li>OIDC/JWT identity provider</li>
                     <li>Role and client management</li>
-                    <li>Token issuance</li>
+                    <li>Token issuance and verification</li>
                   </ul>,
                 )}
               </div>
@@ -1058,7 +1053,9 @@ function gitlabUsageYaml(secret, data, apiRootUrl) {
       return `    ${k}: \n      vault: ${secret}/${k}@secrets\n      file: false`;
     })
     .join("\n");
-  return `job:
+  return `# project: my-group/my-project
+# branch: my-branch
+job:
   variables:
     VAULT_SERVER_URL: ${apiRootUrl}
   id_tokens:
@@ -1092,6 +1089,7 @@ metadata:
 ${template}
       {{ end }}
 spec:
+  serviceAccountName: my-sa # if not set, check default name for identity link in Keycloak
   containers:
   - name: my-app
     image: my-app:0.1.0
@@ -1136,9 +1134,7 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
         your shell environment using a JWT token for authentication. The secrets
         will be exported as environment variables.
       </p>
-
       {prettyCode("bash", shellUsage(secret, apiRootUrl))}
-
       <h4>GitLab Runners</h4>
       <p>
         The following example shows how to consume the secret in a GitLab job,
@@ -1154,6 +1150,19 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
       </p>
 
       {prettyCode("yaml", gitlabUsageYaml(secret, data, apiRootUrl))}
+
+      <p>
+        It is required that a user exists in Keycloak with the permissions to
+        access the secret, and that the user has an{" "}
+        <strong>Identity provider link</strong> configured with GitLab as the
+        provider (likely with alias <code>jwt-gitlab</code>) and User ID set to{" "}
+        <code>
+          project_path:my-group/my-project:ref_type:branch:ref:my-branch
+        </code>
+        . This allows Keycloak to associate the Gitlab-issued token with the
+        correct user in KeyAuthority, enabling secure access to the secrets
+        based on the GitLab project and branch context.
+      </p>
 
       <h4>Kubernetes Pods</h4>
       <p>
@@ -1193,6 +1202,14 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
       </p>
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}
+
+      <p>
+        Similar to GitLab, it is required that a user exists in Keycloak with
+        the permissions to access the secret, and that the user has an{" "}
+        <strong>Identity provider link</strong> configured with Kubernetes as
+        the provider (likely with alias <code>jwt-kubernetes</code>) and User ID
+        set to <code>system:serviceaccount:my-namespace:my-sa</code>.
+      </p>
 
       {disclaimer()}
     </>

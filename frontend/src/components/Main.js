@@ -94,6 +94,7 @@ export default function Main() {
           subtitle: "View your cryptographic keys",
           to: "/keys",
           icon: "bi-key-fill",
+          dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
         },
         {
           title: "Signers",
@@ -115,6 +116,12 @@ export default function Main() {
       //icon: "bi-file-earmark-text",
       items: [
         {
+          title: "Architecture",
+          subtitle: "Understand the architecture of KeyAuthority",
+          to: "/docs/architecture",
+          icon: "bi-diagram-3-fill",
+        },
+        {
           title: "Administration",
           subtitle: "Learn how to manage access for your KeyAuthority users",
           to: "/docs/admin",
@@ -131,12 +138,6 @@ export default function Main() {
           subtitle: "Learn how your applications can access secrets",
           to: "/docs/secrets",
           icon: "bi-lock-fill",
-        },
-        {
-          title: "Architecture",
-          subtitle: "Understand the architecture of KeyAuthority",
-          to: "/docs/architecture",
-          icon: "bi-diagram-3-fill",
         },
         {
           title: "Useful Links",
