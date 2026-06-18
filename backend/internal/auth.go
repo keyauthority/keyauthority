@@ -171,7 +171,7 @@ func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
 
 	idToken, err := verifier.Verify(r.Context(), tokenStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
+		return nil, fmt.Errorf("invalid token: %w, token: %s", err, tokenStr)
 	}
 	return idToken, nil
 }
