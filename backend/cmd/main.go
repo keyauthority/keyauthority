@@ -863,6 +863,25 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			}
 		}
 
+		// Optional token exchange as a pre-step to authentication
+		// Use case example: a client sending an ID Token in the headers instead of an Access Token
+		if r.URL.Query().Get("exchangeToken") == "true" {
+			tokenStr, err := internalpkg.GetTokenFromHeaders(r)
+			if err != nil {
+				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "couldn't get token from request", err)
+				return
+			}
+			exchangedToken, err := internalpkg.ExchangeForToken(
+				&internalpkg.TokenRequest{Jwt: tokenStr},
+			)
+			if err != nil {
+				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "token exchange failed", err)
+				return
+			}
+			r.Header.Set("Authorization", "Bearer "+exchangedToken)
+			// r.Header.Set("X-Vault-Token", exchangedToken)
+		}
+
 		// Verify token (once per request)
 		token, err := internalpkg.VerifyToken(r)
 		if err != nil {

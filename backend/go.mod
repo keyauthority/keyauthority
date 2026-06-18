@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/ThalesGroup/crypto11 v1.6.1
 	github.com/cert-manager/cert-manager v1.20.2
-	github.com/coreos/go-oidc/v3 v3.18.0
+	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1

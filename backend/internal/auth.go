@@ -147,16 +147,28 @@ func ExchangeForToken(reqBody *TokenRequest) (string, error) {
 	return resp.AccessToken, nil
 }
 
-func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
-	authHeader := r.Header.Get("Authorization")
-	vaultToken := r.Header.Get("X-Vault-Token")
+func GetTokenFromHeaders(r *http.Request) (string, error) {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	vaultToken := strings.TrimSpace(r.Header.Get("X-Vault-Token"))
+
 	if authHeader == "" && vaultToken == "" {
-		return nil, fmt.Errorf("missing Authorization header or X-Vault-Token header")
+		return "", fmt.Errorf("missing Authorization header or X-Vault-Token header")
 	}
 
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-	if tokenStr == "" {
-		tokenStr = vaultToken
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if token == "" {
+		token = vaultToken
+	}
+	if token == "" {
+		return "", fmt.Errorf("empty token in Authorization/X-Vault-Token headers")
+	}
+	return token, nil
+}
+
+func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
+	tokenStr, err := GetTokenFromHeaders(r)
+	if err != nil {
+		return nil, err
 	}
 
 	provider, err := oidc.NewProvider(r.Context(), kcIssuer)
@@ -171,7 +183,7 @@ func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
 
 	idToken, err := verifier.Verify(r.Context(), tokenStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w, token: %s", err, tokenStr)
+		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 	return idToken, nil
 }
