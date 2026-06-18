@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Alert, Button, Table } from "react-bootstrap";
 import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
@@ -231,11 +232,85 @@ export function Administration() {
         borderBottom={true}
       />
 
+      <h4>External Identity Providers</h4>
+
       <p>
-        For most cases, these clients should be enough for your needs and you
-        should not need to change anything here. However, you can enrich these
-        clients with additional roles or additional JWT settings as needed for
-        your specific use cases.
+        In some cases, you may need to integrate external{" "}
+        <strong>Identity Providers</strong> to allow users to authenticate using
+        existing credentials from platforms like GitLab, Kubernetes, or Google
+        Cloud. Keycloak supports this through its JWT Authorization Grant
+        feature, which allows you to configure the{" "}
+        <code>keyauthority-exchange</code> client to accept tokens issued by
+        external providers and exchange them for Keycloak-issued tokens. This is
+        particularly useful for machine-to-machine authentication, where
+        services can present tokens from their native identity systems without
+        needing to interact with the frontend.
+      </p>
+
+      <h5>Step 1: Create Identity Provider</h5>
+
+      <p>
+        Create an Identity Provider <code>jwt-gitlab</code> of type{" "}
+        <strong>JWT Authorization Grant</strong> in your Keycloak realm with the
+        appropriate settings, as shown in the example below for GitLab:
+      </p>
+
+      <img
+        src="/new-idp.png"
+        alt="Identity Provider Config"
+        className="img-fluid"
+      />
+
+      <h5>Step 2: Configure Client for Token Exchange</h5>
+
+      <p>
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Settings</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>Capability config</strong> section, and configure the client to
+        allow token exchange for the newly created Identity Provider. This
+        includes adding the Identity Provider as an allowed token exchange
+        source.
+      </p>
+
+      <img src="/exchange-client-config1.png" className="img-fluid" />
+
+      <h5>Step 3: Set Custom Audience for Token Exchange</h5>
+
+      <p>
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>OpenID Connect Compatibility Modes</strong> section, and set an
+        entry in the <strong>Custom audience mapping</strong> to the expected
+        audience claim of the external Identity Provider token. This ensures
+        that tokens issued by the external provider are accepted by Keycloak for
+        exchange.
+      </p>
+
+      <img src="/exchange-client-config2.png" className="img-fluid" />
+
+      <h5>Step 4: Link Identity Provider User ID to Keycloak User</h5>
+
+      <p>
+        Finally, ensure that there is a Keycloak user with an{" "}
+        <strong>Identity provider link</strong> that matches the User ID
+        (subject of the external token) from the external provider. This allows
+        Keycloak to associate incoming tokens with the correct user and apply
+        the appropriate roles and permissions.
+      </p>
+
+      <img src="/user-idp-link.png" className="img-fluid" />
+
+      <p>
+        If you encounter any issues with token exchange, check the Keycloak
+        server logs for errors related to JWT authorization grant validation or
+        audience mismatches. Adjust the configuration as necessary to ensure
+        that the external tokens are correctly recognized and exchanged for
+        Keycloak-issued tokens. In some scenarios, the backend server will also
+        show in DEBUG logs some information on the exchange process, including
+        the external token's claims and the result of the exchange attempt. This
+        can help diagnose issues with token validation or role mapping.
       </p>
 
       {/*<h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
@@ -413,7 +488,7 @@ export function Administration() {
         external identity providers by configuring the appropriate claim
         requirements in Keycloak. You simply need to ensure that the claims used
         for scoping are present in the tokens issued by those providers.
-      </p>*/}
+      </p>
 
       <Alert variant="info">
         <Alert.Heading className="fw-bold fs-6">Tip</Alert.Heading>
@@ -440,7 +515,7 @@ export function Administration() {
           </code>{" "}
           for the setup to work correctly.
         </p>
-      </Alert>
+      </Alert>*/}
     </>
   );
 }
@@ -795,45 +870,58 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
         KeyAuthority-managed signers and supports two types of cert-manager
         issuers:{" "}
         <a
+          href="https://cert-manager.io/docs/configuration/acme/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          ACME{" "}
+        </a>
+        and{" "}
+        <a
           href="https://cert-manager.io/docs/configuration/vault/"
           target="_blank"
           rel="noopener noreferrer"
         >
           Vault
         </a>{" "}
-        and{" "}
-        <a
-          href="https://cert-manager.io/docs/configuration/acme/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          ACME
-        </a>
-        . The former uses the HashiCorp Vault API and the latter uses the ACME
-        protocol to obtain certificates via HTTP-01 challenges.
+        . The former uses ACME protocol to obtain certificates via HTTP-01
+        challenges and the latter uses the HashiCorp Vault API.
       </p>
 
-      <p>
-        Below are example configurations for these issuers. You can choose the
-        appropriate one based on your needs. In the case of Vault issuers, there
-        are two authentication methods supported: Kubernetes Service Account
-        (i.e. k8s token-based) and AppRole (i.e. credentials-based).
-      </p>
+      <h5>ACME Issuer</h5>
 
-      <h5>Vault Issuer With Kubernetes Service Account Authentication</h5>
-
-      {vaultSAAuthIssuerExample(signerName, apiRootUrl)}
-
-      <h5>Vault Issuer With AppRole Authentication</h5>
-      {vaultAppRoleIssuerExample(
+      {acmeIssuerExample(
         signerName,
         `${signerName}@keyauthority.net`,
         apiRootUrl,
       )}
 
-      <h5>ACME Issuer</h5>
+      <h5>Vault Issuer</h5>
 
-      {acmeIssuerExample(
+      <p>
+        In the case of Vault issuers, the authentication methods supported are
+        based on:
+      </p>
+
+      <p>
+        <ul>
+          {/* <li>Kubernetes token issued by a service account</li> */}
+          <li>Kubernetes token issued by a cronjob</li>
+          <li>Credentials (client id and secret)</li>
+        </ul>
+      </p>
+
+      {/* <h6>Kubernetes Authentication through Service Account Tokens</h6> */}
+
+      {/* {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)} */}
+
+      <h6>Kubernetes Authentication through CronJob Tokens</h6>
+
+      {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)}
+
+      <h6>Authentication through Credentials</h6>
+
+      {vaultAppRoleIssuerExample(
         signerName,
         `${signerName}@keyauthority.net`,
         apiRootUrl,
@@ -952,7 +1040,7 @@ spec:
   );
 }
 
-function vaultSAAuthIssuerExample(signerName, apiRootUrl) {
+function vaultK8sSAAuthIssuerExample(signerName, apiRootUrl) {
   return prettyCode(
     "yaml",
     `# Role to allow creating tokens for the ServiceAccount
@@ -1002,6 +1090,93 @@ spec:
         mountPath: /v1/auth/jwt
         serviceAccountRef:
           name: ${signerName}-sa`,
+  );
+}
+
+function vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl) {
+  return prettyCode(
+    "yaml",
+    `# Role to allow creating secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${signerName}-role
+rules:
+  - apiGroups: ['']
+    resources: ['serviceaccounts/token']
+    resourceNames: ['${signerName}-sa']
+    verbs: ['create']
+  - apiGroups: ['']
+    resources: ['secrets']
+    verbs: ['create']
+  - apiGroups: ['']
+    resources: ['secrets']
+    resourceNames: ['${signerName}-token']
+    verbs: ['get', 'update', 'patch']
+---
+# RoleBinding to bind the Role to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${signerName}-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: ${signerName}-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ${signerName}-role
+---
+# ServiceAccount for the cronjob
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${signerName}-sa
+---
+# CronJob token rotator: creates single-audience token and stores in Secret
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${signerName}-token-rotator
+spec:
+  schedule: "*/10 * * * *" # rotate every 10 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ${signerName}-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: rotate
+              image: alpine/kubectl:latest
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  NS="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                  AUD="${apiRootUrl}"
+                  TOKEN="$(kubectl -n "$NS" create token ${signerName}-sa --audience "$AUD" --duration=1h)"
+                  kubectl -n "$NS" create secret generic ${signerName}-token --from-literal=token="$TOKEN" --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+---
+# Vault issuer using token authentication
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ${signerName}
+spec:
+  vault:
+    path: signers/${signerName}/sign
+    server: "${apiRootUrl}"
+    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
+    auth:
+      kubernetes:
+        role: ${signerName}-role
+        mountPath: /v1/auth/jwt
+        secretRef:
+          name: ${signerName}-token
+          key: token`,
   );
 }
 
@@ -1152,7 +1327,7 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
       {prettyCode("yaml", gitlabUsageYaml(secret, data, apiRootUrl))}
 
       <p>
-        It is required that a user exists in Keycloak with the permissions to
+        We recommend that a user exists in Keycloak with the permissions to
         access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with GitLab as the
         provider (likely with alias <code>jwt-gitlab</code>) and User ID set to{" "}
@@ -1161,7 +1336,9 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
         </code>
         . This allows Keycloak to associate the Gitlab-issued token with the
         correct user in KeyAuthority, enabling secure access to the secrets
-        based on the GitLab project and branch context.
+        based on the GitLab project and branch context. Check the{" "}
+        <Link to="/docs/admin">administration docs</Link> for more details on
+        how to set this up.
       </p>
 
       <h4>Kubernetes Pods</h4>
@@ -1208,7 +1385,8 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         the permissions to access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with Kubernetes as
         the provider (likely with alias <code>jwt-kubernetes</code>) and User ID
-        set to <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
+        set to <code>system:serviceaccount:my-namespace:my-serviceaccount</code>
+        .
       </p>
 
       {disclaimer()}
