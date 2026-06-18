@@ -222,9 +222,9 @@ export function Administration() {
       <KeyValueTable
         body={{
           "keyauthority-frontend":
-            "The web frontend client used for UI interactions.",
+            "The web frontend client used for UI interactions",
           "keyauthority-exchange":
-            "Used by applications and services to exchange credentials (e.g. username+password, JWTs) for Keycloak-issued access tokens. This is relevant for non-UI access to the backend API since the API authenticates using these tokens.",
+            "Used by applications and services to exchange credentials like username and password for Keycloak-issued access tokens",
         }}
         header={["Client", "Description"]}
         minKeyLen={30}
@@ -238,13 +238,24 @@ export function Administration() {
         In some cases, you may need to integrate external{" "}
         <strong>Identity Providers</strong> to allow users to authenticate using
         existing credentials from platforms like GitLab, Kubernetes, or Google
-        Cloud. Keycloak supports this through its JWT Authorization Grant
-        feature, which allows you to configure the{" "}
-        <code>keyauthority-exchange</code> client to accept tokens issued by
-        external providers and exchange them for Keycloak-issued tokens. This is
-        particularly useful for machine-to-machine authentication, where
-        services can present tokens from their native identity systems without
-        needing to interact with the frontend.
+        Cloud. Keycloak supports this through its{" "}
+        <a
+          href="https://www.keycloak.org/securing-apps/jwt-authorization-grant"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          JWT Authorization Grant
+        </a>{" "}
+        feature, which allows you to accept tokens issued by external providers
+        and exchange them for Keycloak-issued tokens. This is particularly
+        useful for machine-to-machine authentication, where services can present
+        tokens from their native identity systems without needing to interact
+        with the frontend.
+      </p>
+
+      <p>
+        This section provides a step-by-step guide on how to set up an external
+        Identity Provider, using GitLab as an example.
       </p>
 
       <h5>Step 1: Create Identity Provider</h5>
@@ -252,7 +263,7 @@ export function Administration() {
       <p>
         Create an Identity Provider <code>jwt-gitlab</code> of type{" "}
         <strong>JWT Authorization Grant</strong> in your Keycloak realm with the
-        appropriate settings, as shown in the example below for GitLab:
+        appropriate settings.
       </p>
 
       <img
@@ -268,9 +279,7 @@ export function Administration() {
         <i className="bi bi-caret-right-fill"></i> <strong>Settings</strong> tab{" "}
         <i className="bi bi-caret-right-fill"></i>{" "}
         <strong>Capability config</strong> section, and configure the client to
-        allow token exchange for the newly created Identity Provider. This
-        includes adding the Identity Provider as an allowed token exchange
-        source.
+        allow token exchange for the newly created Identity Provider.
       </p>
 
       <img src="/exchange-client-config1.png" className="img-fluid" />
@@ -281,11 +290,9 @@ export function Administration() {
         Next, go to <code>keyauthority-exchange</code> client{" "}
         <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
         <i className="bi bi-caret-right-fill"></i>{" "}
-        <strong>OpenID Connect Compatibility Modes</strong> section, and set an
-        entry in the <strong>Custom audience mapping</strong> to the expected
-        audience claim of the external Identity Provider token. This ensures
-        that tokens issued by the external provider are accepted by Keycloak for
-        exchange.
+        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
+        entry into the <strong>Custom audience mapping</strong> with the
+        expected audience claim of the external Identity Provider token.
       </p>
 
       <img src="/exchange-client-config2.png" className="img-fluid" />
@@ -305,12 +312,10 @@ export function Administration() {
       <p>
         If you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
-        audience mismatches. Adjust the configuration as necessary to ensure
-        that the external tokens are correctly recognized and exchanged for
-        Keycloak-issued tokens. In some scenarios, the backend server will also
-        show in DEBUG logs some information on the exchange process, including
-        the external token's claims and the result of the exchange attempt. This
-        can help diagnose issues with token validation or role mapping.
+        audience mismatches. In some cases, the backend server will also show in
+        DEBUG logs some information on the exchange process, including the
+        external token's claims and the result of the exchange attempt. This can
+        help diagnose issues with token validation or role mapping.
       </p>
 
       {/*<h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
@@ -906,7 +911,7 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
       <p>
         <ul>
           {/* <li>Kubernetes token issued by a service account</li> */}
-          <li>Kubernetes token issued by a cronjob</li>
+          <li>Kubernetes token issued by a cron job</li>
           <li>Credentials (client id and secret)</li>
         </ul>
       </p>
@@ -1327,16 +1332,15 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
       {prettyCode("yaml", gitlabUsageYaml(secret, data, apiRootUrl))}
 
       <p>
-        We recommend that a user exists in Keycloak with the permissions to
-        access the secret, and that the user has an{" "}
-        <strong>Identity provider link</strong> configured with GitLab as the
-        provider (likely with alias <code>jwt-gitlab</code>) and User ID set to{" "}
+        A user must exist in Keycloak with the permissions to access the secret,
+        and the user must have an <strong>Identity provider link</strong>{" "}
+        configured with GitLab as the provider and User ID set to{" "}
         <code>
           project_path:my-group/my-project:ref_type:branch:ref:my-branch
         </code>
-        . This allows Keycloak to associate the Gitlab-issued token with the
-        correct user in KeyAuthority, enabling secure access to the secrets
-        based on the GitLab project and branch context. Check the{" "}
+        . This allows Keycloak to associate the Gitlab-issued token with an
+        existing user, enabling secure access to the secrets based on the GitLab
+        project and branch context. Check the{" "}
         <Link to="/docs/admin">administration docs</Link> for more details on
         how to set this up.
       </p>
@@ -1384,9 +1388,8 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         Similar to GitLab, it is required that a user exists in Keycloak with
         the permissions to access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with Kubernetes as
-        the provider (likely with alias <code>jwt-kubernetes</code>) and User ID
-        set to <code>system:serviceaccount:my-namespace:my-serviceaccount</code>
-        .
+        the provider and User ID set to{" "}
+        <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
       </p>
 
       {disclaimer()}
