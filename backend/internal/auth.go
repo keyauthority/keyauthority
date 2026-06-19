@@ -54,6 +54,7 @@ var (
 	kcExchangeClientID     string
 	kcExchangeClientSecret string
 	kcIssuer               string
+	skipIssuerCheck        bool = false
 
 	roleMap map[string]Role = map[string]Role{
 		"KEYAUTHORITY_OPERATOR":   RoleOperator,
@@ -82,6 +83,17 @@ func SetupAuthenticator() {
 		kcExchangeClientID = os.Getenv(envKeycloakExchangeClientID)
 		kcExchangeClientSecret = os.Getenv(envKeycloakExchangeClientSecret)
 		kcIssuer = fmt.Sprintf("%s/realms/%s", kcURL, kcRealm)
+
+		// skip issuer check for keycloak running on HTTP localhost
+		if issuerURI, err := url.Parse(kcIssuer); err == nil {
+			skipIssuerCheck = issuerURI.Scheme == "http" &&
+				(issuerURI.Host == "127.0.0.1" ||
+					issuerURI.Host == "localhost" ||
+					issuerURI.Host == "host.docker.internal" ||
+					strings.HasPrefix(issuerURI.Host, "127.0.0.1:") ||
+					strings.HasPrefix(issuerURI.Host, "localhost:") ||
+					strings.HasPrefix(issuerURI.Host, "host.docker.internal:"))
+		}
 	})
 }
 
@@ -179,6 +191,7 @@ func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
 	verifier := provider.Verifier(&oidc.Config{
 		// ClientID:          internalClient.ClientID,
 		SkipClientIDCheck: true, // set true if using public clients without enforcing audience
+		SkipIssuerCheck:   skipIssuerCheck,
 	})
 
 	idToken, err := verifier.Verify(r.Context(), tokenStr)

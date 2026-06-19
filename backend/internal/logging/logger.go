@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -249,15 +248,14 @@ func attrsFromContext(ctx context.Context) []any {
 func attrsFromRequest(r *http.Request) []any {
 	var attrs []any
 	if r != nil {
-		// Try to unescape URL for better readability
 		path := r.URL.Path
-		if unescapedPath, err := url.PathUnescape(path); err == nil {
+		/*if unescapedPath, err := url.PathUnescape(path); err == nil {
 			path = unescapedPath
-		}
+		}*/
 		query := r.URL.RawQuery
-		if unescapedQuery, err := url.QueryUnescape(query); err == nil {
+		/*if unescapedQuery, err := url.QueryUnescape(query); err == nil {
 			query = unescapedQuery
-		}
+		}*/
 		reqURL := path
 		if query != "" {
 			reqURL += "?" + query
