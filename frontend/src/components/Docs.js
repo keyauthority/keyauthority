@@ -748,11 +748,25 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
 
       {/* {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)} */}
 
-      <h6>Kubernetes Authentication through CronJob Tokens</h6>
+      <h6>Authenticating with Kubernetes Tokens from CronJob</h6>
 
       {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)}
 
-      <h6>Authentication through Credentials</h6>
+      <p>
+        A user must exist in Keycloak with the permissions to access the signer,
+        and the user must have an <strong>Identity provider link</strong>{" "}
+        configured with Kubernetes as the provider and User ID set to{" "}
+        <code>system:serviceaccount:my-namespace:{signerName}-sa</code> where{" "}
+        <code>my-namespace</code> is the namespace where the service account{" "}
+        <code>{signerName}-sa</code> resides. This allows Keycloak to associate
+        the Kubernetes-issued token with an existing user, enabling secure
+        access to the signer based on the Kubernetes namespace and service
+        account context. Check the{" "}
+        <Link to="/docs/admin">administration docs</Link> for more details on
+        how to set this up.
+      </p>
+
+      <h6>Authenticating with Credentials</h6>
 
       {vaultAppRoleIssuerExample(
         signerName,
@@ -989,7 +1003,7 @@ spec:
               args:
                 - |
                   NS="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
-                  AUD="${apiRootUrl}"
+                  AUD="${apiRootUrl}" # must match the audience of the IdP (Kubernetes) token
                   TOKEN="$(kubectl -n "$NS" create token ${signerName}-sa --audience "$AUD" --duration=1h)"
                   kubectl -n "$NS" create secret generic ${signerName}-token --from-literal=token="$TOKEN" --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
 ---
@@ -1167,7 +1181,7 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
           project_path:my-group/my-project:ref_type:branch:ref:my-branch
         </code>
         . This allows Keycloak to associate the Gitlab-issued token with an
-        existing user, enabling secure access to the secrets based on the GitLab
+        existing user, enabling secure access to the secret based on the GitLab
         project and branch context. Check the{" "}
         <Link to="/docs/admin">administration docs</Link> for more details on
         how to set this up.
