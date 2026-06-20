@@ -312,7 +312,7 @@ export function Administration() {
       <p>
         Our Helm chart provides options to automate the creation of all these
         configurations, including the identity providers, client settings,
-        users, user links. The next code block shows an example, and you can
+        users, and user links. The next code block shows an example, and you can
         refer to the Helm chart documentation for details on how to enable these
         features during deployment.
       </p>
