@@ -1,18 +1,28 @@
-import { useEffect, useState, useCallback, use } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Alert, Tab, Tabs, Button } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import KeyValueTable from "./KeyValueTable";
 import JSONModal from "./JSONModal";
-import { copyToClipboard, prettyTime } from "../utils/utils";
+import SecretModal from "./SecretModal";
+import { copyToClipboard, prettyTime, showToast } from "../utils/utils";
 import { secretUsageExamples } from "./Docs";
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
 
-function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
+function SecretDetails({
+  isLoading,
+  setIsLoading,
+  setTitle,
+  setSubtitle,
+  setDropdownActions,
+}) {
   const location = useLocation();
   const secretName =
     decodeURIComponent(location.pathname.replaceAll("/secrets/", "")) || "";
+  const navigate = useNavigate();
+
+  const [showSecretModal, setShowSecretModal] = useState(false);
 
   const [error, setError] = useState(null);
   const [visibleSecrets, setVisibleSecrets] = useState(new Set()); // Track which secrets are visible
@@ -27,6 +37,8 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyModalTitle, setKeyModalTitle] = useState("");
   const [keyModalData, setKeyModalData] = useState(null);
+
+  const [dataEntries, setDataEntries] = useState({});
 
   useEffect(() => {
     setTitle(secretName);
@@ -65,7 +77,7 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
     } finally {
       setIsLoading(false);
     }
-  }, [api, secretName, setIsLoading]);
+  }, [api, secretName]);
 
   const handleShowKey = async (keyID) => {
     setIsLoading(true);
@@ -89,76 +101,133 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
     return visibleSecrets.has(key) ? value : "•".repeat(10);
   };
 
-  // Normalize secretData.data to an array of { key, value }
-  const secretEntries = secretData
-    ? Object.entries(secretData).map(([key, value]) => ({ key, value }))
-    : [];
+  const normalizeSecretData = (data) => {
+    if (!data) return [];
+    return Object.entries(data).map(([key, value]) => ({ key, value }));
+  };
 
-  // Build the body for KeyValueTable with React elements as values
-  const keyValueTableBody =
-    secretEntries.length > 0
-      ? Object.fromEntries(
-          secretEntries.map((entry) => [
-            entry.key,
-            <div
-              className="d-flex justify-content-between align-items-start gap-3"
-              key={entry.key}
-            >
+  const buildDataEntries = useCallback(() => {
+    const kv = normalizeSecretData(secretData);
+    const dataEntries =
+      kv.length > 0
+        ? Object.fromEntries(
+            kv.map((entry) => [
+              entry.key,
               <div
-                className="font-body"
-                style={
-                  !visibleSecrets.has(entry.key)
-                    ? { WebkitTextSecurity: "disc" }
-                    : {}
-                }
+                className="d-flex justify-content-between align-items-start gap-3"
+                key={entry.key}
               >
-                <pre
-                  className="mb-0"
-                  style={{
-                    fontFamily: "inherit", // use body font
-                    fontSize: "inherit",
-                    whiteSpace: "pre-wrap", // keep newlines, wrap long lines
-                    wordBreak: "break-word",
-                  }}
+                <div
+                  className="font-body"
+                  style={
+                    !visibleSecrets.has(entry.key)
+                      ? { WebkitTextSecurity: "disc" }
+                      : {}
+                  }
                 >
-                  {getDisplayValue(entry.key, entry.value)}
-                </pre>
-              </div>{" "}
-              <div className="d-flex gap-1">
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => {
-                    const newVisibleSecrets = new Set(visibleSecrets);
-                    if (visibleSecrets.has(entry.key)) {
-                      newVisibleSecrets.delete(entry.key);
-                    } else {
-                      newVisibleSecrets.add(entry.key);
-                    }
-                    setVisibleSecrets(newVisibleSecrets);
-                  }}
-                >
-                  <i
-                    className={`bi ${visibleSecrets.has(entry.key) ? "bi-eye-slash" : "bi-eye"}`}
-                  ></i>
-                </Button>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => {
-                    copyToClipboard(
-                      entry.value,
-                      "Value for '" + entry.key + "' copied!",
-                    );
-                  }}
-                >
-                  <i className="bi bi-clipboard"></i>
-                </Button>
-              </div>
-            </div>,
-          ]),
-        )
-      : {};
+                  <pre
+                    className="mb-0"
+                    style={{
+                      fontFamily: "inherit", // use body font
+                      fontSize: "inherit",
+                      whiteSpace: "pre-wrap", // keep newlines, wrap long lines
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {getDisplayValue(entry.key, entry.value)}
+                  </pre>
+                </div>{" "}
+                <div className="d-flex gap-1">
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => {
+                      const newVisibleSecrets = new Set(visibleSecrets);
+                      if (visibleSecrets.has(entry.key)) {
+                        newVisibleSecrets.delete(entry.key);
+                      } else {
+                        newVisibleSecrets.add(entry.key);
+                      }
+                      setVisibleSecrets(newVisibleSecrets);
+                    }}
+                  >
+                    <i
+                      className={`bi ${
+                        visibleSecrets.has(entry.key)
+                          ? "bi-eye-slash"
+                          : "bi-eye"
+                      }`}
+                    ></i>
+                  </Button>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => {
+                      copyToClipboard(
+                        entry.value,
+                        "Value for '" + entry.key + "' copied!",
+                      );
+                    }}
+                  >
+                    <i className="bi bi-clipboard"></i>
+                  </Button>
+                </div>
+              </div>,
+            ]),
+          )
+        : {};
+    setDataEntries(dataEntries);
+  }, [secretData, visibleSecrets]);
+
+  useEffect(() => {
+    buildDataEntries();
+  }, [buildDataEntries]);
+
+  const handleDeleteSecret = useCallback(async () => {
+    // ask user to enter the secret path to confirm deletion
+    const confirmedPath = window.prompt(
+      `To confirm deletion, please enter the secret path: ${secretName}`,
+    );
+
+    // Cancel pressed: do nothing
+    if (confirmedPath === null) {
+      return;
+    }
+
+    if (confirmedPath !== secretName) {
+      showToast("error", "Secret path does not match. Deletion cancelled.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.delete(`/secrets/${secretName}`);
+      showToast("success", "Secret deleted!");
+      navigate("/secrets");
+    } catch (err) {
+      showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [api, secretName, navigate]);
+
+  useEffect(() => {
+    setDropdownActions?.([
+      {
+        key: "edit-secret",
+        label: "Edit",
+        iconClass: "bi bi-pencil-square",
+        onClick: () => setShowSecretModal(true),
+      },
+      {
+        key: "delete-secret",
+        label: "Delete",
+        iconClass: "bi bi-trash",
+        onClick: handleDeleteSecret,
+      },
+    ]);
+    return () => setDropdownActions?.([]);
+  }, [setDropdownActions, handleDeleteSecret]);
 
   return (
     <>
@@ -169,26 +238,31 @@ function SecretDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
         modalData={keyModalData}
       />
 
+      <SecretModal
+        show={showSecretModal}
+        editMode={true}
+        onHide={() => setShowSecretModal(false)}
+        onSuccess={(updatedSecret) => {
+          fetchSecret();
+        }}
+      />
+
       {error && <Alert variant="danger">{error}</Alert>}
 
-      {secretData && (
+      {secretData && secretMetadata && (
         <Tabs className="mb-3">
           <Tab eventKey="data" title="Data">
-            {secretData && Object.keys(secretData).length > 0 ? (
-              <>
-                <KeyValueTable
-                  body={keyValueTableBody}
-                  borderBottom={true}
-                  header={["Key", "Value"]}
-                  minKeyLen={32}
-                />
-                <div className="text-muted small w-100 text-end">
-                  Last Updated: {prettyTime(secretMetadata.updatedAt)}
-                </div>
-              </>
-            ) : (
-              <Alert variant="info">No data available for this secret.</Alert>
-            )}
+            <>
+              <KeyValueTable
+                body={dataEntries}
+                borderBottom={true}
+                header={["Key", "Value"]}
+                minKeyLen={32}
+              />
+              <div className="text-muted small w-100 text-end">
+                Last Updated: {prettyTime(secretMetadata.updatedAt)}
+              </div>
+            </>
           </Tab>
           <Tab eventKey="usages" title="Usage Examples">
             {secretUsageExamples(secretName, secretData, apiRootUrl)}

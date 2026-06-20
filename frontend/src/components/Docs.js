@@ -1,24 +1,85 @@
-import { Alert, Table } from "react-bootstrap";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Alert, Button, Table } from "react-bootstrap";
 import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
-import { disclaimer, prettyCode } from "../utils/utils";
+import { copyToClipboard, disclaimer, prettyCode } from "../utils/utils";
 import KeyValueTable from "./KeyValueTable";
 
-export function Installation() {
+export function UsefulLinks() {
+  const api = getApi();
+  const apiUrl = new URL(api.defaults.baseURL);
+  const apiRootUrl = apiUrl.href.replace(/\/v1\/?$/, "");
+  const swaggerUrl = apiRootUrl + "/swagger/";
+  const keycloak = getKeycloak();
+
   return (
-    <>
-      <p>
-        KeyAuthority can be installed with Helm. See instructions in the{" "}
-        <a
-          href="https://artifacthub.io/packages/helm/keyauthority/keyauthority"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          KeyAuthority Helm Chart in Artifact Hub
-        </a>
-        .
-      </p>
-    </>
+    <Table responsive striped hover className="align-middle">
+      <thead>
+        <tr>
+          <th>Resource</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Project Home Page</td>
+          <td>
+            <a
+              href="https://keyauthority.net"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://keyauthority.net
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Project Docker Hub</td>
+          <td>
+            <a
+              href="https://hub.docker.com/u/keyauthoritydh"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://hub.docker.com/u/keyauthoritydh
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Helm Chart in Artifact Hub</td>
+          <td>
+            <a
+              href="https://artifacthub.io/packages/helm/keyauthority/keyauthority"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              https://artifacthub.io/packages/helm/keyauthority/keyauthority
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>REST API Swagger UI</td>
+          <td>
+            <a href={swaggerUrl} target="_blank" rel="noopener noreferrer">
+              {swaggerUrl}
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td>Integrated Keycloak's Admin Console</td>
+          <td>
+            <a
+              href={`${keycloak?.authServerUrl}/admin/master/console/#/${keycloak?.realm}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {keycloak?.authServerUrl}/admin/master/console/#/{keycloak?.realm}
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </Table>
   );
 }
 
@@ -113,7 +174,7 @@ export function Administration() {
         borderBottom={true}
       />
 
-      <h5>Environment-Scoped Access Roles</h5>
+      <h5>Environment-Scoped Roles</h5>
       <p>
         In addition to the global roles mentioned above, KeyAuthority also
         supports scoped roles that can be assigned on a <i>per-environment</i>{" "}
@@ -130,12 +191,11 @@ export function Administration() {
       <p>
         The environment-scoped role names are of the form{" "}
         <code>KEYAUTHORITY_OPERATOR_env</code>, where <code>env</code> is the
-        name of the environment. For example, a user with the a single role{" "}
-        <code>KEYAUTHORITY_OPERATOR_dev</code> has access to resources such as
-        signers and secrets within the <code>dev</code> environment only. To
-        assign scoped roles, navigate to the respective user or client in the
-        Keycloak admin interface and use the role assignment options to grant
-        the desired permissions.
+        name of the environment. For example, a user with a single role{" "}
+        <code>KEYAUTHORITY_OPERATOR_dev</code> has access to resources within
+        the <code>dev</code> environment only. To assign scoped roles, navigate
+        to the respective user or client in the Keycloak admin interface and use
+        the role assignment options to grant the desired permissions.
       </p>
 
       <p>
@@ -149,25 +209,22 @@ export function Administration() {
       <h4>Clients</h4>
       <p>
         Applications and services that interact with KeyAuthority must be
-        registered as clients in Keycloak. These services include any automation
+        registered as users in Keycloak. These services include any automation
         tools, CI/CD pipelines, or Kubernetes clusters that need to request
-        certificates or manage secrets. All clients must be named with the
-        prefix <code>keyauthority-</code>.
+        certificates or manage secrets.
       </p>
 
-      <p>A KeyAuthority deployment defines five default clients:</p>
+      <p>
+        Users can access KeyAuthority resources via clients registered in
+        Keycloak. A KeyAuthority deployment defines two default clients:
+      </p>
 
       <KeyValueTable
         body={{
-          "keyauthority-discovery": "Used for client discovery by the backend",
           "keyauthority-frontend":
-            "The web frontend client for user interactions",
+            "The web frontend client used for UI interactions",
           "keyauthority-exchange":
-            "Used by applications and services to exchange credentials (e.g. username and password) for KeyAuthority-verifiable tokens. This is relevant for non-UI access to the backend API since the API authenticates using these tokens.",
-          "keyauthority-kubernetes":
-            "Used by the local Kubernetes cluster to authenticate and request certificates and secrets via the Vault API. This client is configured to verify external tokens issued to Kubernetes service accounts, allowing pods to authenticate using their native Kubernetes identity without additional credential management.",
-          "keyauthority-gitlab":
-            "Used by GitLab CI/CD pipelines to authenticate and retrieve secrets. This client verifies external tokens issued by GitLab (such as CI/CD job tokens), enabling seamless integration with GitLab runners without requiring separate credential storage.",
+            "Used by applications and services to exchange credentials like username and password for Keycloak-issued access tokens",
         }}
         header={["Client", "Description"]}
         minKeyLen={30}
@@ -175,218 +232,123 @@ export function Administration() {
         borderBottom={true}
       />
 
-      <p>
-        We recommend that the first three clients are never modified or deleted.
-        For most cases, these five clients should be enough for your needs and
-        you should not need to change anything here. However, you can also
-        create additional clients as needed for your specific use cases. When
-        setting up a new client, ensure that you assign the necessary roles to
-        enforce proper access control.
-      </p>
+      <h4>External Identity Providers</h4>
 
-      <h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
       <p>
-        For advanced use cases, you may need to customize the client settings
-        further. This can include configuring protocol mappers to include
-        specific claims in tokens, setting up custom authentication flows, or
-        adjusting token lifespans.
-      </p>
-
-      <h5>Token Verification</h5>
-      <p>
-        The KeyAuthority backend API authentication works by looping through the
-        the list of configured OIDC providers until the token presented is
-        verified. This list is composed of:
-      </p>
-      <p>
-        <ul>
-          <li>
-            <strong>the internal OIDC provider</strong>, discoverable at{" "}
-            <a
-              href={`${keycloak?.authServerUrl}/realms/${keycloak?.realm}/.well-known/openid-configuration`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {`${keycloak?.authServerUrl}/realms/${keycloak?.realm}/.well-known/openid-configuration`}
-            </a>{" "}
-            and represents the Keycloak realm <code>{keycloak?.realm}</code>{" "}
-            where KeyAuthority is deployed, and
-          </li>
-          <li>
-            <strong>the external OIDC providers</strong>, corresponding to
-            Keycloak clients that have <code>client-jwt</code> as Client
-            Authenticator Type, ordered by their client ID in alphabetical
-            order.
-          </li>
-        </ul>
+        In some cases, you may need to integrate external{" "}
+        <strong>Identity Providers</strong> to allow users to authenticate using
+        existing credentials from platforms like GitLab, Kubernetes, or Google
+        Cloud. Keycloak supports this through its{" "}
+        <a
+          href="https://www.keycloak.org/securing-apps/jwt-authorization-grant"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          JWT Authorization Grant
+        </a>{" "}
+        feature, which allows you to accept tokens issued by external providers
+        and exchange them for Keycloak-issued tokens. This is particularly
+        useful for machine-to-machine authentication, where services can present
+        tokens from their native identity systems without needing to interact
+        with the frontend.
       </p>
 
       <p>
-        When a token is presented to the API, KeyAuthority will check its
-        validity against each OIDC provider in sequence. If the token is
-        successfully verified by any of the providers, access is granted based
-        on the roles in the token, if the verifier provider is the internal; or
-        the assigned client roles, if the verifier provider is external.
-        Providers are refreshed automatically every 30 minutes.
+        This section provides a step-by-step guide on how to set up an external
+        Identity Provider, using GitLab as an example.
       </p>
 
-      <h5>External Token Verification</h5>
-      <p>
-        Some clients, such as <code>keyauthority-kubernetes</code> and{" "}
-        <code>keyauthority-gitlab</code>, are configured to verify tokens issued
-        by external identity providers rather than Keycloak itself. This design
-        allows KeyAuthority to trust tokens from platforms like Kubernetes and
-        GitLab without requiring those systems to integrate directly with
-        Keycloak.
-      </p>
-      <p>
-        When these external tokens are presented to KeyAuthority, the system:
-      </p>
-      <ul>
-        <li>
-          Validates the token signature against the external provider's public
-          keys.
-        </li>
-        <li>Verifies the token claims (issuer, expiration, etc...).</li>
-        <li>
-          Maps the external identity to appropriate KeyAuthority roles and
-          permissions.
-        </li>
-      </ul>
-      <p>
-        This approach enables secure, federated authentication while maintaining
-        centralized access control through Keycloak for user management and role
-        assignments.
-      </p>
-
-      <h5>Scoping External Tokens</h5>
-      <p>
-        For external tokens, KeyAuthority supports scoping based on claims
-        present in the token. For example, Kubernetes service account tokens
-        include namespace and service account name claims that can be used to
-        assign scoped roles dynamically.
-      </p>
-      <p>
-        When configuring clients for external providers, ensure that the token
-        claims used for scoping align with your access control policies. This
-        allows you to enforce least-privilege access for workloads based on
-        their identities. This is achieved by specifying <i>required claims</i>{" "}
-        in the client's description field.
-      </p>
+      <h5>Step 1: Create Identity Provider</h5>
 
       <p>
-        For example, let's assume that you want to allow Kubernetes service
-        accounts in the the entire cluster to have access to all secrets in the{" "}
-        <code>dev</code> environment, and only service accounts in the{" "}
-        <code>prod</code> namespace to have access to secrets in the{" "}
-        <code>prod</code> environment. You can achieve this by creating the
-        following two clients in Keycloak:
+        Create an Identity Provider <code>jwt-gitlab</code> of type{" "}
+        <strong>JWT Authorization Grant</strong> in your Keycloak realm with the
+        appropriate settings.
       </p>
 
-      <Table responsive>
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Description</th>
-            <th>Roles</th>
-            <th>Configuration</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <code>keyauthority-kubernetes-1-prod</code>
-            </td>
-            <td>
-              Client for Kubernetes service accounts in the <code>prod</code>{" "}
-              namespace
-            </td>
-            <td>
-              <code>KEYAUTHORITY_OPERATOR_dev</code>,{" "}
-              <code>KEYAUTHORITY_OPERATOR_prod</code>
-            </td>
-            <td>
-              {prettyCode("json", {
-                clientId: "keyauthority-kubernetes-1-prod",
-                clientAuthenticatorType: "client-jwt",
-                description:
-                  '{"requiredClaims":{"kubernetes.io":{"namespace":"prod"}}}',
-                attributes: {
-                  "jwks.url": "https://kubernetes.default.svc.cluster.local",
-                  "use.jwks.url": "true",
-                },
-              })}
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>keyauthority-kubernetes-2-dev</code>
-            </td>
-            <td>Client for all Kubernetes service accounts</td>
-            <td>
-              <code>KEYAUTHORITY_OPERATOR_dev</code>
-            </td>
-            <td>
-              {prettyCode("json", {
-                clientId: "keyauthority-kubernetes-2-dev",
-                clientAuthenticatorType: "client-jwt",
-                attributes: {
-                  "jwks.url": "https://kubernetes.default.svc.cluster.local",
-                  "use.jwks.url": "true",
-                },
-              })}
-            </td>
-          </tr>
-        </tbody>
-      </Table>
+      <img
+        src="/new-idp.png"
+        alt="Identity Provider Config"
+        className="img-fluid"
+      />
+
+      <h5>Step 2: Configure Client for Token Exchange</h5>
 
       <p>
-        As you can observe, the only difference between the two clients config
-        is that the first one has a <code>description</code> attribute
-        specifying required claims for environment scoping. This ensures that
-        only tokens from service accounts in the <code>prod</code> namespace
-        will be accepted by that client, therefore only these tokens get access
-        to secrets in both <code>dev</code> and <code>prod</code> environments.
-        Note also that the client names/IDs were purposely set in a way that{" "}
-        <code>keyauthority-kubernetes-1-prod</code> comes before{" "}
-        <code>keyauthority-kubernetes-2-dev</code> alphabetically, so that it is
-        evaluated first during token verification. As a general rule, more
-        specific clients (i.e., those with claim requirements) should be named
-        in a way that they come first alphabetically.
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Settings</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>Capability config</strong> section, and configure the client to
+        allow token exchange for the newly created Identity Provider.
       </p>
+
+      <img src="/exchange-client-config1.png" className="img-fluid" />
+
+      <h5>Step 3: Set Custom Audience for Token Exchange</h5>
+
       <p>
-        Similarly, you can use this approach to set scoped access for other
-        external identity providers by configuring the appropriate claim
-        requirements in Keycloak. You simply need to ensure that the claims used
-        for scoping are present in the tokens issued by those providers.
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
+        entry into the <strong>Custom audience mapping</strong> with the
+        expected audience claim of tokens from the external Identity Provider.
       </p>
 
-      <Alert variant="info">
-        <Alert.Heading className="fw-bold fs-6">Tip</Alert.Heading>
-        <p>
-          When configuring external OIDC providers, it is crucial to ensure that
-          JWKS URLs are correctly set and accessible. For example, while the
-          typical JWKS URL for Kubernetes is{" "}
-          <code>https://kubernetes.default.svc.cluster.local</code>, providers
-          like Google Cloud or Microsoft Azure may have different URLs. The
-          KeyAuthority backend will signal such issues in the DEBUG logs. For
-          example:
-        </p>
+      <img src="/exchange-client-config2.png" className="img-fluid" />
 
-        {prettyCode(
-          "log",
-          `time=2026-02-18T09:50:50.817Z level=DEBUG msg="skipping client for external OIDC provider discovery" clientID=keyauthority-kubernetes reason="oidc: issuer URL provided to client (\\"https://kubernetes.default.svc.cluster.local\\") did not match the issuer URL returned by provider (\\"https://container.googleapis.com/v1/projects/keyauthority-test/locations/europe-central2/clusters/keyauthority-cluster-1\\")".`,
-          false,
-        )}
+      <h5>Step 4: Link Identity Provider User ID to Keycloak User</h5>
 
-        <p>
-          This means that the client's JWKS URL should be set to{" "}
-          <code>
-            https://container.googleapis.com/v1/projects/keyauthority-test/locations/europe-central2/clusters/keyauthority-cluster-1
-          </code>{" "}
-          for the setup to work correctly.
-        </p>
-      </Alert>
+      <p>
+        Finally, ensure that there is a Keycloak user with an{" "}
+        <strong>Identity provider link</strong> that matches the User ID
+        (subject of the external token) from the external provider. This allows
+        Keycloak to associate incoming tokens with the correct user and apply
+        the appropriate roles and permissions.
+      </p>
+
+      <img src="/user-idp-link.png" className="img-fluid" />
+
+      <p>
+        Our Helm chart provides options to automate the creation of all these
+        configurations, including the identity providers, client settings,
+        users, and user links. The next code block shows an example, and you can
+        refer to the Helm chart documentation for details on how to enable these
+        features during deployment.
+      </p>
+
+      {prettyCode(
+        "yaml",
+        `# Example Helm values to automate GitLab Identity Provider setup
+keycloak:
+  provisionJob:
+    jwtIdentityProviders:
+      gitlab:
+        enabled: true
+        alias: jwt-gitlab
+        issuer: https://gitlab.com
+        jwksURL: https://gitlab.com/oauth/discovery/keys
+        customAudience: https://gitlab.com
+        subjects: # every federated user needs an IdP link to a Keycloak user
+          - project_path:my-group/my-project:ref_type:branch:ref:my-branch
+`,
+      )}
+
+      {/*<Alert variant="warning" className="mt-4">
+        <i className="bi bi-exclamation-triangle-fill"></i> The automation of
+        Identity Provider setup is currently in preview and may not cover all
+        use cases. It is recommended to review the generated configurations and
+        adjust them as needed to fit your specific requirements.
+      </Alert>*/}
+
+      <p>
+        If you encounter any issues with token exchange, check the Keycloak
+        server logs for errors related to JWT authorization grant validation or
+        audience mismatches. In some cases, the backend server will also show in
+        DEBUG logs some information on the exchange process, including the
+        external token's claims and the result of the exchange attempt. This can
+        help diagnose issues with token validation or role mapping.
+      </p>
     </>
   );
 }
@@ -504,6 +466,231 @@ EOF
   );
 }
 
+export function Architecture() {
+  const rootRef = useRef(null);
+  const nodeRefs = useRef({});
+  const [points, setPoints] = useState({});
+
+  const setNodeRef = (key) => (el) => {
+    nodeRefs.current[key] = el;
+  };
+
+  useEffect(() => {
+    const updatePoints = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      const rootBox = root.getBoundingClientRect();
+
+      const next = {};
+      Object.entries(nodeRefs.current).forEach(([key, el]) => {
+        if (!el) return;
+        const box = el.getBoundingClientRect();
+        next[key] = {
+          x: box.left - rootBox.left + box.width / 2,
+          y: box.top - rootBox.top + box.height / 2,
+        };
+      });
+
+      setPoints(next);
+    };
+
+    updatePoints();
+    window.addEventListener("resize", updatePoints);
+
+    const ro = new ResizeObserver(updatePoints);
+    if (rootRef.current) ro.observe(rootRef.current);
+
+    return () => {
+      window.removeEventListener("resize", updatePoints);
+      ro.disconnect();
+    };
+  }, []);
+
+  const card = (variant = "secondary", title, description, icon, content) => (
+    <Alert variant={variant} className="rounded-4 shadow w-100">
+      <div className="d-flex align-items-center mb-3">
+        <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
+        <div className="ms-3">
+          <h5 className="mb-0">{title}</h5>
+          <div className="small">{description}</div>
+        </div>
+      </div>
+      <div className="small">{content}</div>
+    </Alert>
+  );
+
+  const line = (from, to, color = "#c62828", dashed = false) => {
+    if (!points[from] || !points[to]) return null;
+    return (
+      <line
+        key={`${from}-${to}`}
+        x1={points[from].x}
+        y1={points[from].y}
+        x2={points[to].x}
+        y2={points[to].y}
+        stroke={color}
+        strokeWidth="3"
+        //strokeDasharray={dashed ? "6 4" : "0"}
+        markerEnd="url(#archArrow)"
+        //className="shadow"
+      />
+    );
+  };
+
+  return (
+    <>
+      <p>
+        The following diagram illustrates the architecture of KeyAuthority,
+        showing its components and their interactions. KeyAuthority components
+        are the frontend, the backend, the identity provider (Keycloak), and the
+        database. The diagram also shows the interactions with humans, machines,
+        and the HSM.
+      </p>
+
+      <div ref={rootRef} className="position-relative">
+        {/* Connection layer */}
+        <svg
+          className="position-absolute top-0 start-0 w-100 h-100"
+          style={{ pointerEvents: "none", zIndex: 0 }}
+        >
+          {line("humans", "frontend")}
+          {line("apps", "backend")}
+          {line("frontend", "backend")}
+          {line("keycloak", "frontend")}
+          {line("keycloak", "backend")}
+          {line("keycloak", "database")}
+          {line("backend", "database")}
+          {line("backend", "hsm")}
+        </svg>
+
+        {/* Nodes */}
+        <div
+          className="position-relative row gap-4 align-items-center"
+          style={{ zIndex: 1, minHeight: 640 }}
+        >
+          <div className="col-3 d-flex flex-column justify-content-center gap-4 h-100">
+            <div ref={setNodeRef("humans")} className="d-flex w-100">
+              {card(
+                "success",
+                "Humans",
+                "End Users",
+                "bi-people-fill",
+                <ul className="mb-0">
+                  <li>Operators</li>
+                  <li>Auditors</li>
+                  <li>Approvers</li>
+                </ul>,
+              )}
+            </div>
+
+            <div ref={setNodeRef("apps")} className="d-flex w-100">
+              {card(
+                "info",
+                "Machines",
+                "Applications and Services",
+                "bi-cpu-fill",
+                <ul className="mb-0">
+                  <li>CI/CD pipelines</li>
+                  <li>Kubernetes workloads</li>
+                  <li>External services</li>
+                </ul>,
+              )}
+            </div>
+
+            <div ref={setNodeRef("hsm")} className="d-flex w-100">
+              {card(
+                "secondary",
+                "HSM",
+                "Hardware Security Module",
+                "bi-safe-fill",
+                <ul className="mb-0">
+                  <li>Secure key custody</li>
+                  <li>Cryptographic operations</li>
+                  <li>PKCS#11 integration</li>
+                </ul>,
+              )}
+            </div>
+          </div>
+
+          <div className="col-8 d-flex flex-column justify-content-center gap-4 h-100">
+            <div className="row g-4">
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("frontend")}
+              >
+                {card(
+                  "warning",
+                  "Frontend",
+                  "Human Entry Point",
+                  "bi-browser-chrome",
+                  <ul className="mb-0">
+                    <li>Web UI</li>
+                    <li>Role-based views</li>
+                    <li>Environment-scoped access</li>
+                  </ul>,
+                )}
+              </div>
+
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("keycloak")}
+              >
+                {card(
+                  "dark",
+                  "Keycloak",
+                  "Authentication and Authorization",
+                  "bi-person-badge-fill",
+                  <ul className="mb-0">
+                    <li>OIDC/JWT identity provider</li>
+                    <li>Role and client management</li>
+                    <li>Token issuance and verification</li>
+                  </ul>,
+                )}
+              </div>
+            </div>
+
+            <div className="row g-4">
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("backend")}
+              >
+                {card(
+                  "primary",
+                  "Backend",
+                  "API and Business Logic",
+                  "bi-hdd-rack-fill",
+                  <ul className="mb-0">
+                    <li>REST API</li>
+                    <li>Authorization enforcement</li>
+                    <li>Workflows and audit logs</li>
+                  </ul>,
+                )}
+              </div>
+
+              <div
+                className="col-12 col-md-6 d-flex"
+                ref={setNodeRef("database")}
+              >
+                {card(
+                  "light",
+                  "Database",
+                  "Scalable Persistent Storage",
+                  "bi-database-fill",
+                  <ul className="mb-0">
+                    <li>User and config data</li>
+                    <li>Crypto resources and metadata</li>
+                    <li>Access and audit logs</li>
+                  </ul>,
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export const signerUsageExample = (signerName, apiRootUrl) => {
   return (
     <>
@@ -513,41 +700,23 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
         KeyAuthority-managed signers and supports two types of cert-manager
         issuers:{" "}
         <a
+          href="https://cert-manager.io/docs/configuration/acme/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          ACME{" "}
+        </a>
+        and{" "}
+        <a
           href="https://cert-manager.io/docs/configuration/vault/"
           target="_blank"
           rel="noopener noreferrer"
         >
           Vault
         </a>{" "}
-        and{" "}
-        <a
-          href="https://cert-manager.io/docs/configuration/acme/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          ACME
-        </a>
-        . The former uses the HashiCorp Vault API and the latter uses the ACME
-        protocol to obtain certificates via HTTP-01 challenges.
+        . The former uses ACME protocol to obtain certificates via HTTP-01
+        challenges and the latter uses the HashiCorp Vault API.
       </p>
-
-      <p>
-        Below are example configurations for these issuers. You can choose the
-        appropriate one based on your needs. In the case of Vault issuers, there
-        are two authentication methods supported: AppRole and Kubernetes Service
-        Account.
-      </p>
-
-      <h5>Vault Issuer With AppRole Authentication</h5>
-      {vaultAppRoleIssuerExample(
-        signerName,
-        `${signerName}@keyauthority.net`,
-        apiRootUrl,
-      )}
-
-      <h5>Vault Issuer With Kubernetes Service Account Authentication</h5>
-
-      {vaultSAAuthIssuerExample(signerName, apiRootUrl)}
 
       <h5>ACME Issuer</h5>
 
@@ -556,6 +725,51 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
         `${signerName}@keyauthority.net`,
         apiRootUrl,
       )}
+
+      <h5>Vault Issuer</h5>
+
+      <p>
+        In the case of Vault issuers, the authentication methods supported are
+        based on:
+      </p>
+
+      <p>
+        <ul>
+          <li>Credentials (client id and secret)</li>
+          {/* <li>Kubernetes token issued by a service account</li> */}
+          <li>Kubernetes token issued by a cron job</li>
+        </ul>
+      </p>
+
+      <h6>Authenticating with Credentials</h6>
+
+      {vaultAppRoleIssuerExample(
+        signerName,
+        `${signerName}@keyauthority.net`,
+        apiRootUrl,
+      )}
+
+      {/* <h6>Kubernetes Authentication through Service Account Tokens</h6> */}
+
+      {/* {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)} */}
+
+      <h6>Authenticating with Kubernetes Tokens from Cron Job</h6>
+
+      {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)}
+
+      <p>
+        A user must exist in Keycloak with the permissions to access the signer,
+        and the user must have an <strong>Identity provider link</strong>{" "}
+        configured with Kubernetes as the provider and User ID set to{" "}
+        <code>system:serviceaccount:my-namespace:{signerName}-sa</code> where{" "}
+        <code>my-namespace</code> is the namespace where the service account{" "}
+        <code>{signerName}-sa</code> resides. This allows Keycloak to associate
+        the Kubernetes-issued token with an existing user, enabling secure
+        access to the signer based on the Kubernetes namespace and service
+        account context. Check the{" "}
+        <Link to="/docs/admin">administration docs</Link> for more details on
+        how to set this up.
+      </p>
 
       <h4>Secure Application</h4>
       <p>
@@ -670,7 +884,7 @@ spec:
   );
 }
 
-function vaultSAAuthIssuerExample(signerName, apiRootUrl) {
+function vaultK8sSAAuthIssuerExample(signerName, apiRootUrl) {
   return prettyCode(
     "yaml",
     `# Role to allow creating tokens for the ServiceAccount
@@ -723,6 +937,93 @@ spec:
   );
 }
 
+function vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl) {
+  return prettyCode(
+    "yaml",
+    `# Role to allow creating secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${signerName}-role
+rules:
+  - apiGroups: ['']
+    resources: ['serviceaccounts/token']
+    resourceNames: ['${signerName}-sa']
+    verbs: ['create']
+  - apiGroups: ['']
+    resources: ['secrets']
+    verbs: ['create']
+  - apiGroups: ['']
+    resources: ['secrets']
+    resourceNames: ['${signerName}-token']
+    verbs: ['get', 'update', 'patch']
+---
+# RoleBinding to bind the Role to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${signerName}-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: ${signerName}-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ${signerName}-role
+---
+# ServiceAccount for the cronjob
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${signerName}-sa
+---
+# CronJob token rotator: creates single-audience token and stores in Secret
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${signerName}-token-rotator
+spec:
+  schedule: "*/10 * * * *" # rotate every 10 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ${signerName}-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: rotate
+              image: alpine/kubectl:latest
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  NS="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                  AUD="${apiRootUrl}" # must match the audience of the IdP (Kubernetes) token
+                  TOKEN="$(kubectl -n "$NS" create token ${signerName}-sa --audience "$AUD" --duration=1h)"
+                  kubectl -n "$NS" create secret generic ${signerName}-token --from-literal=token="$TOKEN" --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+---
+# Vault issuer using token authentication
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ${signerName}
+spec:
+  vault:
+    path: signers/${signerName}/sign
+    server: "${apiRootUrl}"
+    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
+    auth:
+      kubernetes:
+        role: ${signerName}-role
+        mountPath: /v1/auth/jwt
+        secretRef:
+          name: ${signerName}-token
+          key: token`,
+  );
+}
+
 function acmeIssuerExample(signerName, email, apiRootUrl) {
   const isValidEmail = (email) => {
     if (!email || typeof email !== "string") return false;
@@ -771,7 +1072,9 @@ function gitlabUsageYaml(secret, data, apiRootUrl) {
       return `    ${k}: \n      vault: ${secret}/${k}@secrets\n      file: false`;
     })
     .join("\n");
-  return `job:
+  return `# project: my-group/my-project
+# branch: my-branch
+job:
   variables:
     VAULT_SERVER_URL: ${apiRootUrl}
   id_tokens:
@@ -805,6 +1108,7 @@ metadata:
 ${template}
       {{ end }}
 spec:
+  serviceAccountName: my-serviceaccount
   containers:
   - name: my-app
     image: my-app:0.1.0
@@ -849,15 +1153,13 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
         your shell environment using a JWT token for authentication. The secrets
         will be exported as environment variables.
       </p>
-
       {prettyCode("bash", shellUsage(secret, apiRootUrl))}
-
       <h4>GitLab Runners</h4>
       <p>
         The following example shows how to consume the secret in a GitLab job,
         using{" "}
         <a
-          href="https://docs.gitlab.com/ci/secrets/#use-vault-secrets-in-a-ci-job"
+          href="https://docs.gitlab.com/ci/secrets/hashicorp_vault/"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -867,6 +1169,20 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
       </p>
 
       {prettyCode("yaml", gitlabUsageYaml(secret, data, apiRootUrl))}
+
+      <p>
+        A user must exist in Keycloak with the permissions to access the secret,
+        and the user must have an <strong>Identity provider link</strong>{" "}
+        configured with GitLab as the provider and User ID set to{" "}
+        <code>
+          project_path:my-group/my-project:ref_type:branch:ref:my-branch
+        </code>
+        . This allows Keycloak to associate the Gitlab-issued token with an
+        existing user, enabling secure access to the secret based on the GitLab
+        project and branch context. Check the{" "}
+        <Link to="/docs/admin">administration docs</Link> for more details on
+        how to set this up.
+      </p>
 
       <h4>Kubernetes Pods</h4>
       <p>
@@ -906,6 +1222,14 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
       </p>
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}
+
+      <p>
+        Similar to GitLab, it is required that a user exists in Keycloak with
+        the permissions to access the secret, and that the user has an{" "}
+        <strong>Identity provider link</strong> configured with Kubernetes as
+        the provider and User ID set to{" "}
+        <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
+      </p>
 
       {disclaimer()}
     </>

@@ -1,12 +1,17 @@
 import { useCallback, useState, useEffect } from "react";
 import { Alert, Table } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getApi } from "../axios";
 import Paginator from "./Paginator";
-import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
+import SignerModal from "./SignerModal";
 import Filters from "./Filters";
+import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
 
-export default function Signers({ isLoading, setIsLoading }) {
+export default function Signers({
+  isLoading,
+  setIsLoading,
+  setDropdownActions,
+}) {
   const [error, setError] = useState(null);
   const [signers, setSigners] = useState([]);
   const [page, setPage] = useState(1);
@@ -14,7 +19,10 @@ export default function Signers({ isLoading, setIsLoading }) {
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
 
+  const [showSignerModal, setShowSignerModal] = useState(false);
+
   const api = getApi();
+  const navigate = useNavigate();
 
   const fetchSigners = useCallback(async () => {
     setIsLoading(true);
@@ -36,8 +44,31 @@ export default function Signers({ isLoading, setIsLoading }) {
     fetchSigners();
   }, [fetchSigners]);
 
+  useEffect(() => {
+    setDropdownActions?.([
+      {
+        key: "new-signer",
+        label: "New",
+        iconClass: "bi bi-plus-lg",
+        onClick: () => {
+          setShowSignerModal(true);
+        },
+      },
+    ]);
+    return () => setDropdownActions?.([]);
+  }, [setDropdownActions]);
+
   return (
     <>
+      <SignerModal
+        show={showSignerModal}
+        onHide={() => setShowSignerModal(false)}
+        editMode={false}
+        onSuccess={(updatedSigner) => {
+          navigate(`/signers/${encodeURIComponent(updatedSigner)}`);
+        }}
+      />
+
       {error && <Alert variant="danger">{error}</Alert>}
 
       <Filters

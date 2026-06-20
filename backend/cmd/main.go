@@ -71,7 +71,6 @@ var (
 	enterprise    string
 	logger        *loggingpkg.StdAndDBLogger
 	store         *internalpkg.Store
-	authenticator *internalpkg.Authenticator
 	acmeResponder *internalpkg.ACMEResponder
 
 	// HTTP router, made global so pendingRequestHandler can access it
@@ -115,12 +114,8 @@ func main() {
 	// Set default HTTP transport
 	setDefaultHttpTransport()
 
-	// Set up the authenticator once; periodic reloads run in a goroutine
-	if err := setupAuthenticator(); err != nil {
-		logger.ErrorWithContext(context.Background(),
-			"couldn't set up authenticator", "error", err)
-		return
-	}
+	// Set up the authenticator
+	internalpkg.SetupAuthenticator()
 	logger.InfoWithContext(context.Background(), "authenticator ready")
 
 	// Create ACME responder
@@ -296,6 +291,8 @@ func main() {
 
 	router.Handle("/v1/health", healthHandler)
 
+	router.Handle("/v1/oidc/jwks/kubernetes", kubernetesJWKSHandler)
+
 	// ----- Other Hashicorp Vault compatible paths ----- //
 	router.Handle("/v1/auth/{mount}/login", tokenHandler)
 
@@ -384,33 +381,6 @@ func runPeriodicTasks() {
 
 		for {
 			recreateAllCRLs()
-			<-ticker.C
-		}
-	}()
-
-	// Authenticator Reloading
-	go func() {
-		intervalStr := os.Getenv(envAuthenticatorReloadInterval)
-		if intervalStr == "" {
-			intervalStr = "30m"
-		}
-		authenticatorReloadInterval, err := time.ParseDuration(intervalStr)
-		if err != nil {
-			logger.WarnWithContext(context.Background(),
-				"invalid authenticator reload interval, using default of 30m",
-				"error", err, "intervalStr", intervalStr)
-			authenticatorReloadInterval = 30 * time.Minute
-		}
-
-		time.Sleep(authenticatorReloadInterval) // initial delay before first reload
-		ticker := time.NewTicker(authenticatorReloadInterval)
-		defer ticker.Stop()
-
-		for {
-			if err := setupAuthenticator(); err != nil {
-				logger.ErrorWithContext(context.Background(),
-					"couldn't reload authenticator", "error", err)
-			}
 			<-ticker.C
 		}
 	}()
@@ -504,19 +474,6 @@ func recreateAllCRLs() {
 
 		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
 	}
-}
-
-func setupAuthenticator() error {
-	ctx := context.Background()
-	newAuthenticator, logEntries, err := internalpkg.NewAuthenticator(ctx)
-	if err != nil {
-		return err
-	}
-	for _, entry := range logEntries {
-		logger.LogWithContext(ctx, entry)
-	}
-	authenticator = newAuthenticator
-	return nil
 }
 
 func setDefaultHttpTransport() {
@@ -906,11 +863,27 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			}
 		}
 
+		/*// Optional token exchange as a pre-step to authentication
+		// Use case example: a client sending an ID Token in the headers instead of an Access Token
+		if r.URL.Query().Get("exchangeToken") == "true" {
+			tokenStr, err := internalpkg.GetTokenFromHeaders(r)
+			if err != nil {
+				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "couldn't get token from request", err)
+				return
+			}
+			exchangedToken, err := internalpkg.ExchangeForToken(
+				&internalpkg.TokenRequest{Jwt: tokenStr},
+			)
+			if err != nil {
+				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "token exchange failed", err)
+				return
+			}
+			r.Header.Set("Authorization", "Bearer "+exchangedToken)
+			// r.Header.Set("X-Vault-Token", exchangedToken)
+		}*/
+
 		// Verify token (once per request)
-		token, logEntries, providerRoles, err := authenticator.VerifyToken(r)
-		for _, entry := range logEntries {
-			logger.LogWithContext(r.Context(), entry)
-		}
+		token, err := internalpkg.VerifyToken(r)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
@@ -918,9 +891,6 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		// Parse immutable claims once, store in context
 		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
-		if len(providerRoles) > 0 { // override roles from token with provider roles
-			roles = providerRoles
-		}
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
@@ -941,7 +911,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		// RBAC check — use roles already extracted above
-		if !authenticator.HasRequiredRole(roles, environment, requiredRole) {
+		if !internalpkg.HasRequiredRole(roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -1754,16 +1724,26 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
 		return
 	}
-	token, err := authenticator.ExchangeForToken(&b)
+	token, err := internalpkg.ExchangeForToken(&b)
 	if err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
 			"couldn't exchange credentials for Keycloak token", err)
+
+		if b.Jwt != "" {
+			go func() {
+				var claims map[string]any
+				internalpkg.InsecureClaims(b.Jwt, &claims)
+				logger.Debug(r, "couldn't exchange JWT for Keycloak token",
+					"claims", claims, "error", err)
+			}()
+		}
+
 		return
 	}
 
 	if len(token) == 0 {
 		logErrorAndWriteHTTP(w, r, http.StatusUnauthorized,
-			"empty token received from OIDC provider")
+			"empty token received from exchange", nil)
 		return
 	}
 
@@ -1772,6 +1752,51 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
+})
+
+var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwksURL := "https://kubernetes.default.svc.cluster.local/openid/v1/jwks"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, jwksURL, nil)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't create request to Kubernetes API", err)
+		return
+	}
+
+	// use the service account token to authenticate with the Kubernetes API server
+	tokenBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't read service account token", err)
+		return
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't get response from Kubernetes API", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			fmt.Sprintf("unexpected status code from Kubernetes API: %d", resp.StatusCode), nil)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't read response body from Kubernetes API", err)
+		return
+	}
+
+	writeHTTPWithHeaders(w, http.StatusOK, body,
+		map[string]string{"Content-Type": "application/json"})
 })
 
 var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

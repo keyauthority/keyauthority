@@ -37,12 +37,12 @@ export default function KeyInput({
   return (
     <>
       <Row>
-        <Form.Group className="col-12 mb-3">
+        <Form.Group className="col-md mb-3">
           <Form.Label>Environment</Form.Label>
           {isGlobalOperator ? (
             <Form.Control
               value={environment}
-              placeholder="e.g. dev, git-runners, team2, qa, prod"
+              placeholder="e.g. dev, team2, qa, prod"
               onChange={(e) => {
                 const regex = /^[a-zA-Z0-9-_]*$/; // allow only letters, numbers, dashes and underscores
                 if (regex.test(e.target.value)) setEnvironment(e.target.value);
@@ -138,18 +138,18 @@ export default function KeyInput({
 
         <Form.Group className="col-12 mb-3">
           <Form.Label>HSM PKCS11 URI</Form.Label>
-          <div className="d-flex gap-1">
+          <div className="input-group">
             <Form.Control
-              as="textarea"
-              rows={2}
+              //as="textarea"
+              //rows={2}
               placeholder="e.g. pkcs11:module-path=/path/to/module.so;token=keyauthority?pin-source=/path/to/pinfile"
               value={pkcs11URI}
               onChange={(e) => setPkcs11URI(e.target.value)}
             />
             <DropdownButton
-              size="sm"
-              variant="outline-secondary"
+              variant="text"
               title="Presets"
+              className="input-group-text p-0"
             >
               {Object.entries(defaultPkcs11URIs).map(([name, uri]) => (
                 <Dropdown.Item key={name} onClick={() => setPkcs11URI(uri)}>
@@ -167,7 +167,7 @@ export default function KeyInput({
             >
               pkcs11
             </a>{" "}
-            for further details. Leave empty for software key.
+            for further details —leave empty for software key
           </Form.Text>
         </Form.Group>
       </Row>

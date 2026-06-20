@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Card,
   Alert,
@@ -22,16 +22,26 @@ import {
   withTooltipDescription,
 } from "../utils/utils";
 import { Link } from "react-router-dom";
-import JSONModal from "./JSONModal";
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
 import { signerUsageExample } from "./Docs";
+import SignerModal from "./SignerModal";
+import JSONModal from "./JSONModal";
 import KeyValueTable from "./KeyValueTable";
 
-function SignerDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
+function SignerDetails({
+  isLoading,
+  setIsLoading,
+  setTitle,
+  setSubtitle,
+  setDropdownActions,
+}) {
   const location = useLocation();
+  const navigate = useNavigate();
   const signerName =
     decodeURIComponent(location.pathname.replaceAll("/signers/", "")) || "";
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // used to trigger refresh of signerConfig after edit, by changing the key of ConfigTab
 
   // these are all loaded from the CA Chain Tab,
   // but we need them here in the parent component to pass down to other tabs
@@ -45,6 +55,8 @@ function SignerDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
   const apiRootUrl = apiUrl.href.replace(/\/v1\/?$/, "");
 
   const [error, setError] = useState("");
+
+  const [showSignerModal, setShowSignerModal] = useState(false);
 
   useEffect(() => {
     setTitle(signerName);
@@ -61,11 +73,66 @@ function SignerDetails({ isLoading, setIsLoading, setTitle, setSubtitle }) {
     );
   }, [signerConfig, setSubtitle]);
 
+  const handleDeleteSigner = useCallback(async () => {
+    // ask user to enter the signer name to confirm deletion
+    const confirmedName = window.prompt(
+      `To confirm deletion, please enter the signer name: ${signerName}`,
+    );
+
+    // Cancel pressed: do nothing
+    if (confirmedName === null) {
+      return;
+    }
+
+    if (confirmedName !== signerName) {
+      showToast("error", "Signer name does not match. Deletion cancelled.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.delete(`/signers/${signerName}`);
+      navigate("/signers");
+      showToast("success", "Signer deleted!");
+    } catch (err) {
+      showToast("error", errorToString(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [api, navigate, signerName]);
+
+  useEffect(() => {
+    setDropdownActions?.([
+      {
+        key: "edit-signer",
+        label: "Edit",
+        iconClass: "bi bi-pencil-square",
+        onClick: () => setShowSignerModal(true),
+      },
+      {
+        key: "delete-signer",
+        label: "Delete",
+        iconClass: "bi bi-trash",
+        onClick: handleDeleteSigner,
+      },
+    ]);
+    return () => setDropdownActions?.([]);
+  }, [handleDeleteSigner, setDropdownActions]);
+
   return (
     <>
+      <SignerModal
+        show={showSignerModal}
+        onHide={() => setShowSignerModal(false)}
+        editMode={true}
+        onSuccess={(updatedSigner) => {
+          setRefreshTrigger((prev) => prev + 1);
+        }}
+      />
+
       {error && <Alert variant="danger">{error || "An error occurred."}</Alert>}
 
-      <Tabs className="mb-3">
+      <Tabs className="mb-3" key={`signer-details-${refreshTrigger}`}>
         {/* Config Tab */}
         <Tab eventKey="config" title="Configuration">
           <ConfigTab
@@ -227,7 +294,7 @@ function ConfigTab({
               <Card.Header>
                 <h6 className="mb-0">Private Key</h6>
                 <span className="text-muted small">
-                  The private key backing this signer
+                  Key used by for signing operations
                 </span>
               </Card.Header>
               <Card.Body>
@@ -384,7 +451,9 @@ function ConfigTab({
                             </div>
                           ))}
                         </>
-                      ) : null,
+                      ) : (
+                        "-"
+                      ),
                     OCSP:
                       signerConfig.ocsp?.length > 0 ? (
                         <>

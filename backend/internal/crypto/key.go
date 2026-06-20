@@ -27,8 +27,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"sync"
 
 	thalesp11 "github.com/ThalesGroup/crypto11"
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
@@ -96,7 +98,55 @@ type symmetricSoftwareKey struct {
 }
 
 type symmetricHSMKey struct {
+	mu        sync.RWMutex
+	pkcs11URI string
+	keyID     []byte
+	label     []byte
+	bits      int
 	keyHandle *thalesp11.SecretKey
+}
+
+type asymmetricHSMKey struct {
+	mu        sync.RWMutex
+	pkcs11URI string
+	keyID     []byte
+	label     []byte
+	signer    crypto.Signer
+}
+
+func cloneBytes(v []byte) []byte {
+	if v == nil {
+		return nil
+	}
+	out := make([]byte, len(v))
+	copy(out, v)
+	return out
+}
+
+func isRecoverableHSMError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	hints := []string{
+		"ckr_device_error",
+		"ckr_device_removed",
+		"ckr_session",
+		"ckr_token_not_present",
+		"ckr_token_not_recognized",
+		"pkcs11",
+		"session",
+		"token",
+		"broken pipe",
+		"connection reset",
+		"timeout",
+	}
+	for _, h := range hints {
+		if strings.Contains(msg, h) {
+			return true
+		}
+	}
+	return false
 }
 
 func (k *symmetricSoftwareKey) Encrypt(plaintext []byte) ([]byte, error) {
@@ -143,10 +193,76 @@ func (k *symmetricSoftwareKey) Decrypt(ciphertext []byte) ([]byte, error) {
 	return plainData, nil
 }
 
-func (k *symmetricHSMKey) Encrypt(plaintext []byte) ([]byte, error) {
-	aesGCM, err := k.keyHandle.NewGCM()
+func closeCachedP11Context(pkcs11URI string) error {
+	value, exists := p11CtxCache.Get(pkcs11URI)
+	if !exists {
+		return nil
+	}
+
+	p11Ctx, ok := value.(*thalesp11.Context)
+	if !ok || p11Ctx == nil {
+		return fmt.Errorf("invalid cached PKCS#11 context for %s", pkcs11URI)
+	}
+
+	if err := p11Ctx.Close(); err != nil {
+		return fmt.Errorf("close PKCS#11 context: %w", err)
+	}
+
+	p11CtxCache.Delete(pkcs11URI)
+	return nil
+}
+
+func (k *symmetricHSMKey) reloadHandle(resetCtx bool) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if resetCtx {
+		_ = closeCachedP11Context(k.pkcs11URI)
+	}
+
+	p11Ctx, err := getP11Ctx(k.pkcs11URI)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("get PKCS11 context: %w", err)
+	}
+
+	keyHandle, err := p11Ctx.FindKey(k.keyID, k.label)
+	if err != nil {
+		return fmt.Errorf("find key: %w", err)
+	}
+	if keyHandle == nil {
+		return fmt.Errorf("key not found")
+	}
+
+	k.keyHandle = keyHandle
+	return nil
+}
+
+func (k *symmetricHSMKey) getHandle() *thalesp11.SecretKey {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.keyHandle
+}
+
+func (k *symmetricHSMKey) Encrypt(plaintext []byte) ([]byte, error) {
+	if k.getHandle() == nil {
+		if err := k.reloadHandle(false); err != nil {
+			return nil, err
+		}
+	}
+
+	handle := k.getHandle()
+	aesGCM, err := handle.NewGCM()
+	if err != nil {
+		if isRecoverableHSMError(err) {
+			if rerr := k.reloadHandle(true); rerr != nil {
+				return nil, fmt.Errorf("reload HSM key: %w", rerr)
+			}
+			handle = k.getHandle()
+			aesGCM, err = handle.NewGCM()
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	nonce := make([]byte, aesGCM.NonceSize())
@@ -159,9 +275,25 @@ func (k *symmetricHSMKey) Encrypt(plaintext []byte) ([]byte, error) {
 }
 
 func (k *symmetricHSMKey) Decrypt(ciphertext []byte) ([]byte, error) {
-	aesGCM, err := k.keyHandle.NewGCM()
+	if k.getHandle() == nil {
+		if err := k.reloadHandle(false); err != nil {
+			return nil, err
+		}
+	}
+
+	handle := k.getHandle()
+	aesGCM, err := handle.NewGCM()
 	if err != nil {
-		return nil, err
+		if isRecoverableHSMError(err) {
+			if rerr := k.reloadHandle(true); rerr != nil {
+				return nil, fmt.Errorf("reload HSM key: %w", rerr)
+			}
+			handle = k.getHandle()
+			aesGCM, err = handle.NewGCM()
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(ciphertext) < aesGCM.NonceSize() {
@@ -173,10 +305,88 @@ func (k *symmetricHSMKey) Decrypt(ciphertext []byte) ([]byte, error) {
 
 	plainData, err := aesGCM.Open(nil, nonce, cipherData, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt data: %w", err)
+		if isRecoverableHSMError(err) {
+			if rerr := k.reloadHandle(true); rerr != nil {
+				return nil, fmt.Errorf("reload HSM key: %w", rerr)
+			}
+			handle = k.getHandle()
+			aesGCM, err = handle.NewGCM()
+			if err != nil {
+				return nil, err
+			}
+			plainData, err = aesGCM.Open(nil, nonce, cipherData, nil)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("decrypt data: %w", err)
+		}
 	}
 
 	return plainData, nil
+}
+
+func (k *asymmetricHSMKey) Public() crypto.PublicKey {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	if k.signer == nil {
+		return nil
+	}
+	return k.signer.Public()
+}
+
+func (k *asymmetricHSMKey) reloadSigner(resetCtx bool) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if resetCtx {
+		_ = closeCachedP11Context(k.pkcs11URI)
+	}
+
+	p11Ctx, err := getP11Ctx(k.pkcs11URI)
+	if err != nil {
+		return fmt.Errorf("get PKCS11 context: %w", err)
+	}
+
+	keyHandle, err := p11Ctx.FindKeyPair(k.keyID, k.label)
+	if err != nil {
+		return fmt.Errorf("find key pair: %w", err)
+	}
+	if keyHandle == nil {
+		return fmt.Errorf("key pair not found")
+	}
+
+	k.signer = keyHandle
+	return nil
+}
+
+func (k *asymmetricHSMKey) getSigner() crypto.Signer {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.signer
+}
+
+func (k *asymmetricHSMKey) Sign(r io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	if k.getSigner() == nil {
+		if err := k.reloadSigner(false); err != nil {
+			return nil, err
+		}
+	}
+
+	s := k.getSigner()
+	sig, err := s.Sign(r, digest, opts)
+
+	if err != nil {
+		if isRecoverableHSMError(err) {
+			if rerr := k.reloadSigner(true); rerr != nil {
+				return nil, fmt.Errorf("reload HSM signer: %w", rerr)
+			}
+			s = k.getSigner()
+			sig, err = s.Sign(r, digest, opts)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return sig, nil
 }
 
 // InferConfig attempts to infer the key configuration from the Key instance
@@ -190,10 +400,18 @@ func (k *Key) InferConfig() (*KeyConfig, error) {
 			}, nil
 		}
 		if hsmKey, ok := k.SymmetricKey.(*symmetricHSMKey); ok {
+			bits := hsmKey.bits
+			if bits == 0 {
+				hsmKey.mu.RLock()
+				if hsmKey.keyHandle != nil {
+					bits = hsmKey.keyHandle.Cipher.BlockSize * 8
+				}
+				hsmKey.mu.RUnlock()
+			}
 			return &KeyConfig{
 				Type: AES,
 				Mode: "GCM",
-				Bits: hsmKey.keyHandle.Cipher.BlockSize * 8,
+				Bits: bits,
 			}, nil
 		}
 		return nil, fmt.Errorf("unsupported symmetric key type")
@@ -284,8 +502,10 @@ func newHSMKey(cfg *KeyConfig) (*Key, error) {
 		return nil, errors.Errorf("key with uri %s is not valid, id and object are required", cfg.PKCS11KeyUri)
 	}
 
+	label := []byte(object)
+
 	if cfg.IsSymmetric() {
-		keyHandle, err := p11Ctx.FindKey(id, []byte(object))
+		keyHandle, err := p11Ctx.FindKey(id, label)
 		if err != nil {
 			return nil, fmt.Errorf("find key: %w", err)
 		}
@@ -293,13 +513,19 @@ func newHSMKey(cfg *KeyConfig) (*Key, error) {
 			return nil, fmt.Errorf("key not found")
 		}
 		return &Key{
-			SymmetricKey: &symmetricHSMKey{keyHandle: keyHandle},
+			SymmetricKey: &symmetricHSMKey{
+				pkcs11URI: cfg.PKCS11Uri,
+				keyID:     cloneBytes(id),
+				label:     cloneBytes(label),
+				bits:      cfg.Bits,
+				keyHandle: keyHandle,
+			},
 		}, nil
 
 	}
 
 	// Assymmetric key
-	keyHandle, err := p11Ctx.FindKeyPair(id, []byte(object))
+	keyHandle, err := p11Ctx.FindKeyPair(id, label)
 	if err != nil {
 		return nil, fmt.Errorf("find key pair: %w", err)
 	}
@@ -308,7 +534,12 @@ func newHSMKey(cfg *KeyConfig) (*Key, error) {
 	}
 
 	return &Key{
-		AssymmetricKey: keyHandle,
+		AssymmetricKey: &asymmetricHSMKey{
+			pkcs11URI: cfg.PKCS11Uri,
+			keyID:     cloneBytes(id),
+			label:     cloneBytes(label),
+			signer:    keyHandle,
+		},
 	}, nil
 }
 

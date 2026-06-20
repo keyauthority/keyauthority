@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -47,14 +46,6 @@ const (
 	CtxKeyRequestID         = ctxKey("requestID")
 	CtxKeyOriginalRequestID = ctxKey("originalRequestID")
 )
-
-// LogEntry represents a log entry with level, message, args, and whether to save to DB.
-// !IMPORTANT: To be used ONLY in functions that do not have direct access to the logger
-type LogEntry struct {
-	Level   slog.Level
-	Message string
-	Args    []any
-}
 
 type StdAndDBLogger struct {
 	stdLogger *slog.Logger
@@ -112,14 +103,6 @@ func removeErrorArgs(args []any) []any {
 func isError(val any) bool {
 	_, ok := val.(error)
 	return ok
-}
-
-func (l *StdAndDBLogger) LogWithContext(ctx context.Context, logEntry *LogEntry) {
-	args := append(attrsFromContext(ctx), logEntry.Args...)
-	l.stdLogger.Log(ctx, logEntry.Level, logEntry.Message, args...)
-	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
-		l.dbLogger.Log(ctx, logEntry.Level, logEntry.Message, removeErrorArgs(args)...)
-	}
 }
 
 func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {
@@ -230,16 +213,16 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
-		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
-			if user, ok := ctx.Value(CtxKeyUser).(string); ok {
-				attrs = append(attrs,
-					slog.Group("token",
-						slog.String("user", user),
-						slog.String("issuer", token.Issuer),
-					),
-				)
-			}
+		//if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
+		if user, ok := ctx.Value(CtxKeyUser).(string); ok {
+			attrs = append(attrs,
+				slog.Group("token",
+					slog.String("user", user),
+					//slog.String("issuer", token.Issuer),
+				),
+			)
 		}
+		//}
 		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
 			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
 		}
@@ -251,7 +234,7 @@ func attrsFromContext(ctx context.Context) []any {
 			attrs = append(attrs,
 				slog.Group("approverToken",
 					slog.String("user", user),
-					slog.String("issuer", approverToken.Issuer),
+					//slog.String("issuer", approverToken.Issuer),
 				),
 			)
 		}
@@ -265,15 +248,14 @@ func attrsFromContext(ctx context.Context) []any {
 func attrsFromRequest(r *http.Request) []any {
 	var attrs []any
 	if r != nil {
-		// Try to unescape URL for better readability
 		path := r.URL.Path
-		if unescapedPath, err := url.PathUnescape(path); err == nil {
+		/*if unescapedPath, err := url.PathUnescape(path); err == nil {
 			path = unescapedPath
-		}
+		}*/
 		query := r.URL.RawQuery
-		if unescapedQuery, err := url.QueryUnescape(query); err == nil {
+		/*if unescapedQuery, err := url.QueryUnescape(query); err == nil {
 			query = unescapedQuery
-		}
+		}*/
 		reqURL := path
 		if query != "" {
 			reqURL += "?" + query

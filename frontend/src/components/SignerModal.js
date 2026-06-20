@@ -335,7 +335,12 @@ export default function SignerModal({
         {/* Private Key Section */}
         {!editMode && (
           <Card className="mb-3">
-            <Card.Header>Private Key</Card.Header>
+            <Card.Header>
+              <h6 className="mb-0">Private Key</h6>
+              <div className="text-muted small">
+                Key used by for signing operations
+              </div>
+            </Card.Header>
             <Card.Body>
               <KeyInput
                 environment={environment}

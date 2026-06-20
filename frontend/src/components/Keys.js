@@ -16,7 +16,7 @@ import {
 
 import { errorToString } from "../utils/error";
 
-export default function Keys({ isLoading, setIsLoading }) {
+export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
   const [error, setError] = useState(null);
   const [keys, setKeys] = useState([]);
   const [page, setPage] = useState(1);
@@ -58,40 +58,64 @@ export default function Keys({ isLoading, setIsLoading }) {
     }
   };
 
-  const handleDelete = async (keyId, environment, type) => {
-    // ask user to enter enviornment and type to confirm deletion
-    const confirmed = window.prompt(
-      `To confirm deletion, please enter the key environment and type: ${environment} ${type}`,
-    );
+  useEffect(() => {
+    fetchKeys();
+  }, [fetchKeys]);
 
-    // Cancel pressed: do nothing
-    if (confirmed === null) {
-      return;
-    }
-
-    if (confirmed !== `${environment} ${type}`) {
-      showToast(
-        "error",
-        "Environment and type do not match. Deletion cancelled.",
-      );
-      return;
-    }
+  /*const handleDeleteUnusedKeys = async (storage) => {
+    let deletedKeysCount = 0;
+    const deleteKeyByID = async (keyId) => {
+      try {
+        await api.delete(`/keys/${keyId}`);
+        deletedKeysCount++;
+      } catch (err) {
+        // do nothing, just log the error
+      }
+    };
 
     setIsLoading(true);
     try {
-      await api.delete(`/keys/${keyId}`);
-      showToast("success", `Key ${keyId} deleted`);
-      fetchKeys();
+      const params = buildURLParams({ storage }, 1, 1000); // Fetch all keys of the specified storage type
+      const res = await api.get(`/keys?${params.toString()}`);
+      console.log("Unused keys to delete:", res.data.data);
+
+      
+      for (const key of res.data.data || []) {
+        await deleteKeyByID(key.id);
+      }
+
+      if (deletedKeysCount > 0) {
+        showToast(
+          "success",
+          `Deleted ${deletedKeysCount} unused ${storage} key(s)`,
+        );
+        fetchKeys(); // Refresh the keys list after deletion
+      } else {
+        showToast("info", `No unused ${storage} keys deleted`);
+      }
     } catch (err) {
-      showToast("error", errorToString(err));
+      setError(errorToString(err));
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
+    setDropdownActions?.([
+      {
+        key: "delete-unused-software-keys",
+        label: "Delete Unused Software Keys",
+        iconClass: "bi bi-trash",
+        onClick: () => handleDeleteUnusedKeys("Software"),
+      },
+      {
+        key: "delete-unused-hsm-keys",
+        label: "Delete Unused HSM Keys",
+        iconClass: "bi bi-trash",
+        onClick: () => handleDeleteUnusedKeys("HSM"),
+      },
+    ]);
+  }, [keys, setDropdownActions]);*/
 
   return (
     <>
@@ -119,7 +143,7 @@ export default function Keys({ isLoading, setIsLoading }) {
             key: "environment",
             label: "Environment",
             type: "text",
-            placeholder: "e.g. dev, staging, prod",
+            placeholder: "e.g. dev, qa, prod",
           },
           {
             key: "type",
@@ -200,15 +224,6 @@ export default function Keys({ isLoading, setIsLoading }) {
                       disabled={isLoading}
                     >
                       <i className="bi-check2-circle me-1"></i> Check Readiness
-                    </Dropdown.Item>
-                    <Dropdown.Divider />
-                    <Dropdown.Item
-                      onClick={() =>
-                        handleDelete(key.id, key.environment, key.config.type)
-                      }
-                      disabled={isLoading}
-                    >
-                      <i className="bi-trash me-1"></i> Delete
                     </Dropdown.Item>
                   </Dropdown.Menu>
                 </Dropdown>
