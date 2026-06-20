@@ -292,7 +292,7 @@ export function Administration() {
         <i className="bi bi-caret-right-fill"></i>{" "}
         <strong>OpenID Connect Compatibility Modes</strong> section, and add an
         entry into the <strong>Custom audience mapping</strong> with the
-        expected audience claim of the external Identity Provider token.
+        expected audience claim of tokens from the external Identity Provider.
       </p>
 
       <img src="/exchange-client-config2.png" className="img-fluid" />
@@ -310,6 +310,38 @@ export function Administration() {
       <img src="/user-idp-link.png" className="img-fluid" />
 
       <p>
+        Our Helm chart provides options to automate the creation of all these
+        configurations, including the identity providers, client settings,
+        users, user links. The next code block shows an example, and you can
+        refer to the Helm chart documentation for details on how to enable these
+        features during deployment.
+      </p>
+
+      {prettyCode(
+        "yaml",
+        `# Example Helm values to automate GitLab Identity Provider setup
+keycloak:
+  provisionJob:
+    jwtIdentityProviders:
+      gitlab:
+        enabled: true
+        alias: jwt-gitlab
+        issuer: https://gitlab.com
+        jwksURL: https://gitlab.com/oauth/discovery/keys
+        customAudience: https://gitlab.com
+        subjects: # every federated user needs an IdP link to a Keycloak user
+          - project_path:my-group/my-project:ref_type:branch:ref:my-branch
+`,
+      )}
+
+      {/*<Alert variant="warning" className="mt-4">
+        <i className="bi bi-exclamation-triangle-fill"></i> The automation of
+        Identity Provider setup is currently in preview and may not cover all
+        use cases. It is recommended to review the generated configurations and
+        adjust them as needed to fit your specific requirements.
+      </Alert>*/}
+
+      <p>
         If you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
@@ -317,210 +349,6 @@ export function Administration() {
         external token's claims and the result of the exchange attempt. This can
         help diagnose issues with token validation or role mapping.
       </p>
-
-      {/*<h4>Fine-Grained Access Control via Client Configuration (Advanced)</h4>
-      <p>
-        For advanced use cases, you may need to customize the client settings
-        further. This can include configuring protocol mappers to include
-        specific claims in tokens, setting up custom authentication flows, or
-        adjusting token lifespans.
-      </p>
-
-      <h5>Token Verification</h5>
-      <p>
-        The KeyAuthority backend API authentication works by looping through the
-        the list of configured OIDC providers until the token presented is
-        verified. This list is composed of:
-      </p>
-      <p>
-        <ul>
-          <li>
-            <strong>the internal OIDC provider</strong>, discoverable at{" "}
-            <a
-              href={`${keycloak?.authServerUrl}/realms/${keycloak?.realm}/.well-known/openid-configuration`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {`${keycloak?.authServerUrl}/realms/${keycloak?.realm}/.well-known/openid-configuration`}
-            </a>{" "}
-            and represents the Keycloak realm <code>{keycloak?.realm}</code>{" "}
-            where KeyAuthority is deployed, and
-          </li>
-          <li>
-            <strong>the external OIDC providers</strong>, corresponding to
-            Keycloak clients that have <code>client-jwt</code> as Client
-            Authenticator Type, ordered by their client ID in alphabetical
-            order.
-          </li>
-        </ul>
-      </p>
-
-      <p>
-        When a token is presented to the API, KeyAuthority will check its
-        validity against each OIDC provider in sequence. If the token is
-        successfully verified by any of the providers, access is granted based
-        on the roles in the token, if the verifier provider is the internal; or
-        the assigned client roles, if the verifier provider is external.
-        Providers are refreshed automatically every 30 minutes.
-      </p>
-
-      <h5>External Token Verification</h5>
-      <p>
-        Some clients, such as <code>keyauthority-kubernetes</code> and{" "}
-        <code>keyauthority-gitlab</code>, are configured to verify tokens issued
-        by external identity providers rather than Keycloak itself. This design
-        allows KeyAuthority to trust tokens from platforms like Kubernetes and
-        GitLab without requiring those systems to integrate directly with
-        Keycloak.
-      </p>
-      <p>
-        When these external tokens are presented to KeyAuthority, the system:
-      </p>
-      <ul>
-        <li>
-          Validates the token signature against the external provider's public
-          keys.
-        </li>
-        <li>Verifies the token claims (issuer, expiration, etc...).</li>
-        <li>
-          Maps the external identity to appropriate KeyAuthority roles and
-          permissions.
-        </li>
-      </ul>
-      <p>
-        This approach enables secure, federated authentication while maintaining
-        centralized access control through Keycloak for user management and role
-        assignments.
-      </p>
-
-      <h5>Scoping External Tokens</h5>
-      <p>
-        For external tokens, KeyAuthority supports scoping based on claims
-        present in the token. For example, Kubernetes service account tokens
-        include namespace and service account name claims that can be used to
-        assign scoped roles dynamically.
-      </p>
-      <p>
-        When configuring clients for external providers, ensure that the token
-        claims used for scoping align with your access control policies. This
-        allows you to enforce least-privilege access for workloads based on
-        their identities. This is achieved by specifying <i>required claims</i>{" "}
-        in the client's description field.
-      </p>
-
-      <p>
-        For example, let's assume that you want to allow Kubernetes service
-        accounts in the the entire cluster to have access to all secrets in the{" "}
-        <code>dev</code> environment, and only service accounts in the{" "}
-        <code>prod</code> namespace to have access to secrets in the{" "}
-        <code>prod</code> environment. You can achieve this by creating the
-        following two clients in Keycloak:
-      </p>
-
-      <Table responsive>
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Description</th>
-            <th>Roles</th>
-            <th>Configuration</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <code>keyauthority-kubernetes-1-prod</code>
-            </td>
-            <td>
-              Client for Kubernetes service accounts in the <code>prod</code>{" "}
-              namespace
-            </td>
-            <td>
-              <code>KEYAUTHORITY_OPERATOR_dev</code>,{" "}
-              <code>KEYAUTHORITY_OPERATOR_prod</code>
-            </td>
-            <td>
-              {prettyCode("json", {
-                clientId: "keyauthority-kubernetes-1-prod",
-                clientAuthenticatorType: "client-jwt",
-                description:
-                  '{"requiredClaims":{"kubernetes.io":{"namespace":"prod"}}}',
-                attributes: {
-                  "jwks.url": "https://kubernetes.default.svc.cluster.local",
-                  "use.jwks.url": "true",
-                },
-              })}
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>keyauthority-kubernetes-2-dev</code>
-            </td>
-            <td>Client for all Kubernetes service accounts</td>
-            <td>
-              <code>KEYAUTHORITY_OPERATOR_dev</code>
-            </td>
-            <td>
-              {prettyCode("json", {
-                clientId: "keyauthority-kubernetes-2-dev",
-                clientAuthenticatorType: "client-jwt",
-                attributes: {
-                  "jwks.url": "https://kubernetes.default.svc.cluster.local",
-                  "use.jwks.url": "true",
-                },
-              })}
-            </td>
-          </tr>
-        </tbody>
-      </Table>
-
-      <p>
-        As you can observe, the only difference between the two clients config
-        is that the first one has a <code>description</code> attribute
-        specifying required claims for environment scoping. This ensures that
-        only tokens from service accounts in the <code>prod</code> namespace
-        will be accepted by that client, therefore only these tokens get access
-        to secrets in both <code>dev</code> and <code>prod</code> environments.
-        Note also that the client names/IDs were purposely set in a way that{" "}
-        <code>keyauthority-kubernetes-1-prod</code> comes before{" "}
-        <code>keyauthority-kubernetes-2-dev</code> alphabetically, so that it is
-        evaluated first during token verification. As a general rule, more
-        specific clients (i.e., those with claim requirements) should be named
-        in a way that they come first alphabetically.
-      </p>
-      <p>
-        Similarly, you can use this approach to set scoped access for other
-        external identity providers by configuring the appropriate claim
-        requirements in Keycloak. You simply need to ensure that the claims used
-        for scoping are present in the tokens issued by those providers.
-      </p>
-
-      <Alert variant="info">
-        <Alert.Heading className="fw-bold fs-6">Tip</Alert.Heading>
-        <p>
-          When configuring external OIDC providers, it is crucial to ensure that
-          JWKS URLs are correctly set and accessible. For example, while the
-          typical JWKS URL for Kubernetes is{" "}
-          <code>https://kubernetes.default.svc.cluster.local</code>, providers
-          like Google Cloud or Microsoft Azure may have different URLs. The
-          KeyAuthority backend will signal such issues in the DEBUG logs. For
-          example:
-        </p>
-
-        {prettyCode(
-          "log",
-          `time=2026-02-18T09:50:50.817Z level=DEBUG msg="skipping client for external OIDC provider discovery" clientID=keyauthority-kubernetes reason="oidc: issuer URL provided to client (\\"https://kubernetes.default.svc.cluster.local\\") did not match the issuer URL returned by provider (\\"https://container.googleapis.com/v1/projects/keyauthority-test/locations/europe-central2/clusters/keyauthority-cluster-1\\")".`,
-          false,
-        )}
-
-        <p>
-          This means that the client's JWKS URL should be set to{" "}
-          <code>
-            https://container.googleapis.com/v1/projects/keyauthority-test/locations/europe-central2/clusters/keyauthority-cluster-1
-          </code>{" "}
-          for the setup to work correctly.
-        </p>
-      </Alert>*/}
     </>
   );
 }
