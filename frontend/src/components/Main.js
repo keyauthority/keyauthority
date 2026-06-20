@@ -267,8 +267,8 @@ export default function Main() {
                         setIsLoading={setIsLoading}
                       />
                     );
-                  case "/docs/install":
-                    return <Installation />;
+                  case "/docs/architecture":
+                    return <Architecture />;
                   case "/docs/admin":
                     return <Administration />;
                   case "/docs/signers":
@@ -277,8 +277,6 @@ export default function Main() {
                     return <UseSecrets />;
                   case "/docs/links":
                     return <UsefulLinks />;
-                  case "/docs/architecture":
-                    return <Architecture />;
                   case "/keys":
                     return (
                       <Keys

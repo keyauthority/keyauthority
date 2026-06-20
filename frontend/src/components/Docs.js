@@ -507,11 +507,7 @@ export function Architecture() {
   }, []);
 
   const card = (variant = "secondary", title, description, icon, content) => (
-    <Alert
-      variant={variant}
-      className="rounded-4 p-4 mb-0 shadow w-100 h-100 d-flex flex-column justify-content-center"
-      //style={{ minWidth: 120 }}
-    >
+    <Alert variant={variant} className="rounded-4 shadow w-100">
       <div className="d-flex align-items-center mb-3">
         <i className={`bi ${icon}`} style={{ fontSize: "2rem" }}></i>
         <div className="ms-3">
@@ -543,13 +539,14 @@ export function Architecture() {
 
   return (
     <>
-      <p className="mb-3">
+      <p>
         The following diagram illustrates the architecture of KeyAuthority,
         showing its components and their interactions. KeyAuthority components
         are the frontend, the backend, the identity provider (Keycloak), and the
         database. The diagram also shows the interactions with humans, machines,
         and the HSM.
       </p>
+
       <div ref={rootRef} className="position-relative">
         {/* Connection layer */}
         <svg
@@ -568,10 +565,10 @@ export function Architecture() {
 
         {/* Nodes */}
         <div
-          className="position-relative row g-4 align-items-center"
+          className="position-relative row gap-4 align-items-center"
           style={{ zIndex: 1, minHeight: 640 }}
         >
-          <div className="col-12 col-xl-3 d-flex flex-column justify-content-center gap-4 h-100">
+          <div className="col-3 d-flex flex-column justify-content-center gap-4 h-100">
             <div ref={setNodeRef("humans")} className="d-flex w-100">
               {card(
                 "success",
@@ -615,7 +612,7 @@ export function Architecture() {
             </div>
           </div>
 
-          <div className="col-12 col-xl-9 d-flex flex-column justify-content-center gap-4 h-100">
+          <div className="col-8 d-flex flex-column justify-content-center gap-4 h-100">
             <div className="row g-4">
               <div
                 className="col-12 col-md-6 d-flex"
@@ -738,17 +735,25 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
 
       <p>
         <ul>
+          <li>Credentials (client id and secret)</li>
           {/* <li>Kubernetes token issued by a service account</li> */}
           <li>Kubernetes token issued by a cron job</li>
-          <li>Credentials (client id and secret)</li>
         </ul>
       </p>
+
+      <h6>Authenticating with Credentials</h6>
+
+      {vaultAppRoleIssuerExample(
+        signerName,
+        `${signerName}@keyauthority.net`,
+        apiRootUrl,
+      )}
 
       {/* <h6>Kubernetes Authentication through Service Account Tokens</h6> */}
 
       {/* {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)} */}
 
-      <h6>Authenticating with Kubernetes Tokens from CronJob</h6>
+      <h6>Authenticating with Kubernetes Tokens from Cron Job</h6>
 
       {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)}
 
@@ -765,14 +770,6 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
         <Link to="/docs/admin">administration docs</Link> for more details on
         how to set this up.
       </p>
-
-      <h6>Authenticating with Credentials</h6>
-
-      {vaultAppRoleIssuerExample(
-        signerName,
-        `${signerName}@keyauthority.net`,
-        apiRootUrl,
-      )}
 
       <h4>Secure Application</h4>
       <p>
