@@ -326,10 +326,14 @@ keycloak:
       gitlab:
         enabled: true
         alias: jwt-gitlab
+        # Keycloak requires HTTPS scheme and will validate the issuer claim in incoming tokens against this value
         issuer: https://gitlab.com
+        # Make sure to SSL-trust this URL in Keycloak's settings
         jwksURL: https://gitlab.com/oauth/discovery/keys
+        # Set the external IdP token's expected audience claim here
         customAudience: https://gitlab.com
-        subjects: # every federated user needs an IdP link to a Keycloak user
+        # Add all subjects of external IdP tokens that you intend to accept here
+        subjects: 
           - project_path:my-group/my-project:ref_type:branch:ref:my-branch
 `,
       )}
@@ -519,7 +523,7 @@ export function Architecture() {
     </Alert>
   );
 
-  const line = (from, to, color = "#c62828", dashed = false) => {
+  const line = (from, to, color = "default", dashed = false) => {
     if (!points[from] || !points[to]) return null;
     return (
       <line
@@ -528,11 +532,10 @@ export function Architecture() {
         y1={points[from].y}
         x2={points[to].x}
         y2={points[to].y}
-        stroke={color}
+        stroke={color === "default" ? "var(--bs-secondary)" : color}
         strokeWidth="3"
-        //strokeDasharray={dashed ? "6 4" : "0"}
+        strokeDasharray={dashed ? "6 4" : "0"}
         markerEnd="url(#archArrow)"
-        //className="shadow"
       />
     );
   };
@@ -544,7 +547,8 @@ export function Architecture() {
         showing its components and their interactions. KeyAuthority components
         are the frontend, the backend, the identity provider (Keycloak), and the
         database. The diagram also shows the interactions with humans, machines,
-        and the HSM.
+        and the HSM. Dashed lines indicate KeyAuthority's internal interactions,
+        whereas solid lines represent interactions with external actors.
       </p>
 
       <div ref={rootRef} className="position-relative">
@@ -555,11 +559,11 @@ export function Architecture() {
         >
           {line("humans", "frontend")}
           {line("apps", "backend")}
-          {line("frontend", "backend")}
-          {line("keycloak", "frontend")}
-          {line("keycloak", "backend")}
-          {line("keycloak", "database")}
-          {line("backend", "database")}
+          {line("frontend", "backend", "default", true)}
+          {line("keycloak", "frontend", "default", true)}
+          {line("keycloak", "backend", "default", true)}
+          {line("keycloak", "database", "default", true)}
+          {line("backend", "database", "default", true)}
           {line("backend", "hsm")}
         </svg>
 
@@ -642,7 +646,7 @@ export function Architecture() {
                   "bi-person-badge-fill",
                   <ul className="mb-0">
                     <li>OIDC/JWT identity provider</li>
-                    <li>Role and client management</li>
+                    <li>Role, client, and access management</li>
                     <li>Token issuance and verification</li>
                   </ul>,
                 )}
@@ -930,7 +934,7 @@ spec:
     caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
     auth:
       kubernetes:
-        role: ${signerName}-role
+        role: keyauthority
         mountPath: /v1/auth/jwt
         serviceAccountRef:
           name: ${signerName}-sa`,
@@ -1016,7 +1020,7 @@ spec:
     caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
     auth:
       kubernetes:
-        role: ${signerName}-role
+        role: keyauthority
         mountPath: /v1/auth/jwt
         secretRef:
           name: ${signerName}-token
@@ -1102,6 +1106,7 @@ metadata:
   annotations:
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
+    vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
       {{ with secret "${secret}" }}
@@ -1217,8 +1222,17 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
 
       <p>
         Secrets can now be injected into your pods using annotations as shown
-        below. The secret will be written to a shell-compatible file that can be
-        sourced before launching your application.
+        below —full list of annotations available in the{" "}
+        <a
+          href="https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector/annotations"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vault Injector documentation
+        </a>
+        . The secret will be written to a shell-compatible file{" "}
+        <code>/vault/secrets/env</code> that can be sourced before launching
+        your application.
       </p>
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}

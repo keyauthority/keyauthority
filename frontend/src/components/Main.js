@@ -117,7 +117,8 @@ export default function Main() {
       items: [
         {
           title: "Architecture",
-          subtitle: "Understand the architecture of KeyAuthority",
+          subtitle:
+            "Get an overview of components and actors in KeyAuthority workflows",
           to: "/docs/architecture",
           icon: "bi-diagram-3-fill",
         },
