@@ -196,6 +196,13 @@ func main() {
 			},
 			signerSignHandler)))
 
+	router.Handle("/v1/signers/{name}/sign/{cert-name}",
+		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign/{cert-name}", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPut: internalpkg.RoleOperator, // sign certificate (Hashicorp Vault compatible)
+			},
+			signerSignHandler)))
+
 	router.Handle("/v1/signers/{name}/sign-document",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign-document", withAuth(
 			map[string]internalpkg.Role{
