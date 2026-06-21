@@ -17,10 +17,18 @@ limitations under the License.
 package crypto
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"strings"
+
+	cmpki "github.com/cert-manager/cert-manager/pkg/util/pki"
 )
 
 const (
@@ -59,4 +67,56 @@ func DecryptWithPwd(cipherData, password []byte) ([]byte, error) {
 	}
 
 	return (&symmetricSoftwareKey{key: key}).Decrypt(cipherData[pbkdf2SaltLength:])
+}
+
+func GenerateECDSAKeyAndCSR(commonName string) (string, *x509.CertificateRequest, error) {
+	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
+	}
+	// pem-encode the private key
+	privKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal ECDSA key: %w", err)
+	}
+	privKeyPEM := strings.TrimSpace(string(pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: privKeyBytes,
+	})))
+
+	keyUsage, err := cmpki.MarshalKeyUsage(
+		x509.KeyUsageKeyEncipherment |
+			x509.KeyUsageDigitalSignature)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal key usage: %w", err)
+	}
+
+	extendedKeyUsage, err := cmpki.MarshalExtKeyUsage([]x509.ExtKeyUsage{
+		x509.ExtKeyUsageServerAuth,
+		x509.ExtKeyUsageClientAuth,
+	}, nil)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal extended key usage: %w", err)
+	}
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		DNSNames:        []string{commonName},
+		ExtraExtensions: []pkix.Extension{keyUsage, extendedKeyUsage},
+	}
+
+	// Sign the CSR
+	der, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+	}
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to parse CSR: %w", err)
+	}
+
+	return privKeyPEM, csr, nil
 }
