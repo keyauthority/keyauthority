@@ -312,41 +312,6 @@ export function Administration() {
       <img src="/user-idp-link.png" className="img-fluid" />
 
       <p>
-        Our Helm chart provides options to automate the creation of all these
-        configurations, including the identity providers, client settings,
-        users, and user links. The next code block shows an example, and you can
-        refer to the Helm chart documentation for details on how to enable these
-        features during deployment.
-      </p>
-
-      {prettyCode(
-        "yaml",
-        `# Example Helm values to automate GitLab Identity Provider setup
-keycloak:
-  provisionJob:
-    jwtIdentityProviders:
-      - alias: jwt-gitlab
-        # Keycloak requires HTTPS scheme and will validate the issuer claim in incoming tokens against this value
-        issuer: https://gitlab.com
-        # Make sure to SSL-trust this URL in Keycloak's settings
-        jwksURL: https://gitlab.com/oauth/discovery/keys
-        # List all allowed audiences from external IdP tokens
-        audiences: 
-          - https://gitlab.com
-        # List all allowed subjects from external IdP tokens
-        subjects: 
-          - project_path:my-group/my-project:ref_type:branch:ref:my-branch
-`,
-      )}
-
-      {/*<Alert variant="warning" className="mt-4">
-        <i className="bi bi-exclamation-triangle-fill"></i> The automation of
-        Identity Provider setup is currently in preview and may not cover all
-        use cases. It is recommended to review the generated configurations and
-        adjust them as needed to fit your specific requirements.
-      </Alert>*/}
-
-      <p>
         If you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
@@ -357,10 +322,10 @@ keycloak:
 
       <Alert variant="warning" className="mt-4">
         <i className="bi bi-exclamation-triangle-fill me-2"></i>
-        Keycloak does <strong>not</strong> support JWT Authorization Grant for
-        assertion tokens that include multiple audience claims. For these cases,
-        you may need to use a different authentication method such as approle
-        (username and password).
+        Keycloak does not support JWT Authorization Grant for assertion tokens
+        that include multiple audience claims. For these cases, you may need to
+        use a different authentication method such as approle (username and
+        password).
       </Alert>
     </>
   );
