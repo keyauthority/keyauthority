@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.21
+  version: 1.4.26
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -526,24 +526,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CertificateRequest"
+              $ref: "#/components/schemas/CertSignRequest"
       responses:
         "200":
           description: Success
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  certificate:
-                    type: string
-                  issuing_ca:
-                    type: string
-                  ca_chain:
-                    type: string
-            application/x-pem-file:
-              schema:
-                type: string
+                $ref: "#/components/schemas/CertSignResponse"
         "400":
           description: Failed
           content:
@@ -968,7 +958,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Certificate"
+                      $ref: "#/components/schemas/SignedCertificate"
                   page:
                     type: integer
                   pageSize:
@@ -1475,7 +1465,7 @@ components:
         config:
           $ref: "#/components/schemas/SignerConfig"
 
-    CertificateRequest:
+    CertSignRequest:
       type: object
       properties:
         csr:
@@ -1487,35 +1477,20 @@ components:
       required:
         - csr
 
-    Certificate:
+    CertSignResponse:
       type: object
       properties:
-        serial:
-          type: string
-          format: hex
-          description: Certificate serial number
-        signerName:
-          type: string
-          description: Name of the signer that issued this certificate
-        cn:
-          type: string
-          description: Common Name from certificate subject
-        sans:
-          type: array
-          items:
-            type: string
-          description: Subject Alternative Names
-        notBefore:
-          type: string
-          format: date-time
-          description: Certificate validity start time
-        notAfter:
-          type: string
-          format: date-time
-          description: Certificate validity end time
-        revoked:
-          type: boolean
-          description: Whether the certificate has been revoked
+        data:
+          type: object
+          properties:
+            certificate:
+              type: string
+            issuing_ca:
+              type: string
+            ca_chain:
+              type: array
+              items:
+                type: string
 
     SecretMetadata:
       type: object
@@ -1547,6 +1522,36 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/SecretData"
+
+    Certificate:
+      type: object
+      properties:
+        serial:
+          type: string
+          format: hex
+          description: Certificate serial number
+        signerName:
+          type: string
+          description: Name of the signer that issued this certificate
+        cn:
+          type: string
+          description: Common Name from certificate subject
+        sans:
+          type: array
+          items:
+            type: string
+          description: Subject Alternative Names
+        notBefore:
+          type: string
+          format: date-time
+          description: Certificate validity start time
+        notAfter:
+          type: string
+          format: date-time
+          description: Certificate validity end time
+        revoked:
+          type: boolean
+          description: Whether the certificate has been revoked
 
     PendingRequest:
       type: object

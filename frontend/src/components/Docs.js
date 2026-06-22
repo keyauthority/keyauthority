@@ -232,7 +232,9 @@ export function Administration() {
         borderBottom={true}
       />
 
-      <h4>External Identity Providers</h4>
+      <p> </p>
+
+      <h4>External Identity Providers (Advanced)</h4>
 
       <p>
         In some cases, you may need to integrate external{" "}
@@ -323,16 +325,15 @@ export function Administration() {
 keycloak:
   provisionJob:
     jwtIdentityProviders:
-      gitlab:
-        enabled: true
-        alias: jwt-gitlab
+      - alias: jwt-gitlab
         # Keycloak requires HTTPS scheme and will validate the issuer claim in incoming tokens against this value
         issuer: https://gitlab.com
         # Make sure to SSL-trust this URL in Keycloak's settings
         jwksURL: https://gitlab.com/oauth/discovery/keys
-        # Set the external IdP token's expected audience claim here
-        customAudience: https://gitlab.com
-        # Add all subjects of external IdP tokens that you intend to accept here
+        # List all allowed audiences from external IdP tokens
+        audiences: 
+          - https://gitlab.com
+        # List all allowed subjects from external IdP tokens
         subjects: 
           - project_path:my-group/my-project:ref_type:branch:ref:my-branch
 `,
@@ -353,6 +354,14 @@ keycloak:
         external token's claims and the result of the exchange attempt. This can
         help diagnose issues with token validation or role mapping.
       </p>
+
+      <Alert variant="warning" className="mt-4">
+        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+        Keycloak does <strong>not</strong> support JWT Authorization Grant for
+        assertion tokens that include multiple audience claims. For these cases,
+        you may need to use a different authentication method such as approle
+        (username and password).
+      </Alert>
     </>
   );
 }
@@ -374,15 +383,10 @@ export function UseSigners() {
         >
           cert-manager
         </a>{" "}
-        to provide dynamic certificate issuance and renewal.
-      </p>
-      <p>
-        This section walks you through integrating KeyAuthority signers with
-        Kubernetes resources (e.g., Issuers, Certificates, Ingresses) to bring
-        SSL into your applications. We assume that you have a KeyAuthority
-        signer named <code>{sampleSigner}</code> and a user{" "}
-        <code>{`${sampleSigner}@keyauthority.net`}</code>, otherwise you can
-        replace these values with your own.
+        to provide dynamic certificate issuance and renewal. This section walks
+        you through integrating KeyAuthority signers with Kubernetes resources
+        (e.g., Issuers, Certificates, Ingresses) to bring SSL into your
+        applications.
       </p>
 
       {signerUsageExample(sampleSigner, apiRootUrl)}
@@ -739,19 +743,15 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
 
       <p>
         <ul>
-          <li>Credentials (client id and secret)</li>
+          <li>Credentials (username and password)</li>
           {/* <li>Kubernetes token issued by a service account</li> */}
           <li>Kubernetes token issued by a cron job</li>
         </ul>
       </p>
 
-      <h6>Authenticating with Credentials</h6>
+      <h6>Authenticating with Credentials (Recommended)</h6>
 
-      {vaultAppRoleIssuerExample(
-        signerName,
-        `${signerName}@keyauthority.net`,
-        apiRootUrl,
-      )}
+      {vaultAppRoleIssuerExample(signerName, apiRootUrl)}
 
       {/* <h6>Kubernetes Authentication through Service Account Tokens</h6> */}
 
@@ -856,17 +856,17 @@ spec:
   );
 };
 
-function vaultAppRoleIssuerExample(signerName, username, apiRootUrl) {
+function vaultAppRoleIssuerExample(signerName, apiRootUrl) {
   return prettyCode(
     "yaml",
-    `# Secret holding the AppRole secret ID (password)
+    `# Secret holding the password for user@keyauthority.net
 apiVersion: v1
 kind: Secret
 type: Opaque
 metadata:
-  name: ${signerName}-password
+  name: user-password
 stringData:
-  password: "..." # password for '${username}'
+  password: "..."
 ---
 # Vault issuer using AppRole authentication
 apiVersion: cert-manager.io/v1
@@ -881,9 +881,9 @@ spec:
     auth:
       appRole:
         path: approle
-        roleId: ${username} # or your actual username
+        roleId: user@keyauthority.net
         secretRef:
-          name: ${signerName}-password
+          name: user-password # name of the secret above
           key: password`,
   );
 }
@@ -1098,14 +1098,30 @@ function k8sUsageYaml(secret, data) {
     })
     .join("\n");
 
-  return `apiVersion: v1
+  return `# Secret holding the credentials for user@keyauthority.net
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: my-creds
+  namespace: my-namespace
+stringData:
+  username: user@keyauthority.net
+  password: "..."
+---
+# Pod getting the KeyAuthority secret injected
+apiVersion: v1
 kind: Pod
 metadata:
   name: my-app
   namespace: my-namespace
   annotations:
+    vault.hashicorp.com/auth-type: approle
+    vault.hashicorp.com/auth-config-role-id-file-path: /vault/custom/username
+    vault.hashicorp.com/auth-config-secret-id-file-path: /vault/custom/password
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
+    vault.hashicorp.com/agent-extra-secret: 'my-creds' # name of the secret above, which gets mounted to /vault/custom
     vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
@@ -1230,20 +1246,29 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         >
           Vault Injector documentation
         </a>
-        . The secret will be written to a shell-compatible file{" "}
-        <code>/vault/secrets/env</code> that can be sourced before launching
-        your application.
+        . This example leverages approle-based{" "}
+        <a
+          href="https://developer.hashicorp.com/vault/docs/agent-and-proxy/autoauth"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vault Agent Auto-authentication
+        </a>
+        , where a user must exist in Keycloak with the appropriate role to
+        access the secret. The injection works by writing the secret to a
+        shell-compatible file <code>/vault/secrets/env</code> that can be
+        sourced before launching your application.
       </p>
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}
 
-      <p>
+      {/*<p>
         Similar to GitLab, it is required that a user exists in Keycloak with
         the permissions to access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with Kubernetes as
         the provider and User ID set to{" "}
         <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
-      </p>
+      </p>*/}
 
       {disclaimer()}
     </>

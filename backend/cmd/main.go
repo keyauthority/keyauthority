@@ -196,13 +196,6 @@ func main() {
 			},
 			signerSignHandler)))
 
-	router.Handle("/v1/signers/{name}/issue/{cert-name}",
-		metricspkg.WithHttpMetrics("/v1/signers/{name}/issue/{cert-name}", withAuth(
-			map[string]internalpkg.Role{
-				http.MethodPut: internalpkg.RoleOperator, // sign certificate (Hashicorp Vault compatible)
-			},
-			signerIssueHandler)))
-
 	router.Handle("/v1/signers/{name}/sign-document",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign-document", withAuth(
 			map[string]internalpkg.Role{
@@ -1292,110 +1285,25 @@ var signerSignHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 
 	onCertificateSigned(r, cert, body.Comment)
 
-	switch r.URL.Query().Get("output") {
-	case "pem":
-		writeHTTPWithHeaders(w, http.StatusOK, []byte(strings.Join(fullChain, "\n")),
-			map[string]string{
-				"Content-Type": "application/x-pem-file",
-				"Content-Disposition": fmt.Sprintf(`attachment; filename="%s.pem"`,
-					signerpkg.BigIntToString(cert.SerialNumber)),
-			})
-
-	default:
-		type Data struct {
-			Certificate string   `json:"certificate"`
-			IssuingCA   string   `json:"issuing_ca,omitempty"`
-			CAChain     []string `json:"ca_chain,omitempty"`
-		}
-		type Resp struct {
-			Data *Data `json:"data"`
-		}
-		resp := Resp{
-			Data: &Data{
-				Certificate: fullChain[0],
-			},
-		}
-		if len(fullChain) > 1 {
-			resp.Data.IssuingCA = fullChain[1]
-			resp.Data.CAChain = fullChain[1:]
-
-		}
-		writeJSONOk(w, resp)
+	type Data struct {
+		Certificate string   `json:"certificate"`
+		IssuingCA   string   `json:"issuing_ca,omitempty"`
+		CAChain     []string `json:"ca_chain,omitempty"`
 	}
-})
-
-var signerIssueHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	signerName := mux.Vars(r)["name"]
-	signer, err := store.LoadSigner(r.Context(), signerName)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't load signer", err)
-		return
+	type Resp struct {
+		Data *Data `json:"data"`
 	}
-
-	type Body struct {
-		CommonName string `json:"common_name"`
-		TTL        string `json:"ttl"`
-		Comment    string `json:"comment,omitempty"`
+	resp := Resp{
+		Data: &Data{
+			Certificate: fullChain[0],
+		},
 	}
-	var body Body
-	if err := decodeJSONBody(r, &body); err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
-		return
+	if len(fullChain) > 1 {
+		resp.Data.IssuingCA = fullChain[1]
+		resp.Data.CAChain = fullChain[1:]
+
 	}
-
-	privKey, cr, err := cryptopkg.GenerateECDSAKeyAndCSR(body.CommonName)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-			"couldn't generate private key or CSR", err)
-		return
-	}
-
-	ttl, err := time.ParseDuration(body.TTL)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't parse TTL", err)
-		return
-	}
-
-	cert, fullChain, err := signer.Sign(cr, ttl)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't sign certificate", err)
-		return
-	}
-
-	onCertificateSigned(r, cert, body.Comment)
-
-	switch r.URL.Query().Get("output") {
-	case "pem":
-		writeHTTPWithHeaders(w, http.StatusOK, []byte(strings.Join(fullChain, "\n")),
-			map[string]string{
-				"Content-Type": "application/x-pem-file",
-				"Content-Disposition": fmt.Sprintf(`attachment; filename="%s.pem"`,
-					signerpkg.BigIntToString(cert.SerialNumber)),
-			})
-
-	default:
-		type Data struct {
-			Key         string   `json:"key"`
-			Certificate string   `json:"certificate"`
-			IssuingCA   string   `json:"issuing_ca,omitempty"`
-			CAChain     []string `json:"ca_chain,omitempty"`
-		}
-		type Resp struct {
-			Data *Data `json:"data"`
-		}
-		resp := Resp{
-			Data: &Data{
-				Key:         privKey,
-				Certificate: fullChain[0],
-			},
-		}
-		if len(fullChain) > 1 {
-			resp.Data.IssuingCA = fullChain[1]
-			resp.Data.CAChain = fullChain[1:]
-
-		}
-		writeJSONOk(w, resp)
-	}
+	writeJSONOk(w, resp)
 })
 
 var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
