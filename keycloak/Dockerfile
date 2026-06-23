@@ -15,8 +15,10 @@ WORKDIR /src/keycloak
 
 # Minimal patch: allow multiple audiences (https://github.com/keycloak/keycloak/pull/41133)
 RUN sed -i 's|DEFAULT_ALLOW_MULTIPLE_AUDIENCES_FOR_JWT_CLIENT_AUTHENTICATION = false|DEFAULT_ALLOW_MULTIPLE_AUDIENCES_FOR_JWT_CLIENT_AUTHENTICATION = true|' ${JAVA_FILE}
-# Build only services module with its dependencies (not full Keycloak)
-RUN mvn -pl services -am -DskipTests -T 1C clean package
+# Disable optional Maven extension that often fails in CI
+RUN rm -f .mvn/extensions.xml
+# Build only services module with its dependencies
+RUN mvn -pl services -am -DskipTests -T 1C clean package --no-transfer-progress
 
 # Stage 2: Prepare Keyauthority theme
 FROM alpine:3.22 AS theme
