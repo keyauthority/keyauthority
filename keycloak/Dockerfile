@@ -6,7 +6,7 @@ ARG RUNTIME_GID=4001
 # Stage 1: Build patched keycloak-services from source
 FROM maven:3.9.16-eclipse-temurin-21 AS kc-src
 ARG KC_VERSION
-ARG JAVA_FILE=services/src/main/java/org/keycloak/authentication/authenticators/client/AbstractBaseJWTValidator.java
+ARG JAVA_FILE=services/src/main/java/org/keycloak/protocol/oidc/OIDCProviderConfig.java
 RUN apt-get update && apt-get install -y \
     --no-install-recommends git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
@@ -14,16 +14,9 @@ RUN git clone --depth 1 --branch ${KC_VERSION} https://github.com/keycloak/keycl
 WORKDIR /src/keycloak
 
 # Minimal patch: allow multiple audiences (https://github.com/keycloak/keycloak/pull/41133)
-# Fail early if patch target is not found
-RUN grep -q '!multipleAudienceAllowed' ${JAVA_FILE} || (echo "ERROR: Patch target not found" && exit 1)
-# Apply patch to allow multiple audiences (reject only null/empty)
-RUN sed -i 's|!multipleAudienceAllowed|false|' ${JAVA_FILE}
-
+RUN sed -i 's|DEFAULT_ALLOW_MULTIPLE_AUDIENCES_FOR_JWT_CLIENT_AUTHENTICATION = false|DEFAULT_ALLOW_MULTIPLE_AUDIENCES_FOR_JWT_CLIENT_AUTHENTICATION = true|' ${JAVA_FILE}
 # Build only services module with its dependencies (not full Keycloak)
-RUN mvn -pl services -am -DskipTests -T 1C clean package \
-    -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 \
-    -Dmaven.wagon.http.retryHandler.count=5 \
-    -Dorg.slf4j.simpleLogger.defaultLogLevel=warn
+RUN mvn -pl services -am -DskipTests -T 1C clean package
 
 # Stage 2: Prepare Keyauthority theme
 FROM alpine:3.22 AS theme
