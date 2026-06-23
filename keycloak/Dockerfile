@@ -18,8 +18,12 @@ WORKDIR /src/keycloak
 RUN grep -q '!multipleAudienceAllowed' ${JAVA_FILE} || (echo "ERROR: Patch target not found" && exit 1)
 # Apply patch to allow multiple audiences (reject only null/empty)
 RUN sed -i 's|!multipleAudienceAllowed|false|' ${JAVA_FILE}
+
 # Build only services module with its dependencies (not full Keycloak)
-RUN mvn -pl services -am -DskipTests -T 1C clean package
+RUN mvn -pl services -am -DskipTests -T 1C clean package \
+    -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dorg.slf4j.simpleLogger.defaultLogLevel=warn
 
 # Stage 2: Prepare Keyauthority theme
 FROM alpine:3.22 AS theme
