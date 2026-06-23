@@ -1086,7 +1086,7 @@ metadata:
     vault.hashicorp.com/auth-config-secret-id-file-path: /vault/custom/password
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
-    vault.hashicorp.com/agent-extra-secret: 'my-creds' # name of the secret above, which gets mounted to /vault/custom
+    vault.hashicorp.com/agent-extra-secret: my-creds # name of the secret above, which gets mounted to /vault/custom
     vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
@@ -1124,10 +1124,23 @@ injector:
 }
 
 function shellUsage(secret, apiRootUrl) {
-  return `source <(
+  /*return `source <(
   curl -s -H "Authorization: Bearer $JWT" \\
     "${apiRootUrl}/v1/secrets/${secret}?output=shell"
-) && ./run.sh`;
+) && ./run.sh`;*/
+  return `#!/bin/bash
+
+# Exchange credentials for a Keycloak-issued JWT token (replace with your actual credentials)
+JWT=$(curl -s -X POST "${apiRootUrl}/v1/token" \\
+  -H "Content-Type: application/json" \\
+  -d '{"username": "your-username", "password": "your-password"}' | jq -r '.client_token')
+
+# Fetch and source the secret into the shell environment
+curl -s -H "Authorization: Bearer $JWT" \\
+  "${apiRootUrl}/v1/secrets/${secret}?output=shell" | source /dev/stdin
+
+# Run your script with the secret available as environment variables
+./run.sh`;
 }
 
 export const secretUsageExamples = (secret, data, apiRootUrl) => {
@@ -1136,8 +1149,7 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
       <h4>Shell</h4>
       <p>
         Use the following command to fetch and source the secret directly into
-        your shell environment using a JWT token for authentication. The secrets
-        will be exported as environment variables.
+        your shell environment.
       </p>
       {prettyCode("bash", shellUsage(secret, apiRootUrl))}
       <h4>GitLab Runners</h4>

@@ -514,13 +514,6 @@ paths:
           in: path
           schema:
             type: string
-        - name: output
-          in: query
-          schema:
-            type: string
-            enum: [json, pem]
-            default: json
-          description: Output format of the certificate chain.
       requestBody:
         required: true
         content:
