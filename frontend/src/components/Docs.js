@@ -336,10 +336,14 @@ export function Administration() {
           <i className="bi bi-exclamation-triangle-fill me-1"></i> Important
         </Alert.Heading>
         Stock Keycloak does not support multiple audience claims in JWT
-        assertion tokens. Our Keycloak image includes a patch to enable this
-        capability. If you use an unmodified Keycloak image, you must use an
-        alternative authentication method, such as AppRole (username and
+        assertion tokens. Our Keycloak image includes a Java agent to enable
+        this capability. If you use an unmodified Keycloak image, you must use
+        an alternative authentication method, such as AppRole (username and
         password).
+        {/*Keycloak does not support multiple audience claims in JWT assertion
+        tokens. If you are using an Identity Provider that issues
+        multiple-audience tokens, you must use an alternative authentication
+        method, such as AppRole (username and password).*/}
       </Alert>
     </>
   );
@@ -1216,13 +1220,13 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}
 
-      {/*<p>
+      <p>
         Similar to GitLab, it is required that a user exists in Keycloak with
         the permissions to access the secret, and that the user has an{" "}
         <strong>Identity provider link</strong> configured with Kubernetes as
         the provider and User ID set to{" "}
         <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
-      </p>*/}
+      </p>
 
       {disclaimer()}
     </>

@@ -154,6 +154,8 @@ keycloakify-build-theme:
 .PHONY: pretty
 pretty:
 	npx prettier --write "theming"
+	# npx prettier --write "agent/pom.xml" --plugin @prettier/plugin-xml
+	# npx prettier --write "agent/src/**/*.java" --plugin prettier-plugin-java
 
 ##@ Scan
 .PHONY: scan
