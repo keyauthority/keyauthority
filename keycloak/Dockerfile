@@ -6,7 +6,7 @@ ARG RUNTIME_GID=4001
 # Stage 1: Build patched keycloak-services from source
 FROM maven:3.9.16-eclipse-temurin-21 AS kc-src
 ARG KC_VERSION
-ARG JAVA_FILE=services/src/main/java/org/keycloak/services/clientpolicy/executor/SecureClientAuthenticationAssertionExecutor.java
+ARG JAVA_FILE=services/src/main/java/org/keycloak/authentication/authenticators/client/AbstractBaseJWTValidator.java
 RUN apt-get update && apt-get install -y \
     --no-install-recommends git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
@@ -15,9 +15,9 @@ WORKDIR /src/keycloak
 
 # Minimal patch: allow multiple audiences (https://github.com/keycloak/keycloak/pull/41133)
 # Fail early if patch target is not found
-RUN grep -q 'token.getAudience().length != 1' ${JAVA_FILE} || (echo "ERROR: Patch target not found" && exit 1)
+RUN grep -q '!multipleAudienceAllowed' ${JAVA_FILE} || (echo "ERROR: Patch target not found" && exit 1)
 # Apply patch to allow multiple audiences (reject only null/empty)
-RUN sed -i 's/token.getAudience().length != 1/token.getAudience().length == 0/' ${JAVA_FILE}
+RUN sed -i 's|!multipleAudienceAllowed|false|' ${JAVA_FILE}
 # Build only services module with its dependencies (not full Keycloak)
 RUN mvn -pl services -am -DskipTests -T 1C clean package
 
