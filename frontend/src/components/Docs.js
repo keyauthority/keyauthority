@@ -320,11 +320,25 @@ export function Administration() {
         help diagnose issues with token validation or role mapping.
       </p>
 
+      <Alert variant="info" className="mt-4">
+        <Alert.Heading className="fs-6 fw-bold">
+          <i className="bi bi-info-circle-fill me-1"></i> Tip
+        </Alert.Heading>
+        If you are configuring the local Kubernetes cluster as an Identity
+        Provider, set the JWKS URL to{" "}
+        <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>, which is handled
+        by KeyAuthority. This is because the Kubernetes API server's JWKS
+        endpoint requires authentication.
+      </Alert>
+
       <Alert variant="warning" className="mt-4">
-        <i className="bi bi-exclamation-triangle-fill me-2"></i>
-        Keycloak does not support JWT Authorization Grant for assertion tokens
-        that include multiple audience claims. For these cases, you may need to
-        use a different authentication method such as approle (username and
+        <Alert.Heading className="fs-6 fw-bold">
+          <i className="bi bi-exclamation-triangle-fill me-1"></i> Important
+        </Alert.Heading>
+        Stock Keycloak does not support multiple audience claims in JWT
+        assertion tokens. Our Keycloak image includes a patch to enable this
+        capability. If you use an unmodified Keycloak image, you must use an
+        alternative authentication method, such as AppRole (username and
         password).
       </Alert>
     </>
@@ -703,28 +717,21 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
 
       <p>
         In the case of Vault issuers, the authentication methods supported are
-        based on:
+        based on Kubernetes token issued by a service account and credentials
+        like username and password.
       </p>
 
-      <p>
-        <ul>
-          <li>Credentials (username and password)</li>
-          {/* <li>Kubernetes token issued by a service account</li> */}
-          <li>Kubernetes token issued by a cron job</li>
-        </ul>
-      </p>
+      <h6>Option 1: Authenticating with Kubernetes Service Account Token</h6>
 
-      <h6>Authenticating with Credentials (Recommended)</h6>
+      {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)}
+
+      <h6>Option 2: Authenticating with Username and Password</h6>
 
       {vaultAppRoleIssuerExample(signerName, apiRootUrl)}
 
-      {/* <h6>Kubernetes Authentication through Service Account Tokens</h6> */}
+      {/* <h6>Authenticating with Kubernetes Tokens from Cron Job</h6> */}
 
-      {/* {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)} */}
-
-      <h6>Authenticating with Kubernetes Tokens from Cron Job</h6>
-
-      {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)}
+      {/* {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)} */}
 
       <p>
         A user must exist in Keycloak with the permissions to access the signer,
@@ -1063,31 +1070,14 @@ function k8sUsageYaml(secret, data) {
     })
     .join("\n");
 
-  return `# Secret holding the credentials for user@keyauthority.net
-apiVersion: v1
-kind: Secret
-type: Opaque
-metadata:
-  name: my-creds
-  namespace: my-namespace
-stringData:
-  username: user@keyauthority.net
-  password: "..."
----
-# Pod getting the KeyAuthority secret injected
-apiVersion: v1
+  return `apiVersion: v1
 kind: Pod
 metadata:
   name: my-app
   namespace: my-namespace
   annotations:
-    vault.hashicorp.com/auth-type: approle
-    vault.hashicorp.com/auth-config-role-id-file-path: /vault/custom/username
-    vault.hashicorp.com/auth-config-secret-id-file-path: /vault/custom/password
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
-    vault.hashicorp.com/agent-extra-secret: my-creds # name of the secret above, which gets mounted to /vault/custom
-    vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
       {{ with secret "${secret}" }}
@@ -1129,16 +1119,12 @@ function shellUsage(secret, apiRootUrl) {
     "${apiRootUrl}/v1/secrets/${secret}?output=shell"
 ) && ./run.sh`;*/
   return `#!/bin/bash
-
-# Exchange credentials for a Keycloak-issued JWT token (replace with your actual credentials)
-JWT=$(curl -s -X POST "${apiRootUrl}/v1/token" \\
-  -H "Content-Type: application/json" \\
-  -d '{"username": "your-username", "password": "your-password"}' | jq -r '.client_token')
-
+# Exchange credentials for a Keycloak-issued token
+token=$(curl -s -X POST "${apiRootUrl}/v1/token" \\
+  -d '{"username": "user@keyauthority.net", "password": "..."}' | jq -r '.auth.client_token')
 # Fetch and source the secret into the shell environment
-curl -s -H "Authorization: Bearer $JWT" \\
+curl -s -H "Authorization: Bearer $token" \\
   "${apiRootUrl}/v1/secrets/${secret}?output=shell" | source /dev/stdin
-
 # Run your script with the secret available as environment variables
 ./run.sh`;
 }
@@ -1223,18 +1209,9 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         >
           Vault Injector documentation
         </a>
-        . This example leverages approle-based{" "}
-        <a
-          href="https://developer.hashicorp.com/vault/docs/agent-and-proxy/autoauth"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Vault Agent Auto-authentication
-        </a>
-        , where a user must exist in Keycloak with the appropriate role to
-        access the secret. The injection works by writing the secret to a
-        shell-compatible file <code>/vault/secrets/env</code> that can be
-        sourced before launching your application.
+        . The injection works by writing the secret to a shell-compatible file{" "}
+        <code>/vault/secrets/env</code> that can be sourced before launching
+        your application.
       </p>
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}

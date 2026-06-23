@@ -1721,7 +1721,7 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		if b.Jwt != "" {
 			go func() {
 				var claims map[string]any
-				internalpkg.InsecureClaims(b.Jwt, &claims)
+				internalpkg.Claims(b.Jwt, &claims)
 				logger.Debug(r, "couldn't exchange JWT for Keycloak token",
 					"claims", claims, "error", err)
 			}()

@@ -218,7 +218,7 @@ func HasRequiredRole(roles []string, environment string, requiredRole Role) bool
 	return (roleVal & requiredRole) == requiredRole
 }
 
-func InsecureClaims(token string, claims any) {
+func Claims(token string, claims any) {
 	splitToken := strings.Split(token, ".")
 	if len(splitToken) != 3 {
 		return

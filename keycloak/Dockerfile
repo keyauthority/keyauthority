@@ -3,17 +3,40 @@ ARG UBI_MAJOR_VERSION=10
 ARG UBI_VERSION=10.2-1780550715
 ARG RUNTIME_GID=4001
 
-# Stage 1: Prepare Keycloak theme
+# Stage 1: Build patched keycloak-services from source
+FROM maven:3.9.16-eclipse-temurin-21 AS kc-src
+ARG KC_VERSION
+ARG JAVA_FILE=services/src/main/java/org/keycloak/services/clientpolicy/executor/SecureClientAuthenticationAssertionExecutor.java
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch ${KC_VERSION} https://github.com/keycloak/keycloak.git /src/keycloak
+WORKDIR /src/keycloak
+
+# Minimal patch: allow multiple audiences (https://github.com/keycloak/keycloak/pull/41133)
+# Fail early if patch target is not found
+RUN grep -q 'token.getAudience().length != 1' ${JAVA_FILE} || (echo "ERROR: Patch target not found" && exit 1)
+# Apply patch to allow multiple audiences (reject only null/empty)
+RUN sed -i 's/token.getAudience().length != 1/token.getAudience().length == 0/' ${JAVA_FILE}
+# Build only services module with its dependencies (not full Keycloak)
+RUN mvn -pl services -am -DskipTests -T 1C clean package
+
+# Stage 2: Prepare Keyauthority theme
 FROM alpine:3.22 AS theme
 RUN apk add unzip
 COPY theming/keyauthority-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar keycloak-themes.jar
 RUN unzip keycloak-themes.jar -d keycloak-themes
 
-# Stage 2: Builder
+# Stage 3: Builder
 FROM quay.io/keycloak/keycloak:${KC_VERSION} AS builder
+ARG KC_VERSION
 ARG THEME_NAME=keyauthority
 COPY --chmod=777 --chown=root:root --from=theme \
-    keycloak-themes/theme/keyauthority-theme/login/ opt/keycloak/themes/${THEME_NAME}/login/
+    keycloak-themes/theme/keyauthority-theme/login/ /opt/keycloak/themes/${THEME_NAME}/login/
+
+# Replace stock services jar with patched one
+COPY --from=kc-src /src/keycloak/services/target/keycloak-services-${KC_VERSION}.jar \
+    /opt/keycloak/lib/lib/main/keycloak-services-${KC_VERSION}.jar
 
 # Set Keycloak environment variables
 ENV KC_DB=postgres
