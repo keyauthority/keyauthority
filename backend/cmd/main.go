@@ -1285,36 +1285,25 @@ var signerSignHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 
 	onCertificateSigned(r, cert, body.Comment)
 
-	switch r.URL.Query().Get("output") {
-	case "pem":
-		writeHTTPWithHeaders(w, http.StatusOK, []byte(strings.Join(fullChain, "\n")),
-			map[string]string{
-				"Content-Type": "application/x-pem-file",
-				"Content-Disposition": fmt.Sprintf(`attachment; filename="%s.pem"`,
-					signerpkg.BigIntToString(cert.SerialNumber)),
-			})
-
-	default:
-		type Data struct {
-			Certificate string   `json:"certificate"`
-			IssuingCA   string   `json:"issuing_ca,omitempty"`
-			CAChain     []string `json:"ca_chain,omitempty"`
-		}
-		type Resp struct {
-			Data *Data `json:"data"`
-		}
-		resp := Resp{
-			Data: &Data{
-				Certificate: fullChain[0],
-			},
-		}
-		if len(fullChain) > 1 {
-			resp.Data.IssuingCA = fullChain[1]
-			resp.Data.CAChain = fullChain[1:]
-
-		}
-		writeJSONOk(w, resp)
+	type Data struct {
+		Certificate string   `json:"certificate"`
+		IssuingCA   string   `json:"issuing_ca,omitempty"`
+		CAChain     []string `json:"ca_chain,omitempty"`
 	}
+	type Resp struct {
+		Data *Data `json:"data"`
+	}
+	resp := Resp{
+		Data: &Data{
+			Certificate: fullChain[0],
+		},
+	}
+	if len(fullChain) > 1 {
+		resp.Data.IssuingCA = fullChain[1]
+		resp.Data.CAChain = fullChain[1:]
+
+	}
+	writeJSONOk(w, resp)
 })
 
 var signerSignDocumentHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1732,7 +1721,7 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 		if b.Jwt != "" {
 			go func() {
 				var claims map[string]any
-				internalpkg.InsecureClaims(b.Jwt, &claims)
+				internalpkg.Claims(b.Jwt, &claims)
 				logger.Debug(r, "couldn't exchange JWT for Keycloak token",
 					"claims", claims, "error", err)
 			}()

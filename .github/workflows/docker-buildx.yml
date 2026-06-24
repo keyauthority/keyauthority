@@ -39,6 +39,19 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Set up Java # For Keycloak Java agent
+        if: ${{ inputs.directory == 'keycloak' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Build Keycloak Java agent
+        if: ${{ inputs.directory == 'keycloak' }}
+        working-directory: keycloak/agent
+        run: mvn -B -ntp -DskipTests package
+
       - name: Set up QEMU (GitHub mode)
         if: ${{ inputs.builder_mode == 'github' }}
         uses: docker/setup-qemu-action@v3
@@ -79,5 +92,9 @@ jobs:
         env:
           BUILDER: ${{ inputs.builder_mode == 'docker-cloud' && steps.buildx_cloud.outputs.name || '' }}
         run: |
+          echo "🚀 Building and pushing image..."
+          echo "    Image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
+          echo "    Platforms: ${{ inputs.platforms }}"
+          echo "    Build Mode: ${{ inputs.builder_mode }}"
+          echo "    Beta: ${{ github.ref != 'refs/heads/main' && 'Yes' || 'No' }}"
           make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }}
-          echo "✅ Built and pushed image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"

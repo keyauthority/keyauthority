@@ -27,6 +27,26 @@ export default function Filters({
   const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
   const remainder = supportsFill ? filtersTemplate.length % safeColsPerRow : 0;
 
+  const toRFC3339 = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d.toISOString();
+  };
+
+  const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+
+    const pad = (n) => String(n).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  };
+
   return (
     <Card className="mb-3">
       <Card.Header>
@@ -107,11 +127,11 @@ export default function Filters({
                       <span className="input-group-text">{filter.label}</span>
                       <Form.Control
                         type="datetime-local"
-                        value={filters[filter.key] ?? ""}
+                        value={toDateTimeLocal(filters[filter.key] ?? "")}
                         onChange={(e) =>
                           setFilters((prev) => ({
                             ...prev,
-                            [filter.key]: e.target.value,
+                            [filter.key]: toRFC3339(e.target.value),
                           }))
                         }
                       />

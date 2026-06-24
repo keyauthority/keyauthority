@@ -272,8 +272,10 @@ export function prettyCode(language, code, copyButton = true) {
 
 export function disclaimer() {
   return (
-    <Alert variant="info">
-      <Alert.Heading className="fs-6 fw-bold">Disclaimer</Alert.Heading>
+    <Alert variant="warning">
+      <Alert.Heading className="fs-6 fw-bold">
+        <i className="bi bi-exclamation-triangle-fill me-1"></i> Disclaimer
+      </Alert.Heading>
       This product partially implements a HashiCorp Vault-compatible API.
       HashiCorp Vault, Vault Agent (injector), and the <code>vault</code> CLI
       are trademarks of HashiCorp, Inc. This project is not affiliated with or

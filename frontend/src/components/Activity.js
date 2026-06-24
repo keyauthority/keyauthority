@@ -268,20 +268,20 @@ export function Dashboard({ isLoading, setIsLoading }) {
           "bi bi-clock-history",
           [
             {
-              key: "Errors in Last 24h",
+              key: "Errors in the Last 24h",
               iconClass: "bi bi-x-circle-fill",
               value: logCountByLevel["ERROR"],
               valueReady: logCountByLevel?.["ERROR"],
               variant: "danger",
             },
             {
-              key: "Certificates Signed in Last 24h",
+              key: "Certificates Signed in the Last 24h",
               iconClass: "bi bi-award-fill",
               value: logCountByMsg["certificate signed"],
               valueReady: logCountByMsg?.["certificate signed"],
             },
             {
-              key: "Secrets Read in Last 24h",
+              key: "Secret Read Requests in the Last 24h",
               iconClass: "bi bi-lock-fill",
               value: logCountByMsg["secret read"],
               valueReady: logCountByMsg?.["secret read"],
@@ -303,21 +303,21 @@ export function Dashboard({ isLoading, setIsLoading }) {
             variant: "success",
           },
           {
-            key: "Valid and Expiring in ≤3d",
+            key: "Valid and Expiring Within 3 Days",
             iconClass: "bi bi-exclamation-circle-fill",
             value: certCountByExpiring[3],
             valueReady: certCountByExpiring?.[3],
             variant: "danger",
           },
           // {
-          //   key: "Valid and Expiring in ≤7d",
+          //   key: "Valid and Expiring Within 7 Days",
           //   iconClass: "bi bi-exclamation-triangle-fill",
           //   value: certCountByExpiring[7],
           //   valueReady: certCountByExpiring?.[7],
           //   variant: "warning",
           // },
           {
-            key: "Valid and Expiring in ≤30d",
+            key: "Valid and Expiring Within 30 Days",
             iconClass: "bi bi-exclamation-triangle-fill",
             value: certCountByExpiring[30],
             valueReady: certCountByExpiring?.[30],
@@ -392,14 +392,14 @@ export function Dashboard({ isLoading, setIsLoading }) {
         "bi bi-three-dots",
         [
           {
-            key: "Updated in Last 60d",
+            key: "Updated in the Last 60 Days",
             iconClass: "bi bi-check-circle-fill",
             value: secretCountByUpdated[60],
             valueReady: secretCountByUpdated?.[60],
             variant: "success",
           },
           {
-            key: "Not Updated in Last 60d",
+            key: "Not Updated in the Last 60 Days",
             iconClass: "bi bi-clock-fill",
             value:
               secretCountByUpdated[infiniteDays] - secretCountByUpdated[60],

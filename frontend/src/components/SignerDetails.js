@@ -780,14 +780,21 @@ function SignCertificateTab({ signerName, isLoading, setIsLoading }) {
   const handleSignCertificate = async () => {
     setIsLoading(true);
     try {
-      const response = await api.post(
-        `/signers/${signerName}/sign?output=pem`,
-        { csr, ttl: `${ttl}h`, comment },
-      );
+      const response = await api.post(`/signers/${signerName}/sign`, {
+        csr,
+        ttl: `${ttl}h`,
+        comment,
+      });
       setCSR("");
       setTTL(720);
       setComment("");
-      setSignedCert(response.data);
+      // full chain is certificate + ca_chain[:]
+      const fullChain = [
+        response.data.data.certificate,
+        ...(response.data.data.ca_chain || []),
+      ];
+      // string join with newline to get PEM format
+      setSignedCert(fullChain.join("\n"));
     } catch (err) {
       showToast("error", errorToString(err));
     } finally {

@@ -17,10 +17,18 @@ limitations under the License.
 package crypto
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/pbkdf2"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+
+	cmpki "github.com/cert-manager/cert-manager/pkg/util/pki"
 )
 
 const (
@@ -59,4 +67,87 @@ func DecryptWithPwd(cipherData, password []byte) ([]byte, error) {
 	}
 
 	return (&symmetricSoftwareKey{key: key}).Decrypt(cipherData[pbkdf2SaltLength:])
+}
+
+// GenerateKeyAndCSR generates a private key and a corresponding CSR based on the provided parameters.
+func GenerateKeyAndCSR(commonName string, altNames []string,
+	excludeCNFromSANs bool, privateKeyType string) ([]byte, *x509.CertificateRequest, error) {
+
+	var privKey any
+	var privKeyFinal []byte
+	var err error
+
+	switch privateKeyType {
+	case "rsa":
+		// Generate a new RSA private key
+		privKey, err = rsa.GenerateKey(rand.Reader, 3072)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate RSA key: %w", err)
+		}
+		privKeyBytes := x509.MarshalPKCS1PrivateKey(privKey.(*rsa.PrivateKey))
+		privKeyFinal = pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: privKeyBytes,
+		})
+
+	case "ecdsa":
+		// Generate a new ECDSA private key using the P-384 curve
+		privKey, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
+		}
+
+		privKeyBytes, err := x509.MarshalECPrivateKey((privKey.(*ecdsa.PrivateKey)))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to marshal ECDSA key in DER format: %w", err)
+		}
+		privKeyFinal = pem.EncodeToMemory(&pem.Block{
+			Type:  "EC PRIVATE KEY",
+			Bytes: privKeyBytes,
+		})
+	default:
+		return nil, nil, fmt.Errorf("unsupported private key type: %s", privateKeyType)
+	}
+
+	// Create CSR template with the provided common name and alternative names
+	keyUsage, err := cmpki.MarshalKeyUsage(
+		x509.KeyUsageKeyEncipherment |
+			x509.KeyUsageDigitalSignature)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal key usage: %w", err)
+	}
+
+	extendedKeyUsage, err := cmpki.MarshalExtKeyUsage([]x509.ExtKeyUsage{
+		x509.ExtKeyUsageServerAuth,
+		x509.ExtKeyUsageClientAuth,
+	}, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal extended key usage: %w", err)
+	}
+
+	dnsNames := altNames
+	if !excludeCNFromSANs {
+		dnsNames = append([]string{commonName}, altNames...)
+	}
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		DNSNames:        dnsNames,
+		ExtraExtensions: []pkix.Extension{keyUsage, extendedKeyUsage},
+	}
+
+	// Sign the CSR with the generated private key
+	der, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create CSR: %w", err)
+	}
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse CSR: %w", err)
+	}
+
+	return privKeyFinal, csr, nil
 }
