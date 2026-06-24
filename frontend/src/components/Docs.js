@@ -326,9 +326,9 @@ export function Administration() {
         </Alert.Heading>
         If you are configuring the local Kubernetes cluster as an Identity
         Provider, set the JWKS URL to{" "}
-        <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>, which is handled
-        by KeyAuthority. This is because the Kubernetes API server's JWKS
-        endpoint requires authentication.
+        <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This endpoint is
+        handled by the KeyAuthority backend, which performs the authenticated
+        JWKS retrieval and exposes the JWKS to Keycloak unauthenticated.
       </Alert>
 
       <Alert variant="warning" className="mt-4">
@@ -407,42 +407,23 @@ export function UseSecrets() {
         The following examples demonstrate how secrets stored in KeyAuthority
         can be seamlessly injected into your applications and automation
         environments. Let's assume you have a script named <code>run.sh</code>{" "}
-        that performs database operations using credentials stored in a secret.
-        Below is a simplified version of that script:
-      </p>
-
-      {prettyCode(
-        "bash",
-        `#!/bin/bash
-
-# Connect to PostgreSQL using environment variables
-psql -h "postgres.local" -p "5432" -U "$PGUSER" -d "mydb" <<EOF
-UPDATE events SET status='processing' WHERE status='pending';
-EOF
-
-# Continue with additional logic, e.g. process pending events
-...`,
-      )}
-
-      <p>
-        Let's also assume that the required PostgreSQL credentials{" "}
-        <code>{JSON.stringify(sampleSecret.data, null, 2)}</code> are stored in
-        the secret <code>{sampleSecret.name}</code>. KeyAuthority supports
-        several ways to securely expose these secrets to applications:
+        that performs database operations using the credentials{" "}
+        <code>{JSON.stringify(sampleSecret.data, null, 2)}</code>. KeyAuthority
+        supports several ways to securely expose these secrets to applications:
       </p>
 
       <ul>
         <li>
           <strong>Shell</strong>: Source secrets dynamically at runtime using{" "}
-          <code>curl</code>.
+          <code>curl</code>
         </li>
         <li>
           <strong>GitLab Runners</strong>: Use the Vault integration to expose
-          secrets as environment variables in CI/CD jobs.
+          secrets as environment variables in CI/CD jobs
         </li>
         <li>
           <strong>Kubernetes Pods</strong>: Inject secrets into pods using
-          annotations and Vault Agent sidecars.
+          annotations and Vault Agent sidecars
         </li>
       </ul>
 
@@ -728,28 +709,44 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
       <h6>Option 1: Authenticating with Kubernetes Service Account Token</h6>
 
       {vaultK8sSAAuthIssuerExample(signerName, apiRootUrl)}
+      <p>The following dependencies are required:</p>
+      <ul>
+        <li>
+          A user must exist in Keycloak with the permissions to access the
+          signer, and the user must have an{" "}
+          <strong>Identity provider link</strong> configured with Kubernetes as
+          the provider and{" "}
+          <code>system:serviceaccount:&lt;NAMESPACE&gt;:{signerName}-sa</code>{" "}
+          as User ID. This allows Keycloak to associate the Kubernetes-issued
+          token with an existing user, enabling access based on the Kubernetes
+          namespace and service account context.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak client to accept Kubernetes tokens with an audience claim set
+          to <code>keyauthority://signers</code>.
+        </li>
+      </ul>
+
+      <p>
+        Check the <Link to="/docs/admin">administration docs</Link> for more
+        details on how to set this up.
+      </p>
+
+      {/*<Alert variant="info" className="mt-4">
+        <Alert.Heading className="fs-6 fw-bold">
+          <i className="bi bi-info-circle-fill me-1"></i> Tip
+        </Alert.Heading>
+        The token subject (sub) in Kubernetes tokens is unique for each service
+        account, and therefore each service account needs to be linked to a user
+        in Keycloak. Hence, you can use a single service account for multiple
+        signers, allowing you to manage access for those signers with a single
+        Keycloak user.
+      </Alert>*/}
 
       <h6>Option 2: Authenticating with Username and Password</h6>
 
       {vaultAppRoleIssuerExample(signerName, apiRootUrl)}
-
-      {/* <h6>Authenticating with Kubernetes Tokens from Cron Job</h6> */}
-
-      {/* {vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl)} */}
-
-      <p>
-        A user must exist in Keycloak with the permissions to access the signer,
-        and the user must have an <strong>Identity provider link</strong>{" "}
-        configured with Kubernetes as the provider and User ID set to{" "}
-        <code>system:serviceaccount:my-namespace:{signerName}-sa</code> where{" "}
-        <code>my-namespace</code> is the namespace where the service account{" "}
-        <code>{signerName}-sa</code> resides. This allows Keycloak to associate
-        the Kubernetes-issued token with an existing user, enabling secure
-        access to the signer based on the Kubernetes namespace and service
-        account context. Check the{" "}
-        <Link to="/docs/admin">administration docs</Link> for more details on
-        how to set this up.
-      </p>
 
       <h4>Secure Application</h4>
       <p>
@@ -913,94 +910,8 @@ spec:
         role: keyauthority
         mountPath: /v1/auth/jwt
         serviceAccountRef:
-          name: ${signerName}-sa`,
-  );
-}
-
-function vaultK8sTokenAuthIssuerExample(signerName, apiRootUrl) {
-  return prettyCode(
-    "yaml",
-    `# Role to allow creating secrets
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: ${signerName}-role
-rules:
-  - apiGroups: ['']
-    resources: ['serviceaccounts/token']
-    resourceNames: ['${signerName}-sa']
-    verbs: ['create']
-  - apiGroups: ['']
-    resources: ['secrets']
-    verbs: ['create']
-  - apiGroups: ['']
-    resources: ['secrets']
-    resourceNames: ['${signerName}-token']
-    verbs: ['get', 'update', 'patch']
----
-# RoleBinding to bind the Role to ServiceAccount
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: ${signerName}-role-binding
-subjects:
-  - kind: ServiceAccount
-    name: ${signerName}-sa
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: ${signerName}-role
----
-# ServiceAccount for the cronjob
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: ${signerName}-sa
----
-# CronJob token rotator: creates single-audience token and stores in Secret
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: ${signerName}-token-rotator
-spec:
-  schedule: "*/10 * * * *" # rotate every 10 minutes
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          serviceAccountName: ${signerName}-sa
-          restartPolicy: OnFailure
-          containers:
-            - name: rotate
-              image: alpine/kubectl:latest
-              command: ["/bin/sh", "-ec"]
-              args:
-                - |
-                  NS="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
-                  AUD="${apiRootUrl}" # must match the audience of the IdP (Kubernetes) token
-                  TOKEN="$(kubectl -n "$NS" create token ${signerName}-sa --audience "$AUD" --duration=1h)"
-                  kubectl -n "$NS" create secret generic ${signerName}-token --from-literal=token="$TOKEN" --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
----
-# Vault issuer using token authentication
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  name: ${signerName}
-spec:
-  vault:
-    path: signers/${signerName}/sign
-    server: "${apiRootUrl}"
-    caBundle: "..." # optional, Base64-encoded CA cert of '${apiRootUrl}'
-    auth:
-      kubernetes:
-        role: keyauthority
-        mountPath: /v1/auth/jwt
-        secretRef:
-          name: ${signerName}-token
-          key: token`,
+          name: ${signerName}-sa
+          audiences: [ "keyauthority://signers" ]`,
   );
 }
 
@@ -1052,14 +963,12 @@ function gitlabUsageYaml(secret, data, apiRootUrl) {
       return `    ${k}: \n      vault: ${secret}/${k}@secrets\n      file: false`;
     })
     .join("\n");
-  return `# project: my-group/my-project
-# branch: my-branch
-job:
+  return `job:
   variables:
     VAULT_SERVER_URL: ${apiRootUrl}
   id_tokens:
     VAULT_ID_TOKEN:
-      aud: https://gitlab.com
+      aud: keyauthority://secrets
   secrets:
 ${secretsYaml}
   script: |
@@ -1078,7 +987,6 @@ function k8sUsageYaml(secret, data) {
 kind: Pod
 metadata:
   name: my-app
-  namespace: my-namespace
   annotations:
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
@@ -1088,7 +996,6 @@ metadata:
 ${template}
       {{ end }}
 spec:
-  serviceAccountName: my-serviceaccount
   containers:
   - name: my-app
     image: my-app:0.1.0
@@ -1114,7 +1021,7 @@ injector:
       - key: kubernetes.io/metadata.name
         operator: In
         values:
-          - my-namespace`;
+          - <POD_NAMESPACE> # replace with the namespace where your pods are running`;
 }
 
 function shellUsage(secret, apiRootUrl) {
@@ -1158,18 +1065,31 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
 
       {prettyCode("yaml", gitlabUsageYaml(secret, data, apiRootUrl))}
 
+      <p>The following dependencies are required:</p>
+
+      <ul>
+        <li>
+          A user must exist in Keycloak with the permissions to access the
+          secret, and the user must have an{" "}
+          <strong>Identity provider link</strong> configured with GitLab as the
+          provider and{" "}
+          <code>
+            project_path:&lt;PROJECT_PATH&gt;:ref_type:branch:ref:&lt;BRANCH&gt;
+          </code>{" "}
+          as User ID. This allows Keycloak to associate the Gitlab-issued token
+          with an existing user, enabling access based on the GitLab project and
+          branch context.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak client to accept GitLab tokens with an audience claim set to{" "}
+          <code>keyauthority://secrets</code>.
+        </li>
+      </ul>
+
       <p>
-        A user must exist in Keycloak with the permissions to access the secret,
-        and the user must have an <strong>Identity provider link</strong>{" "}
-        configured with GitLab as the provider and User ID set to{" "}
-        <code>
-          project_path:my-group/my-project:ref_type:branch:ref:my-branch
-        </code>
-        . This allows Keycloak to associate the Gitlab-issued token with an
-        existing user, enabling secure access to the secret based on the GitLab
-        project and branch context. Check the{" "}
-        <Link to="/docs/admin">administration docs</Link> for more details on
-        how to set this up.
+        Check the <Link to="/docs/admin">administration docs</Link> for more
+        details on how to set this up.
       </p>
 
       <h4>Kubernetes Pods</h4>
@@ -1220,12 +1140,33 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
 
       {prettyCode("yaml", k8sUsageYaml(secret, data))}
 
+      <p>The following dependencies are required:</p>
+
+      <ul>
+        <li>
+          A user must exist in Keycloak with the permissions to access the
+          secret, and the user must have an{" "}
+          <strong>Identity provider link</strong> configured with Kubernetes as
+          the provider and{" "}
+          <code>
+            system:serviceaccount:&lt;POD_NAMESPACE&gt;:&lt;POD_SERVICE_ACCOUNT&gt;
+          </code>{" "}
+          as User ID. This allows Keycloak to associate the Kubernetes-issued
+          token with an existing user, enabling access based on the Kubernetes
+          namespace and service account context.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak client to accept incoming Kubernetes token audiences. You can
+          parse an existing token and extract an audience claim from it, or
+          infer an audience from the backend DEBUG logs when JWT exchange errors
+          occur.
+        </li>
+      </ul>
+
       <p>
-        Similar to GitLab, it is required that a user exists in Keycloak with
-        the permissions to access the secret, and that the user has an{" "}
-        <strong>Identity provider link</strong> configured with Kubernetes as
-        the provider and User ID set to{" "}
-        <code>system:serviceaccount:my-namespace:my-serviceaccount</code>.
+        Check the <Link to="/docs/admin">administration docs</Link> for more
+        details on how to set this up.
       </p>
 
       {disclaimer()}

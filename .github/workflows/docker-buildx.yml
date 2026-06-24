@@ -39,13 +39,12 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      # Build Java agent once (outside Docker) to avoid Maven 429 during buildx
-      - name: Set up Java
+      - name: Set up Java # For Keycloak Java agent
         if: ${{ inputs.directory == 'keycloak' }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: maven
 
       - name: Build Keycloak Java agent
@@ -93,5 +92,5 @@ jobs:
         env:
           BUILDER: ${{ inputs.builder_mode == 'docker-cloud' && steps.buildx_cloud.outputs.name || '' }}
         run: |
+          echo "🚀 Will try to build image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
           make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }}
-          echo "✅ Built and pushed image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
