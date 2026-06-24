@@ -911,7 +911,7 @@ spec:
         mountPath: /v1/auth/jwt
         serviceAccountRef:
           name: ${signerName}-sa
-          audiences: [ "keyauthority://signers" ]`,
+          audiences: [ 'keyauthority://signers' ]`,
   );
 }
 

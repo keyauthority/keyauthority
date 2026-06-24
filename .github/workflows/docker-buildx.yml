@@ -92,5 +92,9 @@ jobs:
         env:
           BUILDER: ${{ inputs.builder_mode == 'docker-cloud' && steps.buildx_cloud.outputs.name || '' }}
         run: |
-          echo "🚀 Will try to build image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
+          echo "🚀 Building and pushing image..."
+          echo "    Image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
+          echo "    Platforms: ${{ inputs.platforms }}"
+          echo "    Build Mode: ${{ inputs.builder_mode }}"
+          echo "    Beta: ${{ github.ref != 'refs/heads/main' && 'Yes' || 'No' }}"
           make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }}
