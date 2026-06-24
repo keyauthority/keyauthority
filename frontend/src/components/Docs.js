@@ -1157,10 +1157,9 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
         </li>
         <li>
           A <strong>Custom audience mapping</strong> must be configured in the
-          Keycloak client to accept incoming Kubernetes token audiences. You can
-          parse an existing token and extract an audience claim from it, or
-          infer an audience from the backend DEBUG logs when JWT exchange errors
-          occur.
+          Keycloak client to accept Kubernetes token audiences. You can parse an
+          existing token and extract an audience claim from it, or infer an
+          audience from the backend DEBUG logs when JWT exchange errors occur.
         </li>
       </ul>
 

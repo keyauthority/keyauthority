@@ -272,7 +272,7 @@ export function prettyCode(language, code, copyButton = true) {
 
 export function disclaimer() {
   return (
-    <Alert variant="info">
+    <Alert variant="warning">
       <Alert.Heading className="fs-6 fw-bold">
         <i className="bi bi-exclamation-triangle-fill me-1"></i> Disclaimer
       </Alert.Heading>
