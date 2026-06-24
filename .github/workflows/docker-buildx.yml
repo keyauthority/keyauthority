@@ -39,6 +39,20 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      # Build Java agent once (outside Docker) to avoid Maven 429 during buildx
+      - name: Set up Java
+        if: ${{ inputs.directory == 'keycloak' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build Keycloak Java agent
+        if: ${{ inputs.directory == 'keycloak' }}
+        working-directory: keycloak/agent
+        run: mvn -B -ntp -DskipTests package
+
       - name: Set up QEMU (GitHub mode)
         if: ${{ inputs.builder_mode == 'github' }}
         uses: docker/setup-qemu-action@v3
