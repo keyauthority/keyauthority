@@ -1,4 +1,3 @@
 .DS_Store
-
-# generate it using the Helm chart and then copy it here
+/agent/target
 realm.json 

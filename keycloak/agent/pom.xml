@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>net.keyauthority</groupId>
-  <artifactId>keycloak-multiaudience-agent</artifactId>
+  <artifactId>multiaudience-agent</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 

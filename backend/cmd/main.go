@@ -53,17 +53,16 @@ import (
 )
 
 const (
-	envHTTPPort                    = "HTTP_PORT"
-	envHTTPSPort                   = "HTTPS_PORT"
-	envMetricsPort                 = "METRICS_PORT"
-	envCORSOrigin                  = "CORS_ORIGIN"
-	envTruststore                  = "TRUSTSTORE"
-	envTLSCert                     = "TLS_CERT"
-	envTLSKey                      = "TLS_KEY"
-	envCRLRefreshInterval          = "CRL_REFRESH_INTERVAL"
-	envAuthenticatorReloadInterval = "AUTHENTICATOR_RELOAD_INTERVAL"
-	envStoreCleanupInterval        = "STORE_CLEANUP_INTERVAL"
-	envInventoryRefreshInterval    = "INVENTORY_REFRESH_INTERVAL"
+	envHTTPPort                 = "HTTP_PORT"
+	envHTTPSPort                = "HTTPS_PORT"
+	envMetricsPort              = "METRICS_PORT"
+	envCORSOrigin               = "CORS_ORIGIN"
+	envTruststore               = "TRUSTSTORE"
+	envTLSCert                  = "TLS_CERT"
+	envTLSKey                   = "TLS_KEY"
+	envCRLRefreshInterval       = "CRL_REFRESH_INTERVAL"
+	envStoreCleanupInterval     = "STORE_CLEANUP_INTERVAL"
+	envInventoryRefreshInterval = "INVENTORY_REFRESH_INTERVAL"
 )
 
 var (
@@ -380,7 +379,13 @@ func runPeriodicTasks() {
 		defer ticker.Stop()
 
 		for {
-			recreateAllCRLs()
+			successCount, failureCount, err := recreateCRLs()
+			if err != nil {
+				logger.WarnWithContext(context.Background(), "couldn't recreate CRLs", "error", err)
+			} else {
+				logger.DebugWithContext(context.Background(), "CRL recreation completed",
+					"successCount", successCount, "failureCount", failureCount)
+			}
 			<-ticker.C
 		}
 	}()
@@ -407,6 +412,9 @@ func runPeriodicTasks() {
 			if err := store.RunCleanupTasks(context.Background()); err != nil {
 				logger.WarnWithContext(context.Background(),
 					"couldn't perform store cleanup tasks", "error", err)
+			} else {
+				logger.DebugWithContext(context.Background(),
+					"store cleanup tasks completed")
 			}
 			<-ticker.C
 		}
@@ -433,20 +441,23 @@ func runPeriodicTasks() {
 			if err := store.RefreshInventoryMetrics(context.Background()); err != nil {
 				logger.WarnWithContext(context.Background(),
 					"couldn't refresh inventory metrics", "error", err)
+			} else {
+				logger.DebugWithContext(context.Background(),
+					"inventory metrics refreshed")
 			}
 			<-ticker.C
 		}
 	}()
 }
 
-func recreateAllCRLs() {
+func recreateCRLs() (int, int, error) {
 	ctx := context.Background()
 	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
 	if err != nil {
-		logger.WarnWithContext(ctx, "couldn't get signers for CRL recreation", "error", err)
-		return
+		return 0, 0, err
 	}
 
+	successCount := 0
 	for _, s := range signers {
 		signerName := s["name"].(string)
 
@@ -470,10 +481,13 @@ func recreateAllCRLs() {
 
 		if err := store.SetSignerCRL(ctx, signerName, crl); err != nil {
 			logger.WarnWithContext(ctx, "couldn't store CRL", "signer", signerName, "error", err)
+			continue
 		}
 
 		logger.InfoWithContext(ctx, "CRL updated", "signer", signerName)
+		successCount++
 	}
+	return successCount, len(signers) - successCount, nil
 }
 
 func setDefaultHttpTransport() {
@@ -863,26 +877,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			}
 		}
 
-		/*// Optional token exchange as a pre-step to authentication
-		// Use case example: a client sending an ID Token in the headers instead of an Access Token
-		if r.URL.Query().Get("exchangeToken") == "true" {
-			tokenStr, err := internalpkg.GetTokenFromHeaders(r)
-			if err != nil {
-				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "couldn't get token from request", err)
-				return
-			}
-			exchangedToken, err := internalpkg.ExchangeForToken(
-				&internalpkg.TokenRequest{Jwt: tokenStr},
-			)
-			if err != nil {
-				logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "token exchange failed", err)
-				return
-			}
-			r.Header.Set("Authorization", "Bearer "+exchangedToken)
-			// r.Header.Set("X-Vault-Token", exchangedToken)
-		}*/
-
-		// Verify token (once per request)
+		// Verify token
 		token, err := internalpkg.VerifyToken(r)
 		if err != nil {
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)

@@ -1749,6 +1749,7 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 	}
 	defer rows.Close()
 
+	serialsSeen := make(map[string]struct{})
 	for rows.Next() {
 		var caChainBytes []byte
 		var env string
@@ -1756,18 +1757,22 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 			continue // skip if we can't read the CA chain
 		}
 
-		for {
-			var block *pem.Block
-			block, caChainBytes = pem.Decode(caChainBytes)
-			if block == nil {
-				break
-			}
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				continue
-			}
-			inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
+		block, _ := pem.Decode(caChainBytes)
+		if block == nil {
+			continue // skip if we can't decode the CA chain
 		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue // skip if we can't parse the cert
+		}
+
+		serialStr := signerpkg.BigIntToString(cert.SerialNumber)
+		if _, exists := serialsSeen[serialStr]; exists {
+			continue // skip if we've already seen this cert
+		}
+		serialsSeen[serialStr] = struct{}{}
+
+		inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 	}
 
 	// close first result set before running next query
@@ -1825,6 +1830,12 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 		if err != nil {
 			continue // skip if we can't parse the cert
 		}
+
+		serialStr := signerpkg.BigIntToString(cert.SerialNumber)
+		if _, exists := serialsSeen[serialStr]; exists {
+			continue // skip if we've already seen this cert
+		}
+		serialsSeen[serialStr] = struct{}{}
 
 		inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 	}

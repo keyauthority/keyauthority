@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/ThalesGroup/crypto11 v1.6.1
-	github.com/cert-manager/cert-manager v1.20.2
+	github.com/cert-manager/cert-manager v1.20.3
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -16,8 +16,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.83.0
-	k8s.io/api v0.37.0-alpha.1
+	go.step.sm/crypto v0.84.0
+	k8s.io/api v0.37.0-alpha.2
 )
 
 require (
@@ -69,8 +69,8 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.2 // indirect
-	k8s.io/apimachinery v0.37.0-alpha.1 // indirect
-	k8s.io/client-go v0.37.0-alpha.1 // indirect
+	k8s.io/apimachinery v0.37.0-alpha.2 // indirect
+	k8s.io/client-go v0.37.0-alpha.2 // indirect
 	k8s.io/component-base v0.36.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821 // indirect

@@ -14,6 +14,10 @@ IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)$(if $(BETA_VERSION),-beta):$(IMG_TAG)
 # further build arguments
 KC_VERSION=$(shell echo $(VERSION) | cut -d'-' -f1)
 
+# Agent build settings
+AGENT_DIR ?= agent
+AGENT_JAR ?= $(AGENT_DIR)/target/multiaudience-agent.jar
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -48,11 +52,19 @@ check-image-exists: ## Check if image already exists in registry
 		exit 1; \
 	fi
 
+.PHONY: agent-build
+agent-build: ## Build Java agent jar used by Dockerfile
+	cd $(AGENT_DIR) && mvn -B -ntp -DskipTests package
+
+.PHONY: agent-clean
+agent-clean: ## Clean Java agent build artifacts
+	cd $(AGENT_DIR) && mvn -q clean
+
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: keycloakify-prep keycloakify-build-theme ## Build docker image with the manager.
+docker-build: agent-build keycloakify-prep keycloakify-build-theme ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build --build-arg KC_VERSION=$(KC_VERSION) -t $(IMG) .
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
