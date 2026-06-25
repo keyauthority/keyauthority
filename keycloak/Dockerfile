@@ -39,7 +39,7 @@ RUN microdnf install -y java-25-openjdk-headless && \
 
 COPY --from=builder /opt/keycloak /opt/keycloak
 # Agent jar must be prebuilt
-COPY agent/target/multiaudience-agent-1.0.0.jar /opt/keycloak/multiaudience-agent.jar
+COPY agent/target/multiaudience-agent.jar /opt/keycloak/multiaudience-agent.jar
 
 RUN chgrp -R ${RUNTIME_GID} /opt/keycloak && \
     chmod -R g+rwX /opt/keycloak
