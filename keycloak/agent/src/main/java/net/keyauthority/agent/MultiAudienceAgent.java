@@ -9,7 +9,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 
 public class MultiAudienceAgent {
     public static void premain(String args, Instrumentation inst) {
-        System.out.println("[multi-audience-agent] premain loaded");
+        System.out.println("[multiaudience-agent] premain loaded");
         new AgentBuilder.Default()
             .type(named("org.keycloak.authentication.authenticators.client.AbstractBaseJWTValidator"))
             .transform((builder, td, cl, module, pd) ->
@@ -22,7 +22,7 @@ public class MultiAudienceAgent {
         @Advice.OnMethodEnter
         static void onEnter(@Advice.Argument(value = 1, readOnly = false) boolean multipleAudienceAllowed) {
             multipleAudienceAllowed = true;
-            // System.out.println("[multi-audience-agent] forced multipleAudienceAllowed=true");
+            // System.out.println("[multiaudience-agent] forced multipleAudienceAllowed=true");
         }
     }
 }
