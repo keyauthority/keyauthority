@@ -1032,7 +1032,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
+        colsPerRow={4}
         filtersTemplate={[
           {
             key: "id",
@@ -1040,13 +1040,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
-          },
-          {
-            key: "url",
-            type: "text",
-            label: "URL",
-            placeholder: "e.g. /v1/signers/my-signer",
-            value: filters.url,
           },
           {
             key: "from",

@@ -1409,11 +1409,6 @@ func applyPendingRequestFilters(query string, args []any, idx int, filters url.V
 		args = append(args, "%"+user+"%")
 		idx++
 	}
-	if url := filters.Get("url"); url != "" {
-		query += fmt.Sprintf(" AND url ILIKE $%d", idx)
-		args = append(args, "%"+url+"%")
-		idx++
-	}
 	if from := parseTime(filters, "from"); from != nil {
 		query += fmt.Sprintf(" AND created_at >= $%d", idx)
 		args = append(args, *from)

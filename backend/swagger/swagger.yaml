@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.26
+  version: 1.4.27
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -1014,10 +1014,6 @@ paths:
           in: query
           schema:
             type: string
-        - name: url
-          in: query
-          schema:
-            type: string
         - name: from
           in: query
           schema:
@@ -1136,32 +1132,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: user
-          in: query
-          schema:
-            type: string
-        - name: url
-          in: query
-          schema:
-            type: string
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: page
-          in: query
-          schema:
-            type: integer
-        - name: pageSize
-          in: query
-          schema:
-            type: integer
       responses:
         "200":
           description: Success
@@ -1198,10 +1168,6 @@ paths:
           schema:
             type: string
         - name: msg
-          in: query
-          schema:
-            type: string
-        - name: url
           in: query
           schema:
             type: string
