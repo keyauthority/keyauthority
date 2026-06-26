@@ -16,7 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.84.0
+	go.step.sm/crypto v0.84.1
 	k8s.io/api v0.37.0-alpha.2
 )
 

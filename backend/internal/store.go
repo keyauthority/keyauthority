@@ -885,9 +885,15 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 		args = append(args, "%"+cn+"%")
 		idx++
 	}
-	if san := filters.Get("san"); san != "" {
+	/*if san := filters.Get("san"); san != "" {
 		query += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(certs.sans) AS s WHERE s ILIKE $%d)", idx)
 		args = append(args, "%"+san+"%")
+		idx++
+	}*/
+	if san := filters.Get("san"); san != "" {
+		// exact SAN match (uses GIN index on certs.sans)
+		query += fmt.Sprintf(" AND certs.sans @> ARRAY[$%d]::text[]", idx)
+		args = append(args, san)
 		idx++
 	}
 	if comment := filters.Get("comment"); comment != "" {
@@ -1281,37 +1287,32 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 
 func applyLogFilters(query string, args []any, idx int, filters url.Values) (string, []any, int) {
 	if level := filters.Get("level"); level != "" {
-		query += fmt.Sprintf(" AND entry->>'level' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND level ILIKE $%d", idx)
 		args = append(args, "%"+level+"%")
 		idx++
 	}
 	if user := filters.Get("user"); user != "" {
-		query += fmt.Sprintf(" AND entry->'token'->>'user' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND log_user ILIKE $%d", idx)
 		args = append(args, "%"+user+"%")
 		idx++
 	}
 	if msg := filters.Get("msg"); msg != "" {
-		query += fmt.Sprintf(" AND entry->>'msg' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND msg ILIKE $%d", idx)
 		args = append(args, "%"+msg+"%")
 		idx++
 	}
-	if url := filters.Get("url"); url != "" {
-		query += fmt.Sprintf(" AND entry->>'url' ILIKE $%d", idx)
-		args = append(args, "%"+url+"%")
-		idx++
-	}
 	if env := filters.Get("environment"); env != "" {
-		query += fmt.Sprintf(" AND entry->>'environment' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND environment ILIKE $%d", idx)
 		args = append(args, "%"+env+"%")
 		idx++
 	}
 	if timeFrom := parseTime(filters, "from"); timeFrom != nil {
-		query += fmt.Sprintf(" AND (entry->>'time')::timestamptz >= $%d", idx)
+		query += fmt.Sprintf(" AND log_time >= $%d", idx)
 		args = append(args, *timeFrom)
 		idx++
 	}
 	if timeTo := parseTime(filters, "to"); timeTo != nil {
-		query += fmt.Sprintf(" AND (entry->>'time')::timestamptz <= $%d", idx)
+		query += fmt.Sprintf(" AND log_time <= $%d", idx)
 		args = append(args, *timeTo)
 		idx++
 	}
@@ -1324,8 +1325,7 @@ func (s *Store) GetLogs(ctx context.Context, filters url.Values) ([]map[string]a
 	idx := 1
 
 	query, args, idx = applyLogFilters(query, args, idx, filters)
-
-	query += " ORDER BY entry->>'time' DESC"
+	query += ` ORDER BY log_time DESC`
 
 	query, args, idx, limit, offset := applyPagination(query, args, idx, filters)
 

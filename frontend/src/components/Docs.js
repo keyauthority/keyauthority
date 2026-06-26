@@ -338,7 +338,7 @@ export function Administration() {
         Stock Keycloak does not support multiple audience claims in JWT
         assertion tokens. Our Keycloak image includes a Java agent to enable
         this capability. If you use an unmodified Keycloak image, you must use
-        an alternative authentication method, such as AppRole (username and
+        an alternative authentication method such as AppRole (username and
         password).
         {/*Keycloak does not support multiple audience claims in JWT assertion
         tokens. If you are using an Identity Provider that issues
