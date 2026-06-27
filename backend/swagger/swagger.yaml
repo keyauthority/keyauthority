@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.27
+  version: 1.4.28
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -951,7 +951,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/SignedCertificate"
+                      $ref: "#/components/schemas/Certificate"
                   page:
                     type: integer
                   pageSize:

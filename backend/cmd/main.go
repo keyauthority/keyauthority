@@ -814,7 +814,7 @@ func getEnvironment(r *http.Request) (string, error) {
 	}
 
 	// key requests
-	if strings.HasPrefix(r.URL.Path, "/v1/keys/") || r.URL.Path == "/v1/keys" {
+	if strings.HasPrefix(r.URL.Path, "/v1/keys/") || isCreateKeyRequest(r) {
 		// on create key, derive from environment query param
 		if isCreateKeyRequest(r) {
 			env := r.URL.Query().Get("environment")
