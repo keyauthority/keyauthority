@@ -526,13 +526,17 @@ func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Store) GetKeyEnvironment(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *Store) GetKeyEnvironment(ctx context.Context, id string) (string, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid key ID: %w", err)
+	}
 	var env string
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT environment
 		FROM keys
 		WHERE id = $1
-	`, id).Scan(&env); err != nil {
+	`, uid).Scan(&env); err != nil {
 		return "", fmt.Errorf("get key environment: %w", err)
 	}
 	return env, nil
@@ -694,6 +698,19 @@ func (s *Store) GetPrivateKeyID(ctx context.Context, name string) (uuid.UUID, er
 		return uuid.Nil, fmt.Errorf("get private key ID for signer: %w", err)
 	}
 	return id, nil
+}
+
+func (s *Store) GetSignerEnvironment(ctx context.Context, name string) (string, error) {
+	var env string
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT k.environment
+		FROM signers s
+		JOIN keys k ON k.id = s.private_key_id
+		WHERE s.name = $1
+  `, name).Scan(&env); err != nil {
+		return "", fmt.Errorf("get signer environment: %w", err)
+	}
+	return env, nil
 }
 
 func (s *Store) GetSignerConfig(ctx context.Context, name string) (*signerpkg.SignerConfig, error) {
@@ -1019,11 +1036,16 @@ func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Ce
 }
 
 func (s *Store) SetCertAsRevoked(ctx context.Context, serial string) error {
+	bi, err := signerpkg.StringToBigInt(serial)
+	if err != nil {
+		return fmt.Errorf("invalid serial number: %w", err)
+	}
+
 	res, err := s.DB.ExecContext(ctx, `
 		UPDATE certs
 		SET revoked = true
 		WHERE serial = $1
-	`, serial)
+	`, signerpkg.BigIntToString(bi))
 	if err != nil {
 		return err
 	}
@@ -1169,6 +1191,19 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 		VALUES ($1, $2, $3)
 	`, name, encryptionKeyID, ct)
 	return err
+}
+
+func (s *Store) GetSecretEnvironment(ctx context.Context, name string) (string, error) {
+	var env string
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT k.environment
+		FROM secrets s
+		JOIN keys k ON k.id = s.encryption_key_id
+		WHERE s.name = $1
+	`, name).Scan(&env); err != nil {
+		return "", fmt.Errorf("get secret environment: %w", err)
+	}
+	return env, nil
 }
 
 func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {

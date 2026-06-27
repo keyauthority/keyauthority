@@ -75,7 +75,7 @@ var (
 	// HTTP router, made global so pendingRequestHandler can access it
 	router = mux.NewRouter()
 
-	// Cache urlPath -> environment
+	// Cache prefix:name/id -> environment
 	envCache = cachepkg.NewCache()
 )
 
@@ -764,76 +764,83 @@ func requiresApproval(r *http.Request) bool {
 }
 
 func getEnvironment(r *http.Request) (string, error) {
-	// derive environment, used for RBAC
-	// if it's a create key request, get environment from query parameter
-	// for other requests, get key ID from path or store, and then get environment from store using key ID
-	environment := ""
-	if env, exists := envCache.Get(r.URL.Path); exists {
-		environment = env.(string)
-	} else if isCreateKeyRequest(r) {
-		environment = r.URL.Query().Get("environment")
-	} else {
-		ctx := r.Context()
-		keyIDStr := ""
-		keyID := uuid.Nil
+	ctx := r.Context()
 
-		// if it's a request related to a specific key, get key ID from path
-		if strings.HasPrefix(r.URL.Path, "/v1/keys/") {
-			keyIDStr = mux.Vars(r)["id"]
+	// signer requests
+	if strings.HasPrefix(r.URL.Path, "/v1/signers/") {
+		signerName := mux.Vars(r)["name"]
+		cacheKey := "signer:" + signerName
+		if env, ok := envCache.Get(cacheKey); ok {
+			logger.Debug(r, "environment cache hit", "environment", env)
+			return env.(string), nil
 		}
 
-		// for signer-related requests, get the private key ID
-		// from query parameter (for create signer) or from the store (for other requests)
-		if strings.HasPrefix(r.URL.Path, "/v1/signers/") {
-			if isCreateSignerRequest(r) {
-				keyIDStr = r.URL.Query().Get("privateKeyID")
-			} else {
-				privateKeyID, err := store.GetPrivateKeyID(ctx, mux.Vars(r)["name"])
-				if err != nil {
-					return "", fmt.Errorf("couldn't get signer private key ID: %w", err)
-				}
-				keyID = privateKeyID
-			}
+		// on create signer, derive from privateKeyID query param
+		if isCreateSignerRequest(r) {
+			keyID := r.URL.Query().Get("privateKeyID")
+			return store.GetKeyEnvironment(ctx, keyID)
 		}
 
-		// for secrets-related requests, get the encryption key ID
-		// from query parameter (for insert secret) or from the store (for other requests)
-		if strings.HasPrefix(r.URL.Path, "/v1/secrets/") {
-			if isInsertSecretRequest(r) {
-				keyIDStr = r.URL.Query().Get("encryptionKeyID")
-			} else {
-				encryptionKeyID, err := store.GetEncryptionKeyID(ctx, mux.Vars(r)["name"])
-				if err != nil {
-					return "", fmt.Errorf("couldn't get encryption key ID: %w", err)
-				}
-				keyID = encryptionKeyID
-			}
+		env, err := store.GetSignerEnvironment(ctx, signerName)
+		if err != nil {
+			return "", err
 		}
 
-		// if keyID is still nil and keyIDStr is not empty,
-		// it means the key ID was provided as a query parameter - try to parse it
-		if keyIDStr != "" && keyID == uuid.Nil {
-			var err error
-			keyID, err = uuid.Parse(keyIDStr)
-			if err != nil {
-				return "", fmt.Errorf("invalid key ID: %w", err)
-			}
-		}
-
-		// if we have a key ID, get the environment from the store
-		if keyID != uuid.Nil {
-			env, err := store.GetKeyEnvironment(ctx, keyID)
-			if err != nil {
-				return "", fmt.Errorf("couldn't get key environment: %w", err)
-			}
-			environment = env
-		}
-
-		if environment != "" {
-			envCache.Set(r.URL.Path, environment)
-		}
+		envCache.Set(cacheKey, env)
+		return env, nil
 	}
-	return environment, nil
+
+	// secret requests
+	if strings.HasPrefix(r.URL.Path, "/v1/secrets/") {
+		secretName := mux.Vars(r)["name"]
+		cacheKey := "secret:" + secretName
+		if env, ok := envCache.Get(cacheKey); ok {
+			logger.Debug(r, "environment cache hit", "environment", env)
+			return env.(string), nil
+		}
+
+		// on insert secret, derive from encryptionKeyID query param
+		if isInsertSecretRequest(r) {
+			keyID := r.URL.Query().Get("encryptionKeyID")
+			return store.GetKeyEnvironment(ctx, keyID)
+		}
+
+		env, err := store.GetSecretEnvironment(ctx, secretName)
+		if err != nil {
+			return "", err
+		}
+		envCache.Set(cacheKey, env)
+		return env, nil
+	}
+
+	// key requests
+	if strings.HasPrefix(r.URL.Path, "/v1/keys/") || r.URL.Path == "/v1/keys" {
+		// on create key, derive from environment query param
+		if isCreateKeyRequest(r) {
+			env := r.URL.Query().Get("environment")
+			if env == "" {
+				return "", fmt.Errorf("missing environment query parameter")
+			}
+			return env, nil
+		}
+
+		keyID := mux.Vars(r)["id"]
+		cacheKey := "key:" + keyID
+		if env, ok := envCache.Get(cacheKey); ok {
+			logger.Debug(r, "environment cache hit", "environment", env)
+			return env.(string), nil
+		}
+
+		env, err := store.GetKeyEnvironment(ctx, keyID)
+		if err != nil {
+			return "", fmt.Errorf("couldn't get key environment: %w", err)
+		}
+
+		envCache.Set(cacheKey, env)
+		return env, nil
+	}
+
+	return "", nil
 }
 
 /******************************/
@@ -1039,7 +1046,7 @@ var keyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete key", err)
 			return
 		}
-		envCache.Delete(r.URL.Path) // invalidate environment cache for this key
+		envCache.Delete("key:" + keyIDStr) // invalidate environment cache for this key
 		logger.Info(r, "key deleted if existed")
 		writeJSONOk(w, nil)
 	}
@@ -1132,7 +1139,7 @@ var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete signer", err)
 			return
 		}
-		envCache.Delete(r.URL.Path) // invalidate environment cache for this signer
+		envCache.Delete("signer:" + signerName) // invalidate environment cache for this signer
 		logger.Info(r, "signer deleted")
 		writeJSONOk(w, nil)
 	}
@@ -1557,7 +1564,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 				"couldn't delete secret", err)
 			return
 		}
-		envCache.Delete(r.URL.Path) // invalidate environment cache for this secret
+		envCache.Delete("secret:" + secretName) // invalidate environment cache for this secret
 		logger.Info(r, "secret deleted if existed")
 		writeJSONOk(w, nil)
 	}
