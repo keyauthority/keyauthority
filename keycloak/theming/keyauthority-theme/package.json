@@ -13,21 +13,21 @@
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "keycloakify": "^11.15.3",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "sass": "^1.99.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sass": "^1.101.0"
   },
   "devDependencies": {
-    "@storybook/react": "^10.3.5",
-    "@storybook/react-vite": "^10.3.5",
-    "@types/node": "^25.5.2",
-    "@types/react": "^19.2.14",
+    "@storybook/react": "^10.4.6",
+    "@storybook/react-vite": "^10.4.6",
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "globals": "^17.4.0",
-    "storybook": "^10.3.5",
-    "typescript": "^6.0.2",
-    "vite": "^8.0.8"
+    "@vitejs/plugin-react": "^6.0.3",
+    "globals": "^17.7.0",
+    "storybook": "^10.4.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0"
   },
   "engines": {
     "node": "^18.0.0 || >=20.0.0"
