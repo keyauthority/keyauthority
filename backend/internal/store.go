@@ -1050,14 +1050,8 @@ func (s *Store) SetCertAsRevoked(ctx context.Context, serial string) error {
 		return err
 	}
 
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("could not set certificate as revoked: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("certificate not found: %q", serial)
-	}
-	return nil
+	_, err = res.RowsAffected()
+	return err
 }
 
 func (s *Store) GetCertPEM(ctx context.Context, serial string) ([]byte, error) {
