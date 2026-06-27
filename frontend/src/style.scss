@@ -56,3 +56,7 @@ td {
 .no-caret::after {
   display: none !important;
 }
+
+code {
+  white-space: nowrap;
+}

@@ -91,7 +91,6 @@ export function Dashboard({ isLoading, setIsLoading }) {
   );
 
   const countCertsByExpiring = async (days) => {
-    setIsLoading(true);
     const now = new Date();
     const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     try {
@@ -108,13 +107,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countLogsByLevel = async (level) => {
-    setIsLoading(true);
     const now = new Date();
     const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
@@ -130,13 +126,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countLogsByMsg = async (msg) => {
-    setIsLoading(true);
     const now = new Date();
     const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     try {
@@ -152,13 +145,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countKeysByStorage = async (storage) => {
-    setIsLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("storage", storage);
@@ -171,13 +161,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countKeysByType = async (type) => {
-    setIsLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("type", type);
@@ -190,13 +177,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countSignersByRoot = async (isRoot) => {
-    setIsLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("isRoot", isRoot);
@@ -209,13 +193,10 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const countSecretsByUpdated = async (daysAgo) => {
-    setIsLoading(true);
     const now = new Date();
     const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
     try {
@@ -230,33 +211,53 @@ export function Dashboard({ isLoading, setIsLoading }) {
       }));
     } catch (err) {
       // setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isAuditor) {
-      countLogsByLevel("ERROR");
-      countLogsByMsg("secret read");
-      countLogsByMsg("certificate signed");
-      countLogsByMsg("key created");
-    }
-    countCertsByExpiring(infiniteDays);
-    countCertsByExpiring(3);
-    countCertsByExpiring(7);
-    countCertsByExpiring(30);
-    countKeysByStorage("Software");
-    countKeysByStorage("HSM");
-    countKeysByType("RSA");
-    countKeysByType("ECDSA");
-    countKeysByType("Ed25519");
-    countKeysByType("AES");
-    countSignersByRoot(true);
-    countSignersByRoot(false);
-    countSecretsByUpdated(infiniteDays); // count all secrets by using a very large number of days
-    countSecretsByUpdated(60);
-  }, [api, isAuditor]);
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setIsLoading(true);
+      try {
+        const calls = [
+          countCertsByExpiring(infiniteDays),
+          countCertsByExpiring(3),
+          countCertsByExpiring(7),
+          countCertsByExpiring(30),
+          countKeysByStorage("Software"),
+          countKeysByStorage("HSM"),
+          countKeysByType("RSA"),
+          countKeysByType("ECDSA"),
+          countKeysByType("Ed25519"),
+          countKeysByType("AES"),
+          countSignersByRoot(true),
+          countSignersByRoot(false),
+          countSecretsByUpdated(infiniteDays),
+          countSecretsByUpdated(60),
+        ];
+
+        if (isAuditor) {
+          calls.push(
+            countLogsByLevel("ERROR"),
+            countLogsByMsg("secret read"),
+            countLogsByMsg("certificate signed"),
+            countLogsByMsg("key created"),
+          );
+        }
+
+        await Promise.allSettled(calls);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isAuditor, setIsLoading]);
 
   return (
     <>
@@ -264,24 +265,30 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
       {isAuditor &&
         dashboardSection(
-          "Recent Activity",
+          "Activity in the Last 24h",
           "bi bi-clock-history",
           [
             {
-              key: "Errors in the Last 24h",
+              key: "Errors",
               iconClass: "bi bi-x-circle-fill",
               value: logCountByLevel["ERROR"],
               valueReady: logCountByLevel?.["ERROR"],
               variant: "danger",
             },
+            // {
+            //   key: "Keys Created",
+            //   iconClass: "bi bi-key-fill",
+            //   value: logCountByMsg["key created"],
+            //   valueReady: logCountByMsg?.["key created"],
+            // },
             {
-              key: "Certificates Signed in the Last 24h",
+              key: "Certificates Signed",
               iconClass: "bi bi-award-fill",
               value: logCountByMsg["certificate signed"],
               valueReady: logCountByMsg?.["certificate signed"],
             },
             {
-              key: "Secret Read Requests in the Last 24h",
+              key: "Secret Read Requests",
               iconClass: "bi bi-lock-fill",
               value: logCountByMsg["secret read"],
               valueReady: logCountByMsg?.["secret read"],
@@ -740,7 +747,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={4}
+        colsPerRow={3}
         filtersTemplate={[
           {
             key: "level",
@@ -769,13 +776,13 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
             placeholder: "e.g. production",
             value: filters.environment,
           },
-          {
-            key: "url",
-            type: "text",
-            label: "URL",
-            placeholder: "e.g. /v1/secrets/my-secret",
-            value: filters.url,
-          },
+          // {
+          //   key: "url",
+          //   type: "text",
+          //   label: "URL",
+          //   placeholder: "e.g. /v1/secrets/my-secret",
+          //   value: filters.url,
+          // },
           {
             key: "from",
             type: "date",
@@ -1025,7 +1032,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
+        colsPerRow={4}
         filtersTemplate={[
           {
             key: "id",
@@ -1033,13 +1040,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
-          },
-          {
-            key: "url",
-            type: "text",
-            label: "URL",
-            placeholder: "e.g. /v1/signers/my-signer",
-            value: filters.url,
           },
           {
             key: "from",

@@ -38,10 +38,8 @@ RUN microdnf install -y java-25-openjdk-headless && \
     microdnf clean all
 
 COPY --from=builder /opt/keycloak /opt/keycloak
-
-# Agent jar must be prebuilt by CI at keycloak/agent/target/
-COPY agent/target/keycloak-multiaudience-agent-1.0.0.jar /opt/keycloak/keycloak-multiaudience-agent.jar
-RUN test -f /opt/keycloak/keycloak-multiaudience-agent.jar
+# Agent jar must be prebuilt
+COPY agent/target/multiaudience-agent.jar /opt/keycloak/multiaudience-agent.jar
 
 RUN chgrp -R ${RUNTIME_GID} /opt/keycloak && \
     chmod -R g+rwX /opt/keycloak
@@ -50,7 +48,7 @@ ENV KC_DB=postgres
 ENV KC_HEALTH_ENABLED=true
 ENV KC_METRICS_ENABLED=true
 ENV LANG=en_US.UTF-8
-ENV JAVA_OPTS_APPEND="-javaagent:/opt/keycloak/keycloak-multiaudience-agent.jar --add-opens java.base/java.lang=ALL-UNNAMED"
+ENV JAVA_OPTS_APPEND="-javaagent:/opt/keycloak/multiaudience-agent.jar --add-opens java.base/java.lang=ALL-UNNAMED"
 
 EXPOSE 8080 8443 9000
 USER 1001

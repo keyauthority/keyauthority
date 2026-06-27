@@ -98,6 +98,20 @@ func (h *PGHandler) worker() {
 	}
 }
 
+func firstAttrString(attrs []slog.Attr, key string) string {
+	for _, a := range attrs {
+		if a.Key == key {
+			return a.Value.String()
+		}
+		if a.Value.Kind() == slog.KindGroup {
+			if v := firstAttrString(a.Value.Group(), key); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
 // insertBatch performs a single INSERT for the collected records.
 func (h *PGHandler) insertBatch(batch []slog.Record) {
 	if len(batch) == 0 {
@@ -105,9 +119,14 @@ func (h *PGHandler) insertBatch(batch []slog.Record) {
 	}
 
 	var (
-		buf         bytes.Buffer
-		jsonHandler = slog.NewJSONHandler(&buf, &slog.HandlerOptions{AddSource: false})
-		jsonRows    = make([]string, 0, len(batch))
+		buf          bytes.Buffer
+		jsonHandler  = slog.NewJSONHandler(&buf, &slog.HandlerOptions{AddSource: false})
+		jsonRows     = make([]string, 0, len(batch))
+		logTimes     = make([]time.Time, 0, len(batch))
+		levels       = make([]string, 0, len(batch))
+		msgs         = make([]string, 0, len(batch))
+		logUsers     = make([]string, 0, len(batch))
+		environments = make([]string, 0, len(batch))
 	)
 
 	// Serialize in worker (off request path)
@@ -117,7 +136,19 @@ func (h *PGHandler) insertBatch(batch []slog.Record) {
 			log.Printf("[pgslog] format record failed: %v", err)
 			continue
 		}
+
+		var attrs []slog.Attr
+		rec.Attrs(func(a slog.Attr) bool {
+			attrs = append(attrs, a)
+			return true
+		})
+
 		jsonRows = append(jsonRows, strings.TrimSpace(buf.String()))
+		logTimes = append(logTimes, rec.Time)
+		levels = append(levels, rec.Level.String())
+		msgs = append(msgs, rec.Message)
+		logUsers = append(logUsers, firstAttrString(attrs, "user"))
+		environments = append(environments, firstAttrString(attrs, "environment"))
 	}
 
 	if len(jsonRows) == 0 {
@@ -130,15 +161,15 @@ func (h *PGHandler) insertBatch(batch []slog.Record) {
 		args  []any
 		count = 1
 	)
-	sb.WriteString(`INSERT INTO logs (entry) VALUES `)
+	sb.WriteString(`INSERT INTO logs (entry, log_time, level, msg, log_user, environment) VALUES `)
 
 	for i, row := range jsonRows {
 		if i > 0 {
 			sb.WriteString(",")
 		}
-		fmt.Fprintf(&sb, "($%d::jsonb)", count)
-		args = append(args, row)
-		count++
+		fmt.Fprintf(&sb, "($%d::jsonb, $%d, $%d, $%d, $%d, $%d)", count, count+1, count+2, count+3, count+4, count+5)
+		args = append(args, row, logTimes[i], levels[i], msgs[i], logUsers[i], environments[i])
+		count += 6
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

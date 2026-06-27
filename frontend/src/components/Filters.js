@@ -1,4 +1,5 @@
-import { Accordion, Button, Card, Col, Form, Row } from "react-bootstrap";
+import { useEffect, useState } from "react";
+import { Button, Card, Col, Form, Row } from "react-bootstrap";
 
 /*
 
@@ -20,6 +21,12 @@ export default function Filters({
   filtersTemplate,
   colsPerRow = 4,
 }) {
+  const [draftFilters, setDraftFilters] = useState({ ...filters });
+
+  useEffect(() => {
+    setDraftFilters({ ...filters });
+  }, [filters]);
+
   const safeColsPerRow =
     Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
 
@@ -52,21 +59,39 @@ export default function Filters({
       <Card.Header>
         <div className="d-flex justify-content-between align-items-center gap-2">
           <h6 className="mb-0">Filters</h6>
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() =>
-              setFilters((prev) => {
-                const newFilters = { ...prev };
-                Object.keys(newFilters).forEach((key) => {
-                  newFilters[key] = "";
-                });
-                return newFilters;
-              })
-            }
-          >
-            <i className="bi bi-x-lg"></i> Clear
-          </Button>
+          <div className="d-flex gap-2 align-items-center">
+            {/* Show how many filters are applied */}
+            {Object.keys(filters).filter((key) => filters[key]).length > 0 && (
+              <span className="text-muted">
+                {Object.keys(filters).filter((key) => filters[key]).length}{" "}
+                filter(s) applied
+              </span>
+            )}
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => setFilters({ ...draftFilters })}
+              //disabled={Object.keys(draftFilters).every((key) => draftFilters[key] === filters[key])}
+            >
+              <i className="bi bi-funnel"></i> Apply
+              {/*{" "}
+              {
+                Object.keys(draftFilters).filter((key) => draftFilters[key])
+                  .length
+              }{" "}
+              of {filtersTemplate.length}*/}
+            </Button>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => {
+                setDraftFilters({});
+                setFilters({});
+              }}
+            >
+              <i className="bi bi-x-lg"></i> Clear
+            </Button>
+          </div>
         </div>
       </Card.Header>
       <Card.Body>
@@ -89,10 +114,10 @@ export default function Filters({
                       <span className="input-group-text">{filter.label}</span>
                       <Form.Control
                         type="text"
-                        value={filters[filter.key] ?? ""}
+                        value={draftFilters[filter.key] ?? ""}
                         placeholder={filter.placeholder}
                         onChange={(e) =>
-                          setFilters((prev) => ({
+                          setDraftFilters((prev) => ({
                             ...prev,
                             [filter.key]: e.target.value,
                           }))
@@ -105,9 +130,9 @@ export default function Filters({
                     <>
                       <span className="input-group-text">{filter.label}</span>
                       <Form.Select
-                        value={filters[filter.key] ?? ""}
+                        value={draftFilters[filter.key] ?? ""}
                         onChange={(e) =>
-                          setFilters((prev) => ({
+                          setDraftFilters((prev) => ({
                             ...prev,
                             [filter.key]: e.target.value,
                           }))
@@ -127,9 +152,9 @@ export default function Filters({
                       <span className="input-group-text">{filter.label}</span>
                       <Form.Control
                         type="datetime-local"
-                        value={toDateTimeLocal(filters[filter.key] ?? "")}
+                        value={toDateTimeLocal(draftFilters[filter.key] ?? "")}
                         onChange={(e) =>
-                          setFilters((prev) => ({
+                          setDraftFilters((prev) => ({
                             ...prev,
                             [filter.key]: toRFC3339(e.target.value),
                           }))

@@ -5,16 +5,17 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>net.keyauthority</groupId>
-  <artifactId>keycloak-multiaudience-agent</artifactId>
+  <artifactId>multiaudience-agent</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <maven.compiler.release>25</maven.compiler.release>
     <bytebuddy.version>1.18.10-jdk5</bytebuddy.version>
+    <maven.compiler.plugin.version>3.14.0</maven.compiler.plugin.version>
     <maven.shade.plugin.version>3.6.2</maven.shade.plugin.version>
   </properties>
 
@@ -32,14 +33,16 @@
   </dependencies>
 
   <build>
+    <finalName>multiaudience-agent</finalName>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
+        <version>${maven.compiler.plugin.version}</version>
         <configuration>
           <source>${maven.compiler.source}</source>
           <target>${maven.compiler.target}</target>
+          <release>${maven.compiler.release}</release>
         </configuration>
       </plugin>
 

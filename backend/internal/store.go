@@ -526,13 +526,17 @@ func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Store) GetKeyEnvironment(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *Store) GetKeyEnvironment(ctx context.Context, id string) (string, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid key ID: %w", err)
+	}
 	var env string
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT environment
 		FROM keys
 		WHERE id = $1
-	`, id).Scan(&env); err != nil {
+	`, uid).Scan(&env); err != nil {
 		return "", fmt.Errorf("get key environment: %w", err)
 	}
 	return env, nil
@@ -694,6 +698,19 @@ func (s *Store) GetPrivateKeyID(ctx context.Context, name string) (uuid.UUID, er
 		return uuid.Nil, fmt.Errorf("get private key ID for signer: %w", err)
 	}
 	return id, nil
+}
+
+func (s *Store) GetSignerEnvironment(ctx context.Context, name string) (string, error) {
+	var env string
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT k.environment
+		FROM signers s
+		JOIN keys k ON k.id = s.private_key_id
+		WHERE s.name = $1
+  `, name).Scan(&env); err != nil {
+		return "", fmt.Errorf("get signer environment: %w", err)
+	}
+	return env, nil
 }
 
 func (s *Store) GetSignerConfig(ctx context.Context, name string) (*signerpkg.SignerConfig, error) {
@@ -885,9 +902,15 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 		args = append(args, "%"+cn+"%")
 		idx++
 	}
-	if san := filters.Get("san"); san != "" {
+	/*if san := filters.Get("san"); san != "" {
 		query += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(certs.sans) AS s WHERE s ILIKE $%d)", idx)
 		args = append(args, "%"+san+"%")
+		idx++
+	}*/
+	if san := filters.Get("san"); san != "" {
+		// exact SAN match (uses GIN index on certs.sans)
+		query += fmt.Sprintf(" AND certs.sans @> ARRAY[$%d]::text[]", idx)
+		args = append(args, san)
 		idx++
 	}
 	if comment := filters.Get("comment"); comment != "" {
@@ -1013,23 +1036,22 @@ func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Ce
 }
 
 func (s *Store) SetCertAsRevoked(ctx context.Context, serial string) error {
+	bi, err := signerpkg.StringToBigInt(serial)
+	if err != nil {
+		return fmt.Errorf("invalid serial number: %w", err)
+	}
+
 	res, err := s.DB.ExecContext(ctx, `
 		UPDATE certs
 		SET revoked = true
 		WHERE serial = $1
-	`, serial)
+	`, signerpkg.BigIntToString(bi))
 	if err != nil {
 		return err
 	}
 
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("could not set certificate as revoked: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("certificate not found: %q", serial)
-	}
-	return nil
+	_, err = res.RowsAffected()
+	return err
 }
 
 func (s *Store) GetCertPEM(ctx context.Context, serial string) ([]byte, error) {
@@ -1165,6 +1187,19 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 	return err
 }
 
+func (s *Store) GetSecretEnvironment(ctx context.Context, name string) (string, error) {
+	var env string
+	if err := s.DB.QueryRowContext(ctx, `
+		SELECT k.environment
+		FROM secrets s
+		JOIN keys k ON k.id = s.encryption_key_id
+		WHERE s.name = $1
+	`, name).Scan(&env); err != nil {
+		return "", fmt.Errorf("get secret environment: %w", err)
+	}
+	return env, nil
+}
+
 func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {
 	var ct []byte
 	var environment string
@@ -1281,37 +1316,32 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 
 func applyLogFilters(query string, args []any, idx int, filters url.Values) (string, []any, int) {
 	if level := filters.Get("level"); level != "" {
-		query += fmt.Sprintf(" AND entry->>'level' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND level ILIKE $%d", idx)
 		args = append(args, "%"+level+"%")
 		idx++
 	}
 	if user := filters.Get("user"); user != "" {
-		query += fmt.Sprintf(" AND entry->'token'->>'user' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND log_user ILIKE $%d", idx)
 		args = append(args, "%"+user+"%")
 		idx++
 	}
 	if msg := filters.Get("msg"); msg != "" {
-		query += fmt.Sprintf(" AND entry->>'msg' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND msg ILIKE $%d", idx)
 		args = append(args, "%"+msg+"%")
 		idx++
 	}
-	if url := filters.Get("url"); url != "" {
-		query += fmt.Sprintf(" AND entry->>'url' ILIKE $%d", idx)
-		args = append(args, "%"+url+"%")
-		idx++
-	}
 	if env := filters.Get("environment"); env != "" {
-		query += fmt.Sprintf(" AND entry->>'environment' ILIKE $%d", idx)
+		query += fmt.Sprintf(" AND environment ILIKE $%d", idx)
 		args = append(args, "%"+env+"%")
 		idx++
 	}
 	if timeFrom := parseTime(filters, "from"); timeFrom != nil {
-		query += fmt.Sprintf(" AND (entry->>'time')::timestamptz >= $%d", idx)
+		query += fmt.Sprintf(" AND log_time >= $%d", idx)
 		args = append(args, *timeFrom)
 		idx++
 	}
 	if timeTo := parseTime(filters, "to"); timeTo != nil {
-		query += fmt.Sprintf(" AND (entry->>'time')::timestamptz <= $%d", idx)
+		query += fmt.Sprintf(" AND log_time <= $%d", idx)
 		args = append(args, *timeTo)
 		idx++
 	}
@@ -1324,8 +1354,7 @@ func (s *Store) GetLogs(ctx context.Context, filters url.Values) ([]map[string]a
 	idx := 1
 
 	query, args, idx = applyLogFilters(query, args, idx, filters)
-
-	query += " ORDER BY entry->>'time' DESC"
+	query += ` ORDER BY log_time DESC`
 
 	query, args, idx, limit, offset := applyPagination(query, args, idx, filters)
 
@@ -1407,11 +1436,6 @@ func applyPendingRequestFilters(query string, args []any, idx int, filters url.V
 	if user := filters.Get("user"); user != "" {
 		query += fmt.Sprintf(" AND (token_info->'user')::text ILIKE $%d", idx)
 		args = append(args, "%"+user+"%")
-		idx++
-	}
-	if url := filters.Get("url"); url != "" {
-		query += fmt.Sprintf(" AND url ILIKE $%d", idx)
-		args = append(args, "%"+url+"%")
 		idx++
 	}
 	if from := parseTime(filters, "from"); from != nil {
@@ -1749,6 +1773,7 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 	}
 	defer rows.Close()
 
+	serialsSeen := make(map[string]struct{})
 	for rows.Next() {
 		var caChainBytes []byte
 		var env string
@@ -1756,18 +1781,22 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 			continue // skip if we can't read the CA chain
 		}
 
-		for {
-			var block *pem.Block
-			block, caChainBytes = pem.Decode(caChainBytes)
-			if block == nil {
-				break
-			}
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				continue
-			}
-			inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
+		block, _ := pem.Decode(caChainBytes)
+		if block == nil {
+			continue // skip if we can't decode the CA chain
 		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue // skip if we can't parse the cert
+		}
+
+		serialStr := signerpkg.BigIntToString(cert.SerialNumber)
+		if _, exists := serialsSeen[serialStr]; exists {
+			continue // skip if we've already seen this cert
+		}
+		serialsSeen[serialStr] = struct{}{}
+
+		inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 	}
 
 	// close first result set before running next query
@@ -1825,6 +1854,12 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 		if err != nil {
 			continue // skip if we can't parse the cert
 		}
+
+		serialStr := signerpkg.BigIntToString(cert.SerialNumber)
+		if _, exists := serialsSeen[serialStr]; exists {
+			continue // skip if we've already seen this cert
+		}
+		serialsSeen[serialStr] = struct{}{}
 
 		inventory = append(inventory, metricspkg.NewCertInventoryItem(cert, env))
 	}
