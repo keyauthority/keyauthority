@@ -39,7 +39,7 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Set up Java # For Keycloak Java agent
+      - name: Set up Java # For Keycloak Java agent and SPI build
         if: ${{ inputs.directory == 'keycloak' }}
         uses: actions/setup-java@v4
         with:
@@ -50,6 +50,11 @@ jobs:
       - name: Build Keycloak Java agent
         if: ${{ inputs.directory == 'keycloak' }}
         working-directory: keycloak/agent
+        run: mvn -B -ntp -DskipTests package
+
+      - name: Build Keycloak Java SPI
+        if: ${{ inputs.directory == 'keycloak' }}
+        working-directory: keycloak/providers/custom-jwt-ag
         run: mvn -B -ntp -DskipTests package
 
       - name: Set up QEMU (GitHub mode)

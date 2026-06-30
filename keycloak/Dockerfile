@@ -21,6 +21,9 @@ ENV KC_HEALTH_ENABLED=true
 ENV KC_METRICS_ENABLED=true
 ENV LANG=en_US.UTF-8
 
+# Provider jar must be prebuilt
+COPY providers/custom-jwt-ag/target/custom-jwt-ag.jar /opt/keycloak/providers/custom-jwt-ag.jar
+
 RUN /opt/keycloak/bin/kc.sh build
 
 # Remove unnecessary database drivers to reduce CVEs

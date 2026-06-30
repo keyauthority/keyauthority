@@ -18,6 +18,10 @@ KC_VERSION=$(shell echo $(VERSION) | cut -d'-' -f1)
 AGENT_DIR ?= agent
 AGENT_JAR ?= $(AGENT_DIR)/target/multiaudience-agent.jar
 
+# SPI build settings
+SPI_DIR ?= providers/custom-jwt-ag
+SPI_JAR ?= $(SPI_DIR)/target/custom-jwt-ag.jar
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -60,11 +64,19 @@ agent-build: ## Build Java agent jar used by Dockerfile
 agent-clean: ## Clean Java agent build artifacts
 	cd $(AGENT_DIR) && mvn -q clean
 
+.PHONY: spi-build
+spi-build: ## Build Java SPI jar used by Dockerfile
+	cd $(SPI_DIR) && mvn -B -ntp -DskipTests package
+
+.PHONY: spi-clean
+spi-clean: ## Clean Java SPI build artifacts
+	cd $(SPI_DIR) && mvn -q clean
+
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: agent-build keycloakify-prep keycloakify-build-theme ## Build docker image with the manager.
+docker-build: agent-build spi-build keycloakify-prep keycloakify-build-theme ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build --build-arg KC_VERSION=$(KC_VERSION) -t $(IMG) .
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
