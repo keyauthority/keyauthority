@@ -1503,7 +1503,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 				return
 			}
 			for k, v := range data {
-				shell.WriteString(fmt.Sprintf(`%s='%s'`, k, v) + "\n")
+				shell.WriteString(fmt.Sprintf(`export %s='%s'`, k, v) + "\n")
 			}
 			writeHTTP(w, http.StatusOK, []byte(shell.String()))
 

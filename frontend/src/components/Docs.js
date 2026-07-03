@@ -234,7 +234,7 @@ export function Administration() {
 
       <p> </p>
 
-      <h4>External Identity Providers (Advanced)</h4>
+      <h4>External Identity Providers</h4>
 
       <p>
         In some cases, you may need to integrate external{" "}
@@ -263,9 +263,10 @@ export function Administration() {
       <h5>Step 1: Create Identity Provider</h5>
 
       <p>
-        Create an Identity Provider <code>jwt-gitlab</code> of type{" "}
-        <strong>JWT Authorization Grant</strong> in your Keycloak realm with the
-        appropriate settings.
+        Create an Identity Provider of type{" "}
+        <strong>JWT Authorization Grant</strong> with alias{" "}
+        <code>jwt-gitlab</code> and the appropriate settings for Issuer, JWKS
+        URL, and all other required fields.
       </p>
 
       <img
@@ -306,7 +307,12 @@ export function Administration() {
         <strong>Identity provider link</strong> that matches the User ID
         (subject of the external token) from the external provider. This allows
         Keycloak to associate incoming tokens with the correct user and apply
-        the appropriate roles and permissions.
+        the appropriate roles and permissions. If such user does not exist,
+        Keycloak will fallback to the client's service account
+        <code>service-account-keyauthority-exchange</code>. This fallback
+        behavior is useful for grouping users from an external provider under a
+        single default user, but it is recommended to create specific users for
+        better access control and auditing.
       </p>
 
       <img src="/user-idp-link.png" className="img-fluid" />
@@ -712,19 +718,25 @@ export const signerUsageExample = (signerName, apiRootUrl) => {
       <p>The following dependencies are required:</p>
       <ul>
         <li>
-          A user must exist in Keycloak with the permissions to access the
+          An <strong>Identity provider</strong> must be configured in Keycloak
+          to accept Kubernetes-issued tokens.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak exchange client to accept Kubernetes tokens with an audience
+          claim set to <code>keyauthority://signers</code>.
+        </li>
+        <li>
+          A user should exist in Keycloak with the permissions to access the
           signer, and the user must have an{" "}
           <strong>Identity provider link</strong> configured with Kubernetes as
           the provider and{" "}
           <code>system:serviceaccount:&lt;NAMESPACE&gt;:{signerName}-sa</code>{" "}
           as User ID. This allows Keycloak to associate the Kubernetes-issued
           token with an existing user, enabling access based on the Kubernetes
-          namespace and service account context.
-        </li>
-        <li>
-          A <strong>Custom audience mapping</strong> must be configured in the
-          Keycloak client to accept Kubernetes tokens with an audience claim set
-          to <code>keyauthority://signers</code>.
+          namespace and service account context. If such user does not exist,
+          Keycloak will fallback to the client's service account{" "}
+          <code>service-account-keyauthority-exchange</code>.
         </li>
       </ul>
 
@@ -1069,7 +1081,16 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
 
       <ul>
         <li>
-          A user must exist in Keycloak with the permissions to access the
+          An <strong>Identity provider</strong> must be configured in Keycloak
+          to accept GitLab-issued tokens.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak exchange client to accept GitLab tokens with an audience
+          claim set to <code>keyauthority://secrets</code>.
+        </li>
+        <li>
+          A user should exist in Keycloak with the permissions to access the
           secret, and the user must have an{" "}
           <strong>Identity provider link</strong> configured with GitLab as the
           provider and{" "}
@@ -1078,12 +1099,9 @@ export const secretUsageExamples = (secret, data, apiRootUrl) => {
           </code>{" "}
           as User ID. This allows Keycloak to associate the Gitlab-issued token
           with an existing user, enabling access based on the GitLab project and
-          branch context.
-        </li>
-        <li>
-          A <strong>Custom audience mapping</strong> must be configured in the
-          Keycloak client to accept GitLab tokens with an audience claim set to{" "}
-          <code>keyauthority://secrets</code>.
+          branch context. If such user does not exist, Keycloak will fallback to
+          the client's service account{" "}
+          <code>service-account-keyauthority-exchange</code>.
         </li>
       </ul>
 
@@ -1144,7 +1162,18 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
 
       <ul>
         <li>
-          A user must exist in Keycloak with the permissions to access the
+          An <strong>Identity provider</strong> must be configured in Keycloak
+          to accept Kubernetes-issued tokens.
+        </li>
+        <li>
+          A <strong>Custom audience mapping</strong> must be configured in the
+          Keycloak exchange client to accept Kubernetes token audiences. You can
+          parse an existing token and extract an audience claim from it, or
+          infer an audience from the backend DEBUG logs when JWT exchange errors
+          occur.
+        </li>
+        <li>
+          A user should exist in Keycloak with the permissions to access the
           secret, and the user must have an{" "}
           <strong>Identity provider link</strong> configured with Kubernetes as
           the provider and{" "}
@@ -1153,13 +1182,9 @@ helm upgrade --install injector hashicorp/vault -f values.yaml`,
           </code>{" "}
           as User ID. This allows Keycloak to associate the Kubernetes-issued
           token with an existing user, enabling access based on the Kubernetes
-          namespace and service account context.
-        </li>
-        <li>
-          A <strong>Custom audience mapping</strong> must be configured in the
-          Keycloak client to accept Kubernetes token audiences. You can parse an
-          existing token and extract an audience claim from it, or infer an
-          audience from the backend DEBUG logs when JWT exchange errors occur.
+          namespace and service account context. If such user does not exist,
+          Keycloak will fallback to the client's service account{" "}
+          <code>service-account-keyauthority-exchange</code>.
         </li>
       </ul>
 
