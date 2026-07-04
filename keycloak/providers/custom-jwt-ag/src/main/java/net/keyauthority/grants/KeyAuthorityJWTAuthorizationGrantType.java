@@ -59,7 +59,7 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
     }
 
     private static void addKubernetesCandidates(String subject, Set<String> out) {
-        // Kubernetes: system:serviceaccount:<namespace>:<serviceaccount>
+        // Kubernetes: system:serviceaccount:<NAMESPACE>:<SERVICEACCOUNT>
         String[] k8s = subject.split(":", -1);
         if (k8s.length == 4
                 && "system".equals(k8s[0])
