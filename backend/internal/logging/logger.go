@@ -172,8 +172,8 @@ func (l *StdAndDBLogger) Close() {
 func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string) {
 	if full {
 		type tokenClaimsFull struct {
-			PreferredUsername string `json:"preferred_username"`
 			Email             string `json:"email"`
+			PreferredUsername string `json:"preferred_username"`
 			Sub               string `json:"sub"`
 			RealmAccess       struct {
 				Roles []string `json:"roles"`
@@ -190,18 +190,18 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 				roles = append(roles, ra.Roles...)
 			}
 		}
-		return firstNonEmpty(c.PreferredUsername, c.Email, c.Sub), roles
+		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), roles
 	}
 
 	type tokenClaims struct {
-		PreferredUsername string `json:"preferred_username"`
 		Email             string `json:"email"`
+		PreferredUsername string `json:"preferred_username"`
 		Sub               string `json:"sub"`
 	}
 
 	var c tokenClaims
 	if err := idToken.Claims(&c); err == nil {
-		return firstNonEmpty(c.PreferredUsername, c.Email, c.Sub), nil
+		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), nil
 	}
 	return idToken.Subject, nil
 }
