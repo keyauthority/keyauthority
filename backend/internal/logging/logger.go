@@ -172,11 +172,10 @@ func (l *StdAndDBLogger) Close() {
 func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string) {
 	if full {
 		type tokenClaimsFull struct {
-			Email string `json:"email"`
-			//PreferredUsername string `json:"preferred_username"`
-			//Name              string `json:"name"`
-			Sub         string `json:"sub"`
-			RealmAccess struct {
+			PreferredUsername string `json:"preferred_username"`
+			Email             string `json:"email"`
+			Sub               string `json:"sub"`
+			RealmAccess       struct {
 				Roles []string `json:"roles"`
 			} `json:"realm_access"`
 			ResourceAccess map[string]struct {
@@ -191,19 +190,18 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 				roles = append(roles, ra.Roles...)
 			}
 		}
-		return firstNonEmpty(c.Email /*c.PreferredUsername, c.Name,*/, c.Sub), roles
+		return firstNonEmpty(c.PreferredUsername, c.Email, c.Sub), roles
 	}
 
 	type tokenClaims struct {
-		Email string `json:"email"`
-		//PreferredUsername string `json:"preferred_username"`
-		//Name              string `json:"name"`
-		Sub string `json:"sub"`
+		PreferredUsername string `json:"preferred_username"`
+		Email             string `json:"email"`
+		Sub               string `json:"sub"`
 	}
 
 	var c tokenClaims
 	if err := idToken.Claims(&c); err == nil {
-		return firstNonEmpty(c.Email /*c.PreferredUsername, c.Name,*/, c.Sub), nil
+		return firstNonEmpty(c.PreferredUsername, c.Email, c.Sub), nil
 	}
 	return idToken.Subject, nil
 }

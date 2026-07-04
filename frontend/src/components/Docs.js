@@ -308,7 +308,7 @@ export function Administration() {
         (subject of the external token) from the external provider. This allows
         Keycloak to associate incoming tokens with the correct user and apply
         the appropriate roles and permissions. If such user does not exist,
-        Keycloak will fallback to the client's service account
+        Keycloak will fallback to the client's service account{" "}
         <code>service-account-keyauthority-exchange</code>. This fallback
         behavior is useful for grouping users from an external provider under a
         single default user, but it is recommended to create specific users for
