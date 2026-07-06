@@ -97,7 +97,6 @@ export default function Secrets({
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
         filtersTemplate={[
           {
             key: "name",

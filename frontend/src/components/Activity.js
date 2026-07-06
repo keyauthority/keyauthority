@@ -444,7 +444,7 @@ export function Certificates({ isLoading, setIsLoading }) {
       const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/certs?${params.toString()}`);
       setCerts(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
+      if (page === 1) setTotalCount(res.data.totalCount || 0);
     } catch (err) {
       setError(errorToString(err));
     } finally {
@@ -490,7 +490,6 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={4}
         filtersTemplate={[
           {
             key: "serial",
@@ -512,6 +511,19 @@ export function Certificates({ isLoading, setIsLoading }) {
             label: "SAN",
             value: filters.san,
             placeholder: "e.g. www.example.com",
+            colSpan: 4,
+          },
+          {
+            key: "revoked",
+            type: "select",
+            label: "Revoked",
+            value: filters.revoked,
+            options: [
+              { value: "", label: "-" },
+              { value: "true", label: "Yes" },
+              { value: "false", label: "No" },
+            ],
+            colSpan: 2,
           },
           {
             key: "notBeforeFrom",
@@ -524,17 +536,6 @@ export function Certificates({ isLoading, setIsLoading }) {
             type: "date",
             label: "Valid To",
             value: filters.notAfterTo,
-          },
-          {
-            key: "revoked",
-            type: "select",
-            label: "Revoked",
-            value: filters.revoked,
-            options: [
-              { value: "", label: "-" },
-              { value: "true", label: "Yes" },
-              { value: "false", label: "No" },
-            ],
           },
           {
             key: "signerName",
@@ -670,7 +671,9 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       const params = buildURLParams(filters, page, pageSize);
       const res = await api.get(`/logs?${params.toString()}`);
       setLogs(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
+      if (page === 1) {
+        setTotalCount(res.data.totalCount || 0);
+      }
     } catch (err) {
       setError(errorToString(err));
     } finally {
@@ -747,13 +750,13 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
         filtersTemplate={[
           {
             key: "level",
             type: "select",
             label: "Level",
             value: filters.level,
+            colSpan: 2,
             options: [
               { value: "", label: "-" },
               { value: "ERROR", label: "ERROR" },
@@ -763,11 +766,19 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
             ],
           },
           {
+            key: "msg",
+            type: "text",
+            label: "Message",
+            placeholder: "e.g. secret read",
+            value: filters.msg,
+          },
+          {
             key: "user",
             type: "text",
             label: "User",
             placeholder: "e.g. alice@keyauthority.net",
             value: filters.user,
+            colSpan: 4,
           },
           {
             key: "environment",
@@ -776,31 +787,27 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
             placeholder: "e.g. production",
             value: filters.environment,
           },
-          // {
-          //   key: "url",
-          //   type: "text",
-          //   label: "URL",
-          //   placeholder: "e.g. /v1/secrets/my-secret",
-          //   value: filters.url,
-          // },
+          {
+            key: "url",
+            type: "text",
+            label: "URL",
+            placeholder: "e.g. /v1/secrets/my-secret",
+            value: filters.url,
+            colSpan: 5,
+          },
           {
             key: "from",
             type: "date",
             label: "From",
             value: filters.from,
+            colSpan: 4,
           },
           {
             key: "to",
             type: "date",
             label: "To",
             value: filters.to,
-          },
-          {
-            key: "msg",
-            type: "text",
-            label: "Message",
-            placeholder: "e.g. secret read",
-            value: filters.msg,
+            colSpan: 3,
           },
         ]}
       />
@@ -1032,7 +1039,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={4}
         filtersTemplate={[
           {
             key: "id",
@@ -1040,6 +1046,13 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
+          },
+          {
+            key: "user",
+            type: "text",
+            label: "Requester",
+            placeholder: "e.g. alice@keyauthority.net",
+            value: filters.user,
           },
           {
             key: "from",
@@ -1052,13 +1065,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
-          },
-          {
-            key: "user",
-            type: "text",
-            label: "Requester",
-            placeholder: "e.g. alice@keyauthority.net",
-            value: filters.user,
           },
         ]}
       />

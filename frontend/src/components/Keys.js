@@ -131,7 +131,6 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",

@@ -74,7 +74,6 @@ export default function Signers({
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
         filtersTemplate={[
           {
             key: "name",
@@ -96,6 +95,7 @@ export default function Signers({
             label: "Private Key ID",
             placeholder: "e.g. 1234-5678-9012",
             value: filters.privateKeyID,
+            colSpan: 4,
           },
           {
             key: "isRoot",
@@ -107,6 +107,7 @@ export default function Signers({
               { value: "false", label: "No" },
             ],
             value: filters.isRoot,
+            colSpan: 2,
           },
         ]}
       />

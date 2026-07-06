@@ -1000,6 +1000,28 @@ func (s *Store) GetCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibl
 }
 
 func (s *Store) CountCerts(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error) {
+	hasFilters := filters.Get("serial") != "" ||
+		filters.Get("signerName") != "" ||
+		filters.Get("cn") != "" ||
+		filters.Get("san") != "" ||
+		filters.Get("comment") != "" ||
+		filters.Get("notBeforeFrom") != "" ||
+		filters.Get("notBeforeTo") != "" ||
+		filters.Get("notAfterFrom") != "" ||
+		filters.Get("notAfterTo") != "" ||
+		filters.Get("revoked") != ""
+
+	if !hasFilters && hasAccessToAllEnvs {
+		var count int
+		err := s.DB.QueryRowContext(ctx,
+			`SELECT estimate_table_count('certs')`,
+		).Scan(&count)
+		if err != nil {
+			return 0, fmt.Errorf("estimate cert count: %w", err)
+		}
+		return count, nil
+	}
+
 	query := `SELECT COUNT(certs.serial)
         FROM certs
         JOIN signers ON certs.signer_name = signers.name
@@ -1014,7 +1036,7 @@ func (s *Store) CountCerts(ctx context.Context, hasAccessToAllEnvs bool, accessi
 	var count int
 	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("count certs: %w", err)
 	}
 	return count, nil
 }
@@ -1335,6 +1357,11 @@ func applyLogFilters(query string, args []any, idx int, filters url.Values) (str
 		args = append(args, "%"+env+"%")
 		idx++
 	}
+	if url := filters.Get("url"); url != "" {
+		query += fmt.Sprintf(" AND url ILIKE $%d", idx)
+		args = append(args, "%"+url+"%")
+		idx++
+	}
 	if timeFrom := parseTime(filters, "from"); timeFrom != nil {
 		query += fmt.Sprintf(" AND log_time >= $%d", idx)
 		args = append(args, *timeFrom)
@@ -1382,6 +1409,25 @@ func (s *Store) GetLogs(ctx context.Context, filters url.Values) ([]map[string]a
 }
 
 func (s *Store) CountLogs(ctx context.Context, filters url.Values) (int, error) {
+	hasFilters := filters.Get("level") != "" ||
+		filters.Get("user") != "" ||
+		filters.Get("msg") != "" ||
+		filters.Get("environment") != "" ||
+		filters.Get("url") != "" ||
+		filters.Get("from") != "" ||
+		filters.Get("to") != ""
+
+	if !hasFilters {
+		var count int
+		err := s.DB.QueryRowContext(ctx,
+			`SELECT estimate_table_count('logs')`,
+		).Scan(&count)
+		if err != nil {
+			return 0, fmt.Errorf("estimate log count: %w", err)
+		}
+		return count, nil
+	}
+
 	query := `SELECT COUNT(id) FROM logs WHERE 1=1`
 	args := []any{}
 	idx := 1
@@ -1391,7 +1437,7 @@ func (s *Store) CountLogs(ctx context.Context, filters url.Values) (int, error) 
 	var count int
 	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("count logs: %w", err)
 	}
 	return count, nil
 }

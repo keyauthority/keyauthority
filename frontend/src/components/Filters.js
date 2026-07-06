@@ -15,24 +15,12 @@ filters, setFilters: state and setter for filters object (for parent component t
 
 */
 
-export default function Filters({
-  filters,
-  setFilters,
-  filtersTemplate,
-  colsPerRow = 4,
-}) {
+export default function Filters({ filters, setFilters, filtersTemplate }) {
   const [draftFilters, setDraftFilters] = useState({ ...filters });
 
   useEffect(() => {
     setDraftFilters({ ...filters });
   }, [filters]);
-
-  const safeColsPerRow =
-    Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
-
-  const baseSpan = 12 / safeColsPerRow;
-  const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
-  const remainder = supportsFill ? filtersTemplate.length % safeColsPerRow : 0;
 
   const toRFC3339 = (value) => {
     if (!value) return "";
@@ -97,17 +85,8 @@ export default function Filters({
       <Card.Body>
         <Row className="g-3">
           {filtersTemplate.map((filter, index) => {
-            const isLast = index === filtersTemplate.length - 1;
-
-            const md =
-              supportsFill && isLast && remainder !== 0
-                ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
-                : supportsFill
-                  ? baseSpan
-                  : undefined;
-
             return (
-              <Col xs={12} md={md} key={filter.key}>
+              <Col xs={12} md={filter.colSpan || 3} key={filter.key}>
                 <div className="input-group">
                   {filter.type === "text" && (
                     <>
