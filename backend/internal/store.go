@@ -1338,8 +1338,8 @@ func (s *Store) DeleteSecret(ctx context.Context, name string) error {
 
 func applyLogFilters(query string, args []any, idx int, filters url.Values) (string, []any, int) {
 	if level := filters.Get("level"); level != "" {
-		query += fmt.Sprintf(" AND level ILIKE $%d", idx)
-		args = append(args, "%"+level+"%")
+		query += fmt.Sprintf(" AND level = $%d", idx)
+		args = append(args, level)
 		idx++
 	}
 	if user := filters.Get("user"); user != "" {

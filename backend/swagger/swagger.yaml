@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.28
+  version: 1.4.29
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -1172,6 +1172,10 @@ paths:
           schema:
             type: string
         - name: environment
+          in: query
+          schema:
+            type: string
+        - name: url
           in: query
           schema:
             type: string
