@@ -252,8 +252,7 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Not Updated in the Last 60 Days",
             iconClass: "bi bi-clock-fill",
-            value:
-              dashboard.secrets.total - dashboard.secrets.updatedInLast60Days,
+            value: dashboard.secrets.notUpdatedInLast60Days,
             valueReady: dashboard.secrets !== undefined,
             variant: "warning",
           },

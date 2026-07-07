@@ -2021,8 +2021,8 @@ type DashboardData struct {
 		IntermediateTotal int `json:"intermediateTotal"`
 	} `json:"signers"`
 	Secrets struct {
-		Total               int `json:"total"`
-		UpdatedInLast60Days int `json:"updatedInLast60Days"`
+		UpdatedInLast60Days    int `json:"updatedInLast60Days"`
+		NotUpdatedInLast60Days int `json:"notUpdatedInLast60Days"`
 	} `json:"secrets"`
 	Logs struct {
 		ErrorCount24h              int `json:"errorCount24h"`
@@ -2136,8 +2136,8 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 	last60Days := now.AddDate(0, 0, -60)
 
 	secretQuery := `SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN updated_at >= $1 THEN 1 END) as updated_60
+        COUNT(CASE WHEN updated_at >= $1 THEN 1 END) as updated_60,
+				COUNT(CASE WHEN updated_at < $1 THEN 1 END) as not_updated_60
     FROM secrets
     JOIN keys ON secrets.encryption_key_id = keys.id
     WHERE 1=1`
@@ -2155,8 +2155,8 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 	}
 
 	if err := s.DB.QueryRowContext(ctx, secretQuery, secretArgs...).Scan(
-		&dashboard.Secrets.Total,
 		&dashboard.Secrets.UpdatedInLast60Days,
+		&dashboard.Secrets.NotUpdatedInLast60Days,
 	); err != nil {
 		return nil, fmt.Errorf("query secrets dashboard: %w", err)
 	}
