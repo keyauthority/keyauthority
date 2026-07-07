@@ -399,7 +399,7 @@ function ConfigTab({
                         <>
                           {signerConfig.cdp.map((url, index) => (
                             <div
-                              className="d-flex justify-content-between gap-2"
+                              className="d-flex justify-content-between align-items-center gap-2"
                               key={index}
                             >
                               <span
@@ -409,9 +409,8 @@ function ConfigTab({
                                 {url}
                               </span>
                               <Button
-                                variant="link"
+                                variant="outline-secondary"
                                 size="sm"
-                                className="p-0 m-0"
                                 onClick={() => {
                                   copyToClipboard(url, "CDP URL copied!");
                                 }}
@@ -429,7 +428,7 @@ function ConfigTab({
                         <>
                           {signerConfig.aia.map((url, index) => (
                             <div
-                              className="d-flex justify-content-between gap-2"
+                              className="d-flex justify-content-between align-items-center gap-2"
                               key={index}
                             >
                               <span
@@ -439,9 +438,8 @@ function ConfigTab({
                                 {url}
                               </span>
                               <Button
-                                variant="link"
+                                variant="outline-secondary"
                                 size="sm"
-                                className="p-0 m-0"
                                 onClick={() => {
                                   copyToClipboard(url, "AIA URL copied!");
                                 }}
@@ -459,7 +457,7 @@ function ConfigTab({
                         <>
                           {signerConfig.ocsp.map((url, index) => (
                             <div
-                              className="d-flex justify-content-between gap-2"
+                              className="d-flex justify-content-between align-items-center gap-2"
                               key={index}
                             >
                               <span
@@ -469,9 +467,8 @@ function ConfigTab({
                                 {url}
                               </span>
                               <Button
-                                variant="link"
+                                variant="outline-secondary"
                                 size="sm"
-                                className="p-0 m-0"
                                 onClick={() => {
                                   copyToClipboard(url, "OCSP URL copied!");
                                 }}

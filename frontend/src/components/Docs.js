@@ -374,11 +374,10 @@ export function Administration() {
         <Alert.Heading className="fs-6 fw-bold">
           <i className="bi bi-exclamation-triangle-fill me-1"></i> Important
         </Alert.Heading>
-        Our Keycloak image comes with a JWT Authorization Grant provider that
-        supports multiple audience claims in assertion tokens and wildcard-based
-        matching for identity provider links. If you use an unmodified Keycloak
-        image, you will miss these features and hence must use an alternative
-        authentication method such as username and password.
+        Our Keycloak image is customized to support multiple audience claims in
+        assertion tokens and wildcard-based matching for identity provider
+        links. Therefore, if you use an unmodified Keycloak image, you must use
+        an alternative authentication method such as username and password.
       </Alert>
     </>
   );
@@ -1025,6 +1024,7 @@ metadata:
   annotations:
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
+    vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
       {{ with secret "${secret}" }}

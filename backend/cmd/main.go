@@ -280,6 +280,12 @@ func main() {
 		pendingRequestBodyHandler))
 
 	// ------------ Miscellaneous ------------ //
+	router.Handle("/v1/dashboard", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny,
+		},
+		dashboardHandler))
+
 	router.Handle("/v1/logs", withAuth(
 		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleAuditor, // get logs
@@ -1750,4 +1756,18 @@ var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 		"server_time_utc": time.Now().UTC().Unix(),
 		"version":         version,
 	})
+})
+
+var dashboardHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hasAccessToAllEnvs, accessibleEnvs, err := getAccessibleEnvs(r.Context())
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get accessible environments", err)
+		return
+	}
+	dashboard, err := store.GetDashboard(r.Context(), hasAccessToAllEnvs, accessibleEnvs)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get dashboard data", err)
+		return
+	}
+	writeJSONOk(w, dashboard)
 })

@@ -20,7 +20,7 @@ export default function KeyValueTable({
   return (
     <Table
       responsive
-      className={`keyvalue-table ${borderBottom ? "border-bottom" : ""}`}
+      className={`align-middle keyvalue-table ${borderBottom ? "border-bottom" : ""}`}
     >
       {header && (
         <thead>

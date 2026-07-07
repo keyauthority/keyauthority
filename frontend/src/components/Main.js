@@ -63,7 +63,6 @@ export default function Main() {
           subtitle: "Get an overview of your system's resources and activity",
           to: "/activity/dashboard",
           icon: "bi-speedometer",
-          dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
         },
         {
           title: "Issued Certificates",

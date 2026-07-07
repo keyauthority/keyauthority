@@ -85,21 +85,14 @@ export default function Paginator({
   return (
     <div className="d-flex justify-content-end align-items-center gap-2">
       <Pagination className="m-0">
-        {/* <Pagination.First
-          disabled={isFirstPage || isLoading}
-          onClick={goFirstPage}
-        /> */}
         <Pagination.Prev
-          disabled={cursorStack.length <= 1 || isLoading}
+          disabled={cursorStack.length <= 1}
           onClick={handlePreviousPage}
         />
         <Pagination.Item active disabled>
           Page {cursorStack.length}
         </Pagination.Item>
-        <Pagination.Next
-          disabled={!hasMore || isLoading}
-          onClick={handleNextPage}
-        />
+        <Pagination.Next disabled={!hasMore} onClick={handleNextPage} />
       </Pagination>
       <Form.Select
         className="m-0 w-auto"
@@ -107,7 +100,6 @@ export default function Paginator({
         onChange={(e) => {
           setPageSize(Number(e.target.value));
         }}
-        disabled={isLoading}
       >
         {[20, 50, 100].map((size) => (
           <option key={size} value={size}>

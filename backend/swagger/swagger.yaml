@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.29
+  version: 1.4.30
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -41,7 +41,7 @@ paths:
     get:
       summary: Get keys
       description: |
-        Get the accessible keys.
+        Get the accessible keys with optional filtering and pagination.
       tags:
         - Keys
       parameters:
@@ -63,10 +63,10 @@ paths:
           in: query
           schema:
             type: string
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -79,18 +79,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Key"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:
@@ -238,10 +236,10 @@ paths:
           in: query
           schema:
             type: boolean
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -254,18 +252,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Signer"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:
@@ -672,10 +668,10 @@ paths:
           schema:
             type: string
             format: date-time
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -688,8 +684,6 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
@@ -701,12 +695,12 @@ paths:
                             environment:
                               type: string
                         - $ref: "#/components/schemas/SecretMetadata"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:
@@ -930,10 +924,10 @@ paths:
           in: query
           schema:
             type: boolean
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -946,18 +940,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Certificate"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:
@@ -1024,10 +1016,10 @@ paths:
           schema:
             type: string
             format: date-time
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -1040,18 +1032,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/PendingRequest"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:
@@ -1150,6 +1140,29 @@ paths:
         - bearerAuth: []
 
   ### Miscellaneous ###
+  /v1/dashboard:
+    get:
+      summary: Get dashboard
+      description: |
+        Get the dashboard information, including counts of keys, signers, secrets, and certificates.
+      tags:
+        - Miscellaneous
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
   /v1/logs:
     get:
       summary: Get logs
@@ -1189,10 +1202,10 @@ paths:
           schema:
             type: string
             format: date-time
-        - name: page
+        - name: cursor
           in: query
           schema:
-            type: integer
+            type: string
         - name: pageSize
           in: query
           schema:
@@ -1205,18 +1218,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  count:
-                    type: integer
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/LogEntry"
-                  page:
-                    type: integer
+                  nextCursor:
+                    type: string
                   pageSize:
                     type: integer
-                  totalCount:
-                    type: integer
+                  hasMore:
+                    type: boolean
         "400":
           description: Failed
           content:

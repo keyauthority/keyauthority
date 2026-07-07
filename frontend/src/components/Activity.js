@@ -29,13 +29,7 @@ import JSONModal from "./JSONModal";
 
 export function Dashboard({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
-  const [certCountByExpiring, setCertCountByExpiring] = useState({});
-  const [logCountByLevel, setLogCountByLevel] = useState({});
-  const [logCountByMsg, setLogCountByMsg] = useState({});
-  const [keyCountByStorage, setKeyCountByStorage] = useState({});
-  const [keyCountByType, setKeyCountByType] = useState({});
-  const [signerCountByRoot, setSignerCountByRoot] = useState({});
-  const [secretCountByUpdated, setSecretCountByUpdated] = useState({});
+  const [dashboard, setDashboard] = useState(null);
 
   const keycloak = getKeycloak();
   const roles = getRoles(keycloak?.tokenParsed || {});
@@ -43,14 +37,42 @@ export function Dashboard({ isLoading, setIsLoading }) {
     roles.findIndex((role) => role === "KEYAUTHORITY_AUDITOR") !== -1;
 
   const api = getApi();
-  const infiniteDays = 1000000; // used to count all certs/secrets by using a very large number of days
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await api.get("/dashboard");
+        if (!cancelled) {
+          setDashboard(res.data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(errorToString(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, setIsLoading]);
 
   const dashboardBody = (cards, colsPerRow = 4) => {
     const safeColsPerRow =
       Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
 
     const baseSpan = 12 / safeColsPerRow;
-    const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
+    const supportsFill = Number.isInteger(baseSpan);
     const remainder = supportsFill ? cards.length % safeColsPerRow : 0;
 
     return (
@@ -60,10 +82,11 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
           const md =
             supportsFill && isLast && remainder !== 0
-              ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
+              ? 12 - baseSpan * (remainder - 1)
               : supportsFill
                 ? baseSpan
                 : undefined;
+
           return (
             <Col xs={12} md={md} key={index}>
               <Card>
@@ -90,174 +113,9 @@ export function Dashboard({ isLoading, setIsLoading }) {
     </div>
   );
 
-  const countCertsByExpiring = async (days) => {
-    const now = new Date();
-    const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("notAfterFrom", now.toISOString());
-      params.set("notAfterTo", d.toISOString());
-      params.set("revoked", "false");
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/certs?${params.toString()}`);
-      setCertCountByExpiring((prev) => ({
-        ...prev,
-        [days]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countLogsByLevel = async (level) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("level", level);
-      params.set("from", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogCountByLevel((prev) => ({
-        ...prev,
-        [level]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countLogsByMsg = async (msg) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("msg", msg);
-      params.set("from", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogCountByMsg((prev) => ({
-        ...prev,
-        [msg]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countKeysByStorage = async (storage) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("storage", storage);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/keys?${params.toString()}`);
-      setKeyCountByStorage((prev) => ({
-        ...prev,
-        [storage]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countKeysByType = async (type) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("type", type);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/keys?${params.toString()}`);
-      setKeyCountByType((prev) => ({
-        ...prev,
-        [type]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countSignersByRoot = async (isRoot) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("isRoot", isRoot);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/signers?${params.toString()}`);
-      setSignerCountByRoot((prev) => ({
-        ...prev,
-        [isRoot]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countSecretsByUpdated = async (daysAgo) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("updatedFrom", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/secrets?${params.toString()}`);
-      setSecretCountByUpdated((prev) => ({
-        ...prev,
-        [daysAgo]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadDashboard = async () => {
-      setIsLoading(true);
-      try {
-        const calls = [
-          countCertsByExpiring(infiniteDays),
-          countCertsByExpiring(3),
-          countCertsByExpiring(7),
-          countCertsByExpiring(30),
-          countKeysByStorage("Software"),
-          countKeysByStorage("HSM"),
-          countKeysByType("RSA"),
-          countKeysByType("ECDSA"),
-          countKeysByType("Ed25519"),
-          countKeysByType("AES"),
-          countSignersByRoot(true),
-          countSignersByRoot(false),
-          countSecretsByUpdated(infiniteDays),
-          countSecretsByUpdated(60),
-        ];
-
-        if (isAuditor) {
-          calls.push(
-            countLogsByLevel("ERROR"),
-            countLogsByMsg("secret read"),
-            countLogsByMsg("certificate signed"),
-            countLogsByMsg("key created"),
-          );
-        }
-
-        await Promise.allSettled(calls);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-
-    loadDashboard();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, isAuditor, setIsLoading]);
+  if (!dashboard) {
+    return null;
+  }
 
   return (
     <>
@@ -271,27 +129,21 @@ export function Dashboard({ isLoading, setIsLoading }) {
             {
               key: "Errors",
               iconClass: "bi bi-x-circle-fill",
-              value: logCountByLevel["ERROR"],
-              valueReady: logCountByLevel?.["ERROR"],
+              value: dashboard.logs.errorCount24h,
+              valueReady: dashboard.logs !== undefined,
               variant: "danger",
             },
-            // {
-            //   key: "Keys Created",
-            //   iconClass: "bi bi-key-fill",
-            //   value: logCountByMsg["key created"],
-            //   valueReady: logCountByMsg?.["key created"],
-            // },
             {
               key: "Certificates Signed",
               iconClass: "bi bi-award-fill",
-              value: logCountByMsg["certificate signed"],
-              valueReady: logCountByMsg?.["certificate signed"],
+              value: dashboard.logs.certificatesSignedCount24h,
+              valueReady: dashboard.logs !== undefined,
             },
             {
               key: "Secret Read Requests",
               iconClass: "bi bi-lock-fill",
-              value: logCountByMsg["secret read"],
-              valueReady: logCountByMsg?.["secret read"],
+              value: dashboard.logs.secretReadCount24h,
+              valueReady: dashboard.logs !== undefined,
             },
           ],
           3,
@@ -304,30 +156,22 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Valid and Not Expiring Soon",
             iconClass: "bi bi-check-circle-fill",
-            value: certCountByExpiring[infiniteDays] - certCountByExpiring[30], // all valid certs minus those expiring in ≤30 days
-            valueReady:
-              certCountByExpiring?.[infiniteDays] && certCountByExpiring?.[30],
+            value: dashboard.certs.notExpiringSoon,
+            valueReady: dashboard.certs !== undefined,
             variant: "success",
           },
           {
             key: "Valid and Expiring Within 3 Days",
             iconClass: "bi bi-exclamation-circle-fill",
-            value: certCountByExpiring[3],
-            valueReady: certCountByExpiring?.[3],
+            value: dashboard.certs.expiringIn3Days,
+            valueReady: dashboard.certs !== undefined,
             variant: "danger",
           },
-          // {
-          //   key: "Valid and Expiring Within 7 Days",
-          //   iconClass: "bi bi-exclamation-triangle-fill",
-          //   value: certCountByExpiring[7],
-          //   valueReady: certCountByExpiring?.[7],
-          //   variant: "warning",
-          // },
           {
             key: "Valid and Expiring Within 30 Days",
             iconClass: "bi bi-exclamation-triangle-fill",
-            value: certCountByExpiring[30],
-            valueReady: certCountByExpiring?.[30],
+            value: dashboard.certs.expiringIn30Days,
+            valueReady: dashboard.certs !== undefined,
             variant: "warning",
           },
         ],
@@ -341,34 +185,34 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Software",
             iconClass: "bi bi-laptop",
-            value: keyCountByStorage["Software"],
-            valueReady: keyCountByStorage?.["Software"],
+            value: dashboard.keys.softwareTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "HSM",
             iconClass: "bi bi-safe",
-            value: keyCountByStorage["HSM"],
-            valueReady: keyCountByStorage?.["HSM"],
+            value: dashboard.keys.hsmTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "RSA",
-            value: keyCountByType["RSA"],
-            valueReady: keyCountByType?.["RSA"],
+            value: dashboard.keys.rsaTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "ECDSA",
-            value: keyCountByType["ECDSA"],
-            valueReady: keyCountByType?.["ECDSA"],
+            value: dashboard.keys.ecdsaTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "Ed25519",
-            value: keyCountByType["Ed25519"],
-            valueReady: keyCountByType?.["Ed25519"],
+            value: dashboard.keys.ed25519Total,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "AES",
-            value: keyCountByType["AES"],
-            valueReady: keyCountByType?.["AES"],
+            value: dashboard.keys.aesTotal,
+            valueReady: dashboard.keys !== undefined,
           },
         ],
         6,
@@ -381,14 +225,14 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Root CAs",
             iconClass: "bi bi-award-fill",
-            value: signerCountByRoot[true],
-            valueReady: signerCountByRoot?.[true],
+            value: dashboard.signers.rootTotal,
+            valueReady: dashboard.signers !== undefined,
           },
           {
             key: "Intermediate CAs",
             iconClass: "bi bi-award",
-            value: signerCountByRoot[false],
-            valueReady: signerCountByRoot?.[false],
+            value: dashboard.signers.intermediateTotal,
+            valueReady: dashboard.signers !== undefined,
           },
         ],
         2,
@@ -401,18 +245,16 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Updated in the Last 60 Days",
             iconClass: "bi bi-check-circle-fill",
-            value: secretCountByUpdated[60],
-            valueReady: secretCountByUpdated?.[60],
+            value: dashboard.secrets.updatedInLast60Days,
+            valueReady: dashboard.secrets !== undefined,
             variant: "success",
           },
           {
             key: "Not Updated in the Last 60 Days",
             iconClass: "bi bi-clock-fill",
             value:
-              secretCountByUpdated[infiniteDays] - secretCountByUpdated[60],
-            valueReady:
-              secretCountByUpdated?.[infiniteDays] &&
-              secretCountByUpdated?.[60],
+              dashboard.secrets.total - dashboard.secrets.updatedInLast60Days,
+            valueReady: dashboard.secrets !== undefined,
             variant: "warning",
           },
         ],
@@ -421,7 +263,6 @@ export function Dashboard({ isLoading, setIsLoading }) {
     </>
   );
 }
-
 export function Certificates({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [certs, setCerts] = useState([]);
@@ -658,9 +499,6 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
     };
 
     try {
-      const logs = await api
-        .get(`/logs?${buildURLParams(filters, 1, 100000).toString()}`)
-        .then((res) => res.data.data);
       const logContent = logs.map(flattenLogItem).join("\n");
       const blob = new Blob([logContent], { type: "text/plain" });
       const url = URL.createObjectURL(blob);

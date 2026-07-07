@@ -1178,7 +1178,6 @@ func (s *Store) GetSecretsWithCursor(ctx context.Context, hasAccessToAllEnvs boo
 
 	query, args, idx = applyEnvRestrictions(query, args, idx, hasAccessToAllEnvs, accessibleEnvs)
 	query, args, idx = applySecretFilters(query, args, idx, filters)
-
 	query, args, idx, pageSize := applyCursorPagination(query, args, idx, filters, "secrets.updated_at", "secrets.name", "DESC")
 
 	rows, err := s.DB.QueryContext(ctx, query, args...)
@@ -1546,7 +1545,6 @@ func (s *Store) GetPendingRequestsWithCursor(ctx context.Context, filters url.Va
 	idx := 1
 
 	query, args, idx = applyPendingRequestFilters(query, args, idx, filters)
-
 	query, args, idx, pageSize := applyCursorPagination(query, args, idx, filters, "created_at", "id", "DESC")
 
 	rows, err := s.DB.QueryContext(ctx, query, args...)
@@ -2001,4 +1999,185 @@ func (s *Store) RefreshInventoryMetrics(ctx context.Context) error {
 
 	metricspkg.SetInventoryRefreshTimestamp(time.Now())
 	return nil
+}
+
+type DashboardData struct {
+	Certs struct {
+		ExpiringIn3Days  int `json:"expiringIn3Days"`
+		ExpiringIn7Days  int `json:"expiringIn7Days"`
+		ExpiringIn30Days int `json:"expiringIn30Days"`
+		NotExpiringSoon  int `json:"notExpiringSoon"`
+	} `json:"certs"`
+	Keys struct {
+		SoftwareTotal int `json:"softwareTotal"`
+		HSMTotal      int `json:"hsmTotal"`
+		RSATotal      int `json:"rsaTotal"`
+		ECDSATotal    int `json:"ecdsaTotal"`
+		Ed25519Total  int `json:"ed25519Total"`
+		AESTotal      int `json:"aesTotal"`
+	} `json:"keys"`
+	Signers struct {
+		RootTotal         int `json:"rootTotal"`
+		IntermediateTotal int `json:"intermediateTotal"`
+	} `json:"signers"`
+	Secrets struct {
+		Total               int `json:"total"`
+		UpdatedInLast60Days int `json:"updatedInLast60Days"`
+	} `json:"secrets"`
+	Logs struct {
+		ErrorCount24h              int `json:"errorCount24h"`
+		CertificatesSignedCount24h int `json:"certificatesSignedCount24h"`
+		SecretReadCount24h         int `json:"secretReadCount24h"`
+	} `json:"logs"`
+}
+
+func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string) (*DashboardData, error) {
+	dashboard := &DashboardData{}
+
+	// Certs counts (with environment restrictions if needed)
+	now := time.Now()
+	in3Days := now.AddDate(0, 0, 3)
+	in7Days := now.AddDate(0, 0, 7)
+	in30Days := now.AddDate(0, 0, 30)
+
+	certQuery := `SELECT 
+        COUNT(CASE WHEN not_after <= $1 THEN 1 END) as in_3_days,
+        COUNT(CASE WHEN not_after <= $2 THEN 1 END) as in_7_days,
+        COUNT(CASE WHEN not_after <= $3 THEN 1 END) as in_30_days,
+				COUNT(CASE WHEN not_after > $3 THEN 1 END) as not_expiring_soon
+    FROM certs
+    JOIN signers ON certs.signer_name = signers.name
+    JOIN keys ON signers.private_key_id = keys.id
+    WHERE certs.revoked = false AND not_after > now()`
+
+	certArgs := []any{in3Days, in7Days, in30Days}
+	certIdx := 5
+
+	if !hasAccessToAllEnvs && len(accessibleEnvs) > 0 {
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, env := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", certIdx+i)
+			certArgs = append(certArgs, env)
+		}
+		certQuery += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ","))
+	}
+
+	if err := s.DB.QueryRowContext(ctx, certQuery, certArgs...).Scan(
+		&dashboard.Certs.ExpiringIn3Days,
+		&dashboard.Certs.ExpiringIn7Days,
+		&dashboard.Certs.ExpiringIn30Days,
+		&dashboard.Certs.NotExpiringSoon,
+	); err != nil {
+		return nil, fmt.Errorf("query certs dashboard: %w", err)
+	}
+
+	// Keys counts
+	keyQuery := `SELECT 
+        COUNT(CASE WHEN config->>'pkcs11URI' IS NULL OR config->>'pkcs11URI' = '' THEN 1 END) as software,
+        COUNT(CASE WHEN config->>'pkcs11URI' IS NOT NULL AND config->>'pkcs11URI' != '' THEN 1 END) as hsm,
+        COUNT(CASE WHEN config->>'type' = 'RSA' THEN 1 END) as rsa,
+        COUNT(CASE WHEN config->>'type' = 'ECDSA' THEN 1 END) as ecdsa,
+        COUNT(CASE WHEN config->>'type' = 'Ed25519' THEN 1 END) as ed25519,
+        COUNT(CASE WHEN config->>'type' = 'AES' THEN 1 END) as aes
+    FROM keys
+    WHERE 1=1`
+
+	keyArgs := []any{}
+	keyIdx := 1
+
+	if !hasAccessToAllEnvs && len(accessibleEnvs) > 0 {
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, env := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", keyIdx+i)
+			keyArgs = append(keyArgs, env)
+		}
+		keyQuery += fmt.Sprintf(" AND environment IN (%s)", strings.Join(placeholders, ","))
+	}
+
+	if err := s.DB.QueryRowContext(ctx, keyQuery, keyArgs...).Scan(
+		&dashboard.Keys.SoftwareTotal,
+		&dashboard.Keys.HSMTotal,
+		&dashboard.Keys.RSATotal,
+		&dashboard.Keys.ECDSATotal,
+		&dashboard.Keys.Ed25519Total,
+		&dashboard.Keys.AESTotal,
+	); err != nil {
+		return nil, fmt.Errorf("query keys dashboard: %w", err)
+	}
+
+	// Signers counts
+	signerQuery := `SELECT 
+        COUNT(CASE WHEN signers.config->>'isCA' = 'true' THEN 1 END) as root,
+        COUNT(CASE WHEN signers.config->>'isCA' = 'false' OR signers.config->>'isCA' IS NULL THEN 1 END) as intermediate
+    FROM signers
+    JOIN keys ON signers.private_key_id = keys.id
+    WHERE 1=1`
+
+	signerArgs := []any{}
+	signerIdx := 1
+
+	if !hasAccessToAllEnvs && len(accessibleEnvs) > 0 {
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, env := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", signerIdx+i)
+			signerArgs = append(signerArgs, env)
+		}
+		signerQuery += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ","))
+	}
+
+	if err := s.DB.QueryRowContext(ctx, signerQuery, signerArgs...).Scan(
+		&dashboard.Signers.RootTotal,
+		&dashboard.Signers.IntermediateTotal,
+	); err != nil {
+		return nil, fmt.Errorf("query signers dashboard: %w", err)
+	}
+
+	// Secrets counts
+	last60Days := now.AddDate(0, 0, -60)
+
+	secretQuery := `SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN updated_at >= $1 THEN 1 END) as updated_60
+    FROM secrets
+    JOIN keys ON secrets.encryption_key_id = keys.id
+    WHERE 1=1`
+
+	secretArgs := []any{last60Days}
+	secretIdx := 2
+
+	if !hasAccessToAllEnvs && len(accessibleEnvs) > 0 {
+		placeholders := make([]string, len(accessibleEnvs))
+		for i, env := range accessibleEnvs {
+			placeholders[i] = fmt.Sprintf("$%d", secretIdx+i)
+			secretArgs = append(secretArgs, env)
+		}
+		secretQuery += fmt.Sprintf(" AND keys.environment IN (%s)", strings.Join(placeholders, ","))
+	}
+
+	if err := s.DB.QueryRowContext(ctx, secretQuery, secretArgs...).Scan(
+		&dashboard.Secrets.Total,
+		&dashboard.Secrets.UpdatedInLast60Days,
+	); err != nil {
+		return nil, fmt.Errorf("query secrets dashboard: %w", err)
+	}
+
+	// Logs counts (24 hours, no environment restrictions for auditors)
+	last24h := now.Add(-24 * time.Hour)
+
+	logQuery := `SELECT 
+        COUNT(CASE WHEN level = 'ERROR' THEN 1 END) as errors,
+        COUNT(CASE WHEN msg = 'certificate signed' THEN 1 END) as certs_signed,
+        COUNT(CASE WHEN msg = 'secret read' THEN 1 END) as secret_reads
+    FROM logs
+    WHERE log_time >= $1`
+
+	if err := s.DB.QueryRowContext(ctx, logQuery, last24h).Scan(
+		&dashboard.Logs.ErrorCount24h,
+		&dashboard.Logs.CertificatesSignedCount24h,
+		&dashboard.Logs.SecretReadCount24h,
+	); err != nil {
+		return nil, fmt.Errorf("query logs dashboard: %w", err)
+	}
+
+	return dashboard, nil
 }
