@@ -425,36 +425,13 @@ export function Dashboard({ isLoading, setIsLoading }) {
 export function Certificates({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [certs, setCerts] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchCerts = useCallback(async () => {
-    setCerts([]);
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/certs?${params.toString()}`);
-      setCerts(res.data.data || []);
-      if (page === 1) setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [api, filters, page, pageSize, setIsLoading]);
-
-  useEffect(() => {
-    fetchCerts();
-  }, [fetchCerts]);
 
   const cnAndSan = (cert) => {
     let names = [];
@@ -638,11 +615,15 @@ export function Certificates({ isLoading, setIsLoading }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={certs}
+        setItems={setCerts}
+        apiPath="/certs"
+        orderCol="notBefore"
+        idCol="serial"
       />
     </>
   );
@@ -651,40 +632,13 @@ export function Certificates({ isLoading, setIsLoading }) {
 export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchLogs = useCallback(async () => {
-    setLogs([]);
-    // const loadingToast = showLoadingToast("Loading logs...");
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogs(res.data.data || []);
-      if (page === 1) {
-        setTotalCount(res.data.totalCount || 0);
-      }
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      // loadingToast.dismiss();
-      setIsLoading(false);
-    }
-  }, [api, filters, page, pageSize, setIsLoading]);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
 
   const levelVariant = {
     ERROR: "danger",
@@ -898,11 +852,15 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={logs}
+        setItems={setLogs}
+        apiPath="/logs"
+        orderCol="time"
+        idCol="logEntryID"
       />
     </>
   );
@@ -912,38 +870,15 @@ export function PendingRequests({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [requests, setRequests] = useState([]);
   const [files, setFiles] = useState({});
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // used to trigger re-fetching requests after approving/rejecting
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchRequests = useCallback(async () => {
-    setRequests([]);
-    // const loadingToast = showLoadingToast("Loading requests...");
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/pending-requests?${params.toString()}`);
-      setRequests(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      // loadingToast.dismiss();
-      setIsLoading(false);
-    }
-  }, [api, page, pageSize, filters, setIsLoading]);
-
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
 
   const handleApproveRequest = async (requestID, useOwnToken) => {
     const confirmed = window.confirm(
@@ -961,7 +896,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
         ...prev,
         [requestID]: { data: response.data, contentTypeFromHeader },
       }));
-      fetchRequests();
+      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
     } catch (err) {
       showToast("error", errorToString(err));
     } finally {
@@ -979,7 +914,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
     try {
       await api.delete(`/pending-requests/${requestID}`);
       showToast("success", "Request rejected!");
-      fetchRequests();
+      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
     } catch (err) {
       showToast("error", errorToString(err));
     } finally {
@@ -1135,11 +1070,16 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        key={`pending-requests-paginator-${refreshTrigger}`}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={requests}
+        setItems={setRequests}
+        apiPath="/pending-requests"
+        orderCol="createdAt"
+        idCol="id"
       />
     </>
   );

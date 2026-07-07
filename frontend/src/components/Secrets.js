@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import Filters from "./Filters";
 import Paginator from "./Paginator";
 import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
-import { getApi } from "../axios";
 
 import ImportSecretsModal from "./ImportSecretsModal";
 import SecretModal from "./SecretModal";
@@ -16,37 +15,12 @@ export default function Secrets({
 }) {
   const [error, setError] = useState(null);
   const [secrets, setSecrets] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
-
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [showImportSecretsModal, setShowImportSecretsModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const api = getApi();
   const navigate = useNavigate();
-
-  const fetchSecrets = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/secrets?${params.toString()}`);
-      setSecrets(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(err.message || "Failed to fetch secrets");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [api, page, pageSize, filters, setIsLoading]);
-
-  useEffect(() => {
-    fetchSecrets();
-  }, [fetchSecrets]);
 
   useEffect(() => {
     setDropdownActions?.([
@@ -159,11 +133,13 @@ export default function Secrets({
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={secrets}
+        setItems={setSecrets}
+        apiPath="/secrets"
       />
     </>
   );

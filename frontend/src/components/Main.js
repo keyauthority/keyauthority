@@ -63,12 +63,7 @@ export default function Main() {
           subtitle: "Get an overview of your system's resources and activity",
           to: "/activity/dashboard",
           icon: "bi-speedometer",
-        },
-        {
-          title: "Application Logs",
-          subtitle: "View recorded logs for auditing purposes",
-          to: "/activity/logs",
-          icon: "bi-file-text-fill",
+          dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
         },
         {
           title: "Issued Certificates",
@@ -81,6 +76,12 @@ export default function Main() {
           subtitle: "Review and approve/reject pending requests",
           to: "/activity/pending-requests",
           icon: "bi-clock-fill",
+        },
+        {
+          title: "Application Logs",
+          subtitle: "View recorded logs for auditing purposes",
+          to: "/activity/logs",
+          icon: "bi-file-text-fill",
         },
       ],
     },

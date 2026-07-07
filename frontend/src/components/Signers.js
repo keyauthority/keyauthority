@@ -1,11 +1,10 @@
 import { useCallback, useState, useEffect } from "react";
 import { Alert, Table } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
-import { getApi } from "../axios";
 import Paginator from "./Paginator";
 import SignerModal from "./SignerModal";
 import Filters from "./Filters";
-import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
+import { prettyTime, prettyEnv } from "../utils/utils";
 
 export default function Signers({
   isLoading,
@@ -14,35 +13,10 @@ export default function Signers({
 }) {
   const [error, setError] = useState(null);
   const [signers, setSigners] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
-
   const [showSignerModal, setShowSignerModal] = useState(false);
 
-  const api = getApi();
   const navigate = useNavigate();
-
-  const fetchSigners = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/signers?${params.toString()}`);
-      setSigners(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(err.message || "Failed to fetch signers");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [api, page, pageSize, filters, setIsLoading]);
-
-  useEffect(() => {
-    fetchSigners();
-  }, [fetchSigners]);
 
   useEffect(() => {
     setDropdownActions?.([
@@ -118,7 +92,6 @@ export default function Signers({
             <th>Name</th>
             <th>Environment</th>
             <th>Common Name</th>
-            {/* <th>Is Root</th> */}
             <th>Private Key ID</th>
             <th>Last Updated</th>
           </tr>
@@ -127,27 +100,12 @@ export default function Signers({
           {signers.map((signer, idx) => (
             <tr key={idx}>
               <td>
-                <Link
-                  to={`/signers/${encodeURIComponent(signer.name)}`}
-                  //className="fw-medium"
-                >
+                <Link to={`/signers/${encodeURIComponent(signer.name)}`}>
                   {signer.name}
                 </Link>
               </td>
               <td>{prettyEnv(signer.environment)}</td>
-              <td>{signer.config.caTemplate?.subject?.commonName || "-"}</td>
-              {/* <td>
-                {signer.config.isCA ? (
-                  <>
-                    <i className="bi bi-check-circle me-1"></i>Yes
-                  </>
-                ) : (
-                  <>
-                    <i className="bi bi-x-circle me-1"></i>No
-                  </>
-                )}
-              </td> */}
-              {/* <td>{shortUUID(signer.privateKeyID)}</td> */}
+              <td>{signer.config?.caTemplate?.subject?.commonName || "-"}</td>
               <td>{signer.privateKeyID}</td>
               <td>{prettyTime(signer.updatedAt)}</td>
             </tr>
@@ -156,11 +114,13 @@ export default function Signers({
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={signers}
+        setItems={setSigners}
+        apiPath="/signers"
       />
     </>
   );
