@@ -141,19 +141,16 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
                 <Alert
                   key={key}
                   variant="light"
-                  className="py-1 ps-3 pe-2 d-flex align-items-center gap-2"
+                  className="py-1 px-2 d-flex align-items-center gap-2"
                 >
                   <span>
                     <strong>{def?.label || key}:</strong>{" "}
                     {getDisplayValue(def, value)}
                   </span>
-                  <Button
-                    variant="link"
-                    className="p-0 m-0"
+                  <CloseButton
+                    className="small"
                     onClick={() => removeFilter(key)}
-                  >
-                    <i className="bi bi-x-lg"></i>
-                  </Button>
+                  />
                 </Alert>
               );
             })}

@@ -168,7 +168,7 @@ export default function JWKSModal({ show, onHide }) {
             setJWKSEntries([...jwksEntries, { url: "", json: "" }])
           }
         >
-          <i className="bi bi-plus"></i> Add Another
+          <i className="bi bi-plus-lg"></i> Add
         </Button>
 
         {mergedJWKS?.keys.length > 0 && (
