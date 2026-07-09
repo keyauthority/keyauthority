@@ -154,19 +154,17 @@ export default function KeyInput({
         <Form.Label>HSM PKCS11 URI</Form.Label>
         <div className="input-group">
           <Form.Control
-            as="textarea"
-            rows={2}
             placeholder="e.g. pkcs11:module-path=/path/to/module.so;token=keyauthority?pin-source=/path/to/pinfile"
             value={pkcs11URI}
             onChange={(e) => setPkcs11URI(e.target.value)}
           />
           <Form.Select
             className="input-group-text"
-            style={{ maxWidth: "10rem" }}
+            style={{ maxWidth: "13rem" }}
             onChange={(e) => setPkcs11URI(e.target.value)}
           >
             <option key="Manual" value="">
-              No preset
+              Manual input
             </option>
             {Object.entries(defaultPkcs11URIs).map(([name, uri]) => (
               <option key={name} value={uri}>
