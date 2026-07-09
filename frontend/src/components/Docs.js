@@ -5,6 +5,7 @@ import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
 import { copyToClipboard, disclaimer, prettyCode } from "../utils/utils";
 import KeyValueTable from "./KeyValueTable";
+import JWKSModal from "./JWKSModal";
 
 export function UsefulLinks() {
   const api = getApi();
@@ -84,6 +85,8 @@ export function UsefulLinks() {
 }
 
 export function Administration() {
+  const [showJWKSModal, setShowJWKSModal] = useState(false);
+
   const keycloak = getKeycloak();
 
   const apiUrl = new URL(getApi().defaults.baseURL);
@@ -275,15 +278,33 @@ export function Administration() {
         className="img-fluid"
       />
 
+      <JWKSModal show={showJWKSModal} onHide={() => setShowJWKSModal(false)} />
+
       <Alert variant="info">
         <Alert.Heading className="fs-6 fw-bold">
-          <i className="bi bi-info-circle-fill me-1"></i> Tip
+          <i className="bi bi-info-circle-fill me-1"></i> Tips
         </Alert.Heading>
-        If you are configuring the local Kubernetes cluster as an Identity
-        Provider, set the JWKS URL to{" "}
-        <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This endpoint is
-        handled by the KeyAuthority backend, which performs the authenticated
-        JWKS retrieval from the Kubernetes API and exposes it unauthenticated.
+        <ul>
+          <li>
+            If you are configuring the local Kubernetes cluster as an Identity
+            Provider, set the JWKS URL to{" "}
+            <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This
+            endpoint is handled by the KeyAuthority backend, which performs the
+            authenticated JWKS retrieval from the Kubernetes API and exposes it
+            unauthenticated.
+          </li>
+          <li>
+            If you intend to use multiple providers that have the same issuer
+            claim in their tokens (e.g., multiple Kubernetes instances), you
+            need to <i>merge</i> them all into a single provider due to
+            Keycloak's restriction of one provider per issuer. You can use the
+            our <Link onClick={() => setShowJWKSModal(true)}>tool</Link> to
+            merge the JWKS of all providers into a single one. The joint
+            provider can be then be configured by toggling off the{" "}
+            <strong>Use JWKS URL</strong> option and pasting the merged JWKS
+            into the <strong>Validating public key</strong> field.
+          </li>
+        </ul>
       </Alert>
 
       <h5>Step 2: Configure Client for Token Exchange</h5>

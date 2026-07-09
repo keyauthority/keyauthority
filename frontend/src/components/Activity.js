@@ -318,7 +318,7 @@ export function Certificates({ isLoading, setIsLoading }) {
           {
             key: "cn",
             type: "text",
-            label: "CN",
+            label: "Common Name",
             value: filters.cn,
             placeholder: "e.g. example.com",
           },
@@ -345,13 +345,25 @@ export function Certificates({ isLoading, setIsLoading }) {
           {
             key: "notBeforeFrom",
             type: "date",
-            label: "Valid From",
+            label: "Not Before From",
             value: filters.notBeforeFrom,
+          },
+          {
+            key: "notBeforeTo",
+            type: "date",
+            label: "Not Before To",
+            value: filters.notBeforeTo,
+          },
+          {
+            key: "notAfterFrom",
+            type: "date",
+            label: "Not After From",
+            value: filters.notAfterFrom,
           },
           {
             key: "notAfterTo",
             type: "date",
-            label: "Valid To",
+            label: "Not After To",
             value: filters.notAfterTo,
           },
           {
