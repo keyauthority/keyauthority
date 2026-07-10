@@ -144,7 +144,7 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
                   className="px-3 py-2 d-flex align-items-center gap-2"
                 >
                   <span>
-                    <span>{def?.label || key}:</span>{" "}
+                    <strong>{def?.label || key}:</strong>{" "}
                     {getDisplayValue(def, value)}
                   </span>
                   <CloseButton
