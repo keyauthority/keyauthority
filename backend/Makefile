@@ -259,3 +259,22 @@ pretty: fmt
 .PHONY: scan
 scan:
 	trivy image $(IMG)
+
+##@ Test JWT exchange
+.PHONY: test-jwt-exchange
+test-jwt-exchange:
+	@token1=$$(step crypto jwt sign \
+			--key test-jwks-key.json \
+			--password-file /dev/null \
+			--iss "https://local.keyauthority.net" \
+			--aud "keyauthority://secrets" \
+			--sub "local:keyauthority" \
+			--exp "$$(date -v+87600H +%s)"); \
+	token2=$$(curl -s -X POST \
+			-H "Content-Type: application/json" \
+			-d "{ \"jwt\": \"$$token1\" }" \
+			http://localhost:$(BACKEND_PORT)/v1/token | jq -r '.auth.client_token'); \
+	curl -s \
+			-H "Authorization: Bearer $$token2" \
+			http://localhost:$(BACKEND_PORT)/v1/token/claims | jq
+

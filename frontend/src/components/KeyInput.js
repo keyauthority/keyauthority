@@ -1,7 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Row, Col, Form, Dropdown, DropdownButton } from "react-bootstrap";
-import { getDefaultPkcs11URIs, getRoles } from "../utils/utils";
+import { getRoles } from "../utils/utils";
 import { getKeycloak } from "../keycloak";
+
+function getDefaultPkcs11URIs() {
+  return {
+    "SoftHSM (dev)":
+      "pkcs11:module-path=/usr/lib64/pkcs11/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin",
+    "Securosys Primus":
+      "pkcs11:module-path=/usr/local/primus/lib/libprimusP11.so;slot-id=0?pin-source=/etc/primus/.pin",
+  };
+}
 
 export default function KeyInput({
   environment,
@@ -18,6 +27,8 @@ export default function KeyInput({
   pkcs11URI,
   setPkcs11URI,
 }) {
+  const [pkcs11URIDisabled, setPkcs11URIDisabled] = useState(false);
+
   const defaultPkcs11URIs = getDefaultPkcs11URIs();
   const keycloak = getKeycloak();
   const token = keycloak?.tokenParsed || {};
@@ -151,20 +162,24 @@ export default function KeyInput({
       </Row>
 
       <Form.Group>
-        <Form.Label>HSM PKCS11 URI</Form.Label>
+        <Form.Label className="d-flex justify-content-between align-items-center gap-2">
+          <span>HSM PKCS11 URI</span>
+          <span className="text-muted small">
+            <i className="bi bi-info-circle me-1"></i>Leave empty for software
+            key
+          </span>
+        </Form.Label>
         <div className="input-group">
-          <Form.Control
-            placeholder="e.g. pkcs11:module-path=/path/to/module.so;token=keyauthority?pin-source=/path/to/pinfile"
-            value={pkcs11URI}
-            onChange={(e) => setPkcs11URI(e.target.value)}
-          />
           <Form.Select
             className="input-group-text"
-            style={{ maxWidth: "13rem" }}
-            onChange={(e) => setPkcs11URI(e.target.value)}
+            style={{ maxWidth: "14rem" }}
+            onChange={(e) => {
+              setPkcs11URI(e.target.value);
+              setPkcs11URIDisabled(e.target.value !== "");
+            }}
           >
             <option key="Manual" value="">
-              Manual input
+              Manual Entry
             </option>
             {Object.entries(defaultPkcs11URIs).map(([name, uri]) => (
               <option key={name} value={uri}>
@@ -172,6 +187,12 @@ export default function KeyInput({
               </option>
             ))}
           </Form.Select>
+          <Form.Control
+            placeholder="e.g. pkcs11:module-path=/path/to/module.so;token=keyauthority?pin-source=/path/to/pinfile"
+            value={pkcs11URI}
+            disabled={pkcs11URIDisabled}
+            onChange={(e) => setPkcs11URI(e.target.value)}
+          />
         </div>
         <Form.Text className="text-muted">
           Refer to the Golang package{" "}
@@ -182,7 +203,7 @@ export default function KeyInput({
           >
             pkcs11
           </a>{" "}
-          for further details —leave empty for software key
+          for further details
         </Form.Text>
       </Form.Group>
     </>

@@ -141,14 +141,14 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
                 <Alert
                   key={key}
                   variant="light"
-                  className="py-1 px-2 d-flex align-items-center gap-2"
+                  className="px-3 py-2 d-flex align-items-center gap-2"
                 >
                   <span>
-                    <strong>{def?.label || key}:</strong>{" "}
+                    <span>{def?.label || key}:</span>{" "}
                     {getDisplayValue(def, value)}
                   </span>
                   <CloseButton
-                    className="small"
+                    className="small m-0 p-0"
                     onClick={() => removeFilter(key)}
                   />
                 </Alert>

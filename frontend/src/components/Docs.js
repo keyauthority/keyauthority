@@ -353,24 +353,54 @@ export function Administration() {
 
       <ul>
         <li>
-          <strong>Kubernetes</strong>: subjects of the form{" "}
+          <strong>Kubernetes</strong>: subjects can be linked exactly, or with a
+          wildcard pattern{" "}
           <code>
             system:serviceaccount:&lt;NAMESPACE&gt;:&lt;SERVICEACCOUNT&gt;
-          </code>{" "}
-          can be linked exactly, or with wildcard patterns such as{" "}
-          <code>system:serviceaccount:dev:*</code>,{" "}
-          <code>system:serviceaccount:*:my-serviceaccount</code>, or{" "}
-          <code>system:serviceaccount:*:*</code>.
+          </code>
+          , where each placeholder can be replaced with actual values or{" "}
+          <code>*</code>. This allows you to define access control based on
+          Kubernetes namespaces and service accounts. Examples:
+          <ul>
+            <li>
+              <code>system:serviceaccount:dev:my-serviceaccount</code> matches a
+              specific service account in a specific namespace
+            </li>
+            <li>
+              <code>system:serviceaccount:dev:*</code> matches all service
+              accounts in a specific namespace
+            </li>
+          </ul>
         </li>
         <li>
-          <strong>GitLab</strong>: subjects of the form{" "}
+          <strong>GitLab</strong>: subjects can be linked exactly, or with a
+          wildcard pattern{" "}
           <code>
             project_path:&lt;PROJECT_PATH&gt;:ref_type:&lt;REF_TYPE&gt;:ref:&lt;REF&gt;
           </code>{" "}
-          can also be linked using wildcard patterns such as{" "}
-          <code>project_path:my-group/my-project:ref_type:branch:ref:main</code>
-          , <code>project_path:my-group/*:ref_type:branch:ref:main</code>, or{" "}
-          <code>project_path:*:ref_type:branch:ref:*</code>.
+          where each placeholder can be replaced with actual values or{" "}
+          <code>*</code>. This allows you to define access control based on
+          projects and branches. In the case of the <code>PROJECT_PATH</code>{" "}
+          placeholder, you can use more fine-grained patterns to match specific
+          groups or subgroups in GitLab, for example{" "}
+          <code>group/subgroup/*</code> to match all projects under a specific
+          subgroup. Examples:
+          <ul>
+            <li>
+              <code>
+                project_path:my-group/my-project:ref_type:branch:ref:main
+              </code>{" "}
+              matches a specific branch in a specific project
+            </li>
+            <li>
+              <code>project_path:my-group/*:ref_type:branch:ref:*</code> matches
+              all branches in all projects under a specific group
+            </li>
+          </ul>
+        </li>
+        <li>
+          <strong>Other providers</strong>: subjects can be linked exactly, or
+          using the wildcard pattern <code>*</code>.
         </li>
         <li>
           If no matching user exists, Keycloak will fallback to the client's
@@ -383,7 +413,8 @@ export function Administration() {
       </ul>
 
       <p>
-        If you encounter any issues with token exchange, check the Keycloak
+        Note that wildcards are <strong>not</strong> regular expressions. Also,
+        if you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
         DEBUG logs some information on the exchange process, including the

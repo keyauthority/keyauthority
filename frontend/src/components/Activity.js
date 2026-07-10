@@ -500,7 +500,10 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
   };
 
   const handleExportLogs = useCallback(async () => {
-    setIsLoading(true);
+    showToast("warning", "Sorry, feature not implemented yet.");
+    return;
+
+    /*setIsLoading(true);
 
     const flattenLogItem = (item) => {
       // convert logs JSONs to .log format
@@ -524,7 +527,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       showToast("error", errorToString(err));
     } finally {
       setIsLoading(false);
-    }
+    }*/
   }, [api, filters, setIsLoading]);
 
   useEffect(() => {

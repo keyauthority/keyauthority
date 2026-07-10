@@ -36,6 +36,10 @@ export default function Topbar() {
     window.location.href = url;
   };
 
+  const handleManageAccount = () => {
+    keycloak.accountManagement({ redirectUri: window.location.origin });
+  };
+
   return (
     <>
       <ProfileModal

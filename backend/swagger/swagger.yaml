@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.30
+  version: 1.4.31
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -1263,6 +1263,26 @@ paths:
                     properties:
                       client_token:
                         type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/token/claims:
+    get:
+      summary: Get token claims
+      description: |
+        Get the claims of the current Bearer token.
+      tags:
+        - Miscellaneous
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
         "400":
           description: Failed
           content:

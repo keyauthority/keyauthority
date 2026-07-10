@@ -294,6 +294,12 @@ func main() {
 
 	router.Handle("/v1/token", tokenHandler)
 
+	router.Handle("/v1/token/claims", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get token info
+		},
+		tokenClaimsHandler))
+
 	router.Handle("/v1/health", healthHandler)
 
 	router.Handle("/v1/oidc/jwks/kubernetes", kubernetesJWKSHandler)
@@ -854,13 +860,14 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
 		}
-
 		// Parse immutable claims once, store in context
-		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		user, externalIssuer, externalSubject, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIssuer, externalIssuer)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSubject, externalSubject)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
 		r = r.WithContext(ctx)
 
@@ -1701,6 +1708,22 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
+})
+
+var tokenClaimsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+	if !ok {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+		return
+	}
+
+	var claims map[string]any
+	if err := token.Claims(&claims); err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't parse token claims", err)
+		return
+	}
+
+	writeJSONOk(w, claims)
 })
 
 var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

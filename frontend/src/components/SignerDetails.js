@@ -449,9 +449,7 @@ function ConfigTab({
                             </div>
                           ))}
                         </>
-                      ) : (
-                        "-"
-                      ),
+                      ) : null,
                     OCSP:
                       signerConfig.ocsp?.length > 0 ? (
                         <>

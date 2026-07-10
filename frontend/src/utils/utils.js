@@ -284,15 +284,6 @@ export function disclaimer() {
   );
 }
 
-export function getDefaultPkcs11URIs() {
-  return {
-    SoftHSM:
-      "pkcs11:module-path=/usr/lib64/pkcs11/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin",
-    "Securosys Primus":
-      "pkcs11:module-path=/usr/local/primus/lib/libprimusP11.so;slot-id=0?pin-source=/etc/primus/.pin",
-  };
-}
-
 export async function copyToClipboard(
   text,
   successMsg = "Copied to clipboard!",

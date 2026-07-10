@@ -527,64 +527,70 @@ export default function SignerModal({
                 Comma-separated list of URLs
               </Form.Text>
             </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>AIA (Authority Information Access)</Form.Label>
-              <div className="input-group">
-                <Form.Control
-                  type="text"
-                  value={aia}
-                  placeholder="e.g. http://example.com/aia1, http://example.com/aia2"
-                  onChange={(e) => {
-                    setAIA(e.target.value);
-                  }}
-                />
-                <Button
-                  variant="outline-secondary"
-                  onClick={async () => {
-                    if (defaultAIABaseURL && signerName) {
-                      const hash = await createSignerHashForCRL(signerName);
-                      setAIA(defaultAIABaseURL + hash);
-                    }
-                  }}
-                  disabled={!defaultAIABaseURL || !signerName}
-                  title="Set default AIA URL"
-                >
-                  <i className="bi bi-arrow-clockwise"></i>
-                </Button>
-              </div>
-              <Form.Text className="text-muted">
-                Comma-separated list of URLs
-              </Form.Text>
-            </Form.Group>
-            {/*<Form.Group className="mb-3">
-              <Form.Label>OCSP (Online Certificate Status Protocol)</Form.Label>
-              <div className="input-group">
-                <Form.Control
-                  type="text"
-                  value={ocsp}
-                  placeholder="e.g. http://example.com/ocsp1, http://example.com/ocsp2"
-                  onChange={(e) => {
-                    setOCSP(e.target.value);
-                  }}
-                />
-                <Button
-                  variant="outline-secondary"
-                  title="Set default OCSP URL"
-                  onClick={async () => {
-                    if (defaultOCSPBaseURL && signerName) {
-                      const hash = await createSignerHashForCRL(signerName);
-                      setOCSP(defaultOCSPBaseURL + hash);
-                    }
-                  }}
-                  disabled={!defaultOCSPBaseURL || !signerName}
-                >
-                  <i className="bi bi-arrow-clockwise"></i>
-                </Button>
-              </div>
-              <Form.Text className="text-muted">
-                Comma-separated list of URLs
-              </Form.Text>
-            </Form.Group>*/}
+            {aia && (
+              <Form.Group className="mb-3">
+                <Form.Label>AIA (Authority Information Access)</Form.Label>
+                <div className="input-group">
+                  <Form.Control
+                    type="text"
+                    value={aia}
+                    placeholder="e.g. http://example.com/aia1, http://example.com/aia2"
+                    onChange={(e) => {
+                      setAIA(e.target.value);
+                    }}
+                  />
+                  <Button
+                    variant="outline-secondary"
+                    onClick={async () => {
+                      if (defaultAIABaseURL && signerName) {
+                        const hash = await createSignerHashForCRL(signerName);
+                        setAIA(defaultAIABaseURL + hash);
+                      }
+                    }}
+                    disabled={!defaultAIABaseURL || !signerName}
+                    title="Set default AIA URL"
+                  >
+                    <i className="bi bi-arrow-clockwise"></i>
+                  </Button>
+                </div>
+                <Form.Text className="text-muted">
+                  Comma-separated list of URLs
+                </Form.Text>
+              </Form.Group>
+            )}
+            {ocsp && (
+              <Form.Group className="mb-3">
+                <Form.Label>
+                  OCSP (Online Certificate Status Protocol)
+                </Form.Label>
+                <div className="input-group">
+                  <Form.Control
+                    type="text"
+                    value={ocsp}
+                    placeholder="e.g. http://example.com/ocsp1, http://example.com/ocsp2"
+                    onChange={(e) => {
+                      setOCSP(e.target.value);
+                    }}
+                  />
+                  <Button
+                    variant="outline-secondary"
+                    title="Set default OCSP URL"
+                    onClick={async () => {
+                      if (defaultOCSPBaseURL && signerName) {
+                        const hash = await createSignerHashForCRL(signerName);
+                        setOCSP(defaultOCSPBaseURL + hash);
+                      }
+                    }}
+                    disabled={!defaultOCSPBaseURL || !signerName}
+                  >
+                    <i className="bi bi-arrow-clockwise"></i>
+                  </Button>
+                </div>
+                <Form.Text className="text-muted">
+                  Comma-separated list of URLs
+                </Form.Text>
+              </Form.Group>
+            )}
           </Card.Body>
         </Card>
 

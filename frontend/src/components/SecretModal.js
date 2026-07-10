@@ -313,7 +313,7 @@ export default function SecretModal({
                       setDataEntries([...dataEntries, { key: "", value: "" }])
                     }
                   >
-                    <i className="bi bi-plus-lg"></i> Add Pair
+                    <i className="bi bi-plus-lg"></i> Add
                   </Button>
                 </Col>
               </Form.Group>

@@ -2051,7 +2051,7 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
     WHERE certs.revoked = false AND not_after > now()`
 
 	certArgs := []any{in3Days, in7Days, in30Days}
-	certIdx := 5
+	certIdx := 4
 
 	if !hasAccessToAllEnvs && len(accessibleEnvs) > 0 {
 		placeholders := make([]string, len(accessibleEnvs))
