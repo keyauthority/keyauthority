@@ -26,18 +26,7 @@ export default function Topbar() {
   };
 
   const handleKeycloakAction = (kcAction) => {
-    const kcBaseUrl = keycloak?.authServerUrl;
-    const realm = keycloak?.realm;
-    const clientId = keycloak?.clientId;
-    const redirectUri = window.location.origin;
-
-    const url = `${kcBaseUrl}/realms/${realm}/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&kc_action=${kcAction}`;
-
-    window.location.href = url;
-  };
-
-  const handleManageAccount = () => {
-    keycloak.accountManagement({ redirectUri: window.location.origin });
+    keycloak.login({ action: kcAction, redirectUri: window.location.origin });
   };
 
   return (

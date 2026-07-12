@@ -162,13 +162,7 @@ export default function KeyInput({
       </Row>
 
       <Form.Group>
-        <Form.Label className="d-flex justify-content-between align-items-center gap-2">
-          <span>HSM PKCS11 URI</span>
-          <span className="text-muted small">
-            <i className="bi bi-info-circle me-1"></i>Leave empty for software
-            key
-          </span>
-        </Form.Label>
+        <Form.Label>HSM PKCS11 URI</Form.Label>
         <div className="input-group">
           <Form.Select
             className="input-group-text"
@@ -203,7 +197,7 @@ export default function KeyInput({
           >
             pkcs11
           </a>{" "}
-          for further details
+          for further details - leave empty for software key
         </Form.Text>
       </Form.Group>
     </>
