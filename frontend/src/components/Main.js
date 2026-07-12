@@ -65,12 +65,6 @@ export default function Main() {
           icon: "bi-speedometer",
         },
         {
-          title: "Application Logs",
-          subtitle: "View recorded logs for auditing purposes",
-          to: "/activity/logs",
-          icon: "bi-file-text-fill",
-        },
-        {
           title: "Issued Certificates",
           subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
@@ -81,6 +75,12 @@ export default function Main() {
           subtitle: "Review and approve/reject pending requests",
           to: "/activity/pending-requests",
           icon: "bi-clock-fill",
+        },
+        {
+          title: "Application Logs",
+          subtitle: "View recorded logs for auditing purposes",
+          to: "/activity/logs",
+          icon: "bi-file-text-fill",
         },
       ],
     },

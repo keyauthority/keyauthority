@@ -284,15 +284,6 @@ export function disclaimer() {
   );
 }
 
-export function getDefaultPkcs11URIs() {
-  return {
-    SoftHSM:
-      "pkcs11:module-path=/usr/lib64/pkcs11/libsofthsm2.so;token=keyauthority?pin-source=/etc/softhsm/.pin",
-    Primus:
-      "pkcs11:module-path=/usr/local/primus/lib/libprimusP11.so;slot-id=0?pin-source=/etc/primus/.pin",
-  };
-}
-
 export async function copyToClipboard(
   text,
   successMsg = "Copied to clipboard!",
@@ -407,14 +398,4 @@ export const withTooltipDescription = (
       ) : null}
     </div>
   );
-};
-
-export const buildURLParams = (filters, page, pageSize) => {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value) params.append(key, value);
-  });
-  params.append("page", page);
-  params.append("pageSize", pageSize);
-  return params;
 };

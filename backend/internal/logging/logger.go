@@ -40,6 +40,8 @@ const (
 	CtxKeyWriteLogToDB      = ctxKey("writeLogToDB")
 	CtxKeyToken             = ctxKey("token")
 	CtxKeyUser              = ctxKey("user")
+	CtxKeyExternalIssuer    = ctxKey("externalIssuer")
+	CtxKeyExternalSubject   = ctxKey("externalSubject")
 	CtxKeyRoles             = ctxKey("roles")
 	CtxKeyEnvironment       = ctxKey("environment")
 	CtxKeyApproverToken     = ctxKey("approverToken")
@@ -169,12 +171,14 @@ func (l *StdAndDBLogger) Close() {
 	}
 }
 
-func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string) {
+func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, string, string, []string) {
 	if full {
 		type tokenClaimsFull struct {
 			Email             string `json:"email"`
 			PreferredUsername string `json:"preferred_username"`
 			Sub               string `json:"sub"`
+			ExternalIssuer    string `json:"external_iss"`
+			ExternalSubject   string `json:"external_sub"`
 			RealmAccess       struct {
 				Roles []string `json:"roles"`
 			} `json:"realm_access"`
@@ -190,20 +194,22 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 				roles = append(roles, ra.Roles...)
 			}
 		}
-		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), roles
+		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), c.ExternalIssuer, c.ExternalSubject, roles
 	}
 
 	type tokenClaims struct {
 		Email             string `json:"email"`
 		PreferredUsername string `json:"preferred_username"`
 		Sub               string `json:"sub"`
+		ExternalIssuer    string `json:"external_iss"`
+		ExternalSubject   string `json:"external_sub"`
 	}
 
 	var c tokenClaims
 	if err := idToken.Claims(&c); err == nil {
-		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), nil
+		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), c.ExternalIssuer, c.ExternalSubject, nil
 	}
-	return idToken.Subject, nil
+	return idToken.Subject, "", "", nil
 }
 
 // ---- Helpers ---- //
@@ -211,16 +217,18 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, []string)
 func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
-		//if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok {
+		tokenAttrs := []any{}
 		if user, ok := ctx.Value(CtxKeyUser).(string); ok {
-			attrs = append(attrs,
-				slog.Group("token",
-					slog.String("user", user),
-					//slog.String("issuer", token.Issuer),
-				),
-			)
+			tokenAttrs = append(tokenAttrs, slog.String("user", user))
 		}
-		//}
+		if externalIss, ok := ctx.Value(CtxKeyExternalIssuer).(string); ok && externalIss != "" {
+			tokenAttrs = append(tokenAttrs, slog.String("externalIss", externalIss))
+		}
+		if externalSub, ok := ctx.Value(CtxKeyExternalSubject).(string); ok && externalSub != "" {
+			tokenAttrs = append(tokenAttrs, slog.String("externalSub", externalSub))
+		}
+		attrs = append(attrs, slog.Group("token", tokenAttrs...))
+
 		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
 			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
 		}
@@ -228,7 +236,7 @@ func attrsFromContext(ctx context.Context) []any {
 			attrs = append(attrs, slog.String(string(CtxKeyOriginalRequestID), originalReqID.String()))
 		}
 		if approverToken, ok := ctx.Value(CtxKeyApproverToken).(*oidc.IDToken); ok {
-			user, _ := GetTokenInfoFromClaims(approverToken, false)
+			user, _, _, _ := GetTokenInfoFromClaims(approverToken, false)
 			attrs = append(attrs,
 				slog.Group("approverToken",
 					slog.String("user", user),

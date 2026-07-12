@@ -280,6 +280,12 @@ func main() {
 		pendingRequestBodyHandler))
 
 	// ------------ Miscellaneous ------------ //
+	router.Handle("/v1/dashboard", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny,
+		},
+		dashboardHandler))
+
 	router.Handle("/v1/logs", withAuth(
 		map[string]internalpkg.Role{
 			http.MethodGet: internalpkg.RoleAuditor, // get logs
@@ -287,6 +293,12 @@ func main() {
 		logsHandler))
 
 	router.Handle("/v1/token", tokenHandler)
+
+	router.Handle("/v1/token/claims", withAuth(
+		map[string]internalpkg.Role{
+			http.MethodGet: internalpkg.RoleAny, // get token info
+		},
+		tokenClaimsHandler))
 
 	router.Handle("/v1/health", healthHandler)
 
@@ -452,15 +464,13 @@ func runPeriodicTasks() {
 
 func recreateCRLs() (int, int, error) {
 	ctx := context.Background()
-	signers, _, _, err := store.GetSigners(ctx, true, nil, url.Values{})
+	signers, err := store.GetAllSigners(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	successCount := 0
-	for _, s := range signers {
-		signerName := s["name"].(string)
-
+	for _, signerName := range signers {
 		signer, err := store.LoadSigner(ctx, signerName)
 		if err != nil {
 			logger.WarnWithContext(ctx, "couldn't load signer", "signer", signerName, "error", err)
@@ -633,11 +643,31 @@ func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
 	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token roles in context")
 }
 
-func getPaginatedListWithAccessibleEnvs(
+func getPaginatedListWithCursor(
 	r *http.Request,
 	w http.ResponseWriter,
-	getFunc func(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) ([]map[string]any, int, int, error),
-	countFunc func(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (int, error),
+	getFunc func(ctx context.Context, filters url.Values) (*internalpkg.CursorPaginationResult, error),
+) {
+	filters := r.URL.Query()
+
+	result, err := getFunc(r.Context(), filters)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
+		return
+	}
+
+	writeJSONOk(w, map[string]any{
+		"data":       result.Items,
+		"nextCursor": result.NextCursor,
+		"hasMore":    result.HasMore,
+		"pageSize":   result.PageSize,
+	})
+}
+
+func getPaginatedListWithAccessibleEnvsAndCursor(
+	r *http.Request,
+	w http.ResponseWriter,
+	getFunc func(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*internalpkg.CursorPaginationResult, error),
 ) {
 	hasAccessToAllEnvs, accessibleEnvs, err := getAccessibleEnvs(r.Context())
 	if err != nil {
@@ -647,73 +677,13 @@ func getPaginatedListWithAccessibleEnvs(
 
 	filters := r.URL.Query()
 
-	var items []map[string]any
-	var limit, offset int
-	if filters.Get("totalCountOnly") != "true" {
-		items, limit, offset, err = getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
-		if err != nil {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-			return
-		}
-	}
-
-	totalCount, err := countFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
+	result, err := getFunc(r.Context(), hasAccessToAllEnvs, accessibleEnvs, filters)
 	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get total count", err)
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
 		return
 	}
 
-	respPage := 1
-	if limit > 0 && offset >= 0 {
-		respPage = (offset / limit) + 1
-	}
-
-	writeJSONOk(w, map[string]any{
-		"data":       items,
-		"page":       respPage,
-		"pageSize":   limit,
-		"count":      len(items),
-		"totalCount": totalCount,
-	})
-}
-
-func getPaginatedListWithoutAccessibleEnvs(
-	r *http.Request,
-	w http.ResponseWriter,
-	getFunc func(ctx context.Context, filters url.Values) ([]map[string]any, int, int, error),
-	countFunc func(ctx context.Context, filters url.Values) (int, error),
-) {
-	filters := r.URL.Query()
-
-	var items []map[string]any
-	var limit, offset int
-	if filters.Get("totalCountOnly") != "true" {
-		var err error
-		items, limit, offset, err = getFunc(r.Context(), filters)
-		if err != nil {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get items", err)
-			return
-		}
-	}
-
-	totalCount, err := countFunc(r.Context(), filters)
-	if err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get total count", err)
-		return
-	}
-
-	respPage := 1
-	if limit > 0 && offset >= 0 {
-		respPage = (offset / limit) + 1
-	}
-
-	writeJSONOk(w, map[string]any{
-		"data":       items,
-		"page":       respPage,
-		"pageSize":   limit,
-		"count":      len(items),
-		"totalCount": totalCount,
-	})
+	writeJSONOk(w, result)
 }
 
 func isCreateKeyRequest(r *http.Request) bool {
@@ -890,13 +860,14 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			logErrorAndWriteHTTP(w, r, http.StatusUnauthorized, "authentication failed", err)
 			return
 		}
-
 		// Parse immutable claims once, store in context
-		user, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		user, externalIssuer, externalSubject, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIssuer, externalIssuer)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSubject, externalSubject)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
 		r = r.WithContext(ctx)
 
@@ -970,7 +941,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet: // get keys
-		getPaginatedListWithAccessibleEnvs(r, w, store.GetKeys, store.CountKeys)
+		getPaginatedListWithAccessibleEnvsAndCursor(r, w, store.GetKeysWithCursor)
 
 	case http.MethodPost: // create key
 		q := r.URL.Query()
@@ -1087,7 +1058,7 @@ var certHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 })
 
 var certsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	getPaginatedListWithAccessibleEnvs(r, w, store.GetCerts, store.CountCerts)
+	getPaginatedListWithAccessibleEnvsAndCursor(r, w, store.GetCertsWithCursor)
 })
 
 /******************************/
@@ -1095,7 +1066,7 @@ var certsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 /******************************/
 
 var signersHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	getPaginatedListWithAccessibleEnvs(r, w, store.GetSigners, store.CountSigners)
+	getPaginatedListWithAccessibleEnvsAndCursor(r, w, store.GetSignersWithCursor)
 })
 
 var signerHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1479,7 +1450,7 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 /*      Secrets handlers      */
 /******************************/
 var secretsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	getPaginatedListWithAccessibleEnvs(r, w, store.GetSecrets, store.CountSecrets)
+	getPaginatedListWithAccessibleEnvsAndCursor(r, w, store.GetSecretsWithCursor)
 })
 
 var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1574,7 +1545,7 @@ var secretHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 /*  Pending Requests handlers */
 /******************************/
 var pendingRequestsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	getPaginatedListWithoutAccessibleEnvs(r, w, store.GetPendingRequests, store.CountPendingRequests)
+	getPaginatedListWithCursor(r, w, store.GetPendingRequestsWithCursor)
 })
 
 var pendingRequestBodyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1635,19 +1606,13 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, false)
 
 		// Execute the pending request using the approver's token
-		if useOwnToken := r.URL.Query().Get("useOwnToken"); useOwnToken == "true" {
-			prList, _, _, err := store.GetPendingRequests(r.Context(),
-				url.Values{
-					"id":     []string{id.String()},
-					"limit":  []string{"1"},
-					"offset": []string{"0"},
-				})
-			if err != nil || len(prList) != 1 {
-				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-					"couldn't get pending request info", err)
+		if r.URL.Query().Get("useOwnToken") == "true" {
+			requesterUser, err := store.GetPendingRequestUser(r.Context(), id)
+			if err != nil {
+				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get pending request user", err)
 				return
 			}
-			if requesterUser, ok := prList[0]["tokenInfo"].(map[string]any)["user"].(string); !ok || requesterUser == user {
+			if requesterUser == user {
 				logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
 					"cannot guarantee that requester and approver are different users")
 				return
@@ -1706,7 +1671,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 /*   Miscellaneous handlers   */
 /******************************/
 var logsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	getPaginatedListWithoutAccessibleEnvs(r, w, store.GetLogs, store.CountLogs)
+	getPaginatedListWithCursor(r, w, store.GetLogsWithCursor)
 })
 
 var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1743,6 +1708,22 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
+})
+
+var tokenClaimsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+	if !ok {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
+		return
+	}
+
+	var claims map[string]any
+	if err := token.Claims(&claims); err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't parse token claims", err)
+		return
+	}
+
+	writeJSONOk(w, claims)
 })
 
 var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1798,4 +1779,18 @@ var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request
 		"server_time_utc": time.Now().UTC().Unix(),
 		"version":         version,
 	})
+})
+
+var dashboardHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hasAccessToAllEnvs, accessibleEnvs, err := getAccessibleEnvs(r.Context())
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get accessible environments", err)
+		return
+	}
+	dashboard, err := store.GetDashboard(r.Context(), hasAccessToAllEnvs, accessibleEnvs)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get dashboard data", err)
+		return
+	}
+	writeJSONOk(w, dashboard)
 })

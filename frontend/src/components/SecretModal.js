@@ -222,12 +222,12 @@ export default function SecretModal({
               </div>
             </Card.Header>
             <Card.Body>
-              <Form.Group className="mb-3 row g-2">
+              <Form.Group className="mb-3 row g-3">
                 {dataEntries.map((entry, idx) => (
                   <Col
                     md={12}
                     key={idx}
-                    className="d-flex align-items-start gap-2"
+                    className="d-flex align-items-start gap-3"
                   >
                     <Form.Control
                       placeholder="Key"
@@ -313,7 +313,7 @@ export default function SecretModal({
                       setDataEntries([...dataEntries, { key: "", value: "" }])
                     }
                   >
-                    <i className="bi bi-plus-lg"></i> Add Pair
+                    <i className="bi bi-plus-lg"></i> Add
                   </Button>
                 </Col>
               </Form.Group>

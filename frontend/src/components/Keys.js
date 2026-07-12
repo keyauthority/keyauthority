@@ -5,7 +5,6 @@ import Paginator from "./Paginator";
 import Filters from "./Filters";
 import JSONModal from "./JSONModal";
 
-import { getApi } from "../axios";
 import {
   prettyTime,
   prettyEnv,
@@ -19,32 +18,11 @@ import { errorToString } from "../utils/error";
 export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
   const [error, setError] = useState(null);
   const [keys, setKeys] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
-
-  const api = getApi();
-
-  const fetchKeys = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/keys?${params.toString()}`);
-      setKeys(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [api, page, pageSize, filters, setIsLoading]);
 
   const handleCheckReadiness = async (keyId) => {
     setIsLoading(true);
@@ -57,65 +35,6 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
-
-  /*const handleDeleteUnusedKeys = async (storage) => {
-    let deletedKeysCount = 0;
-    const deleteKeyByID = async (keyId) => {
-      try {
-        await api.delete(`/keys/${keyId}`);
-        deletedKeysCount++;
-      } catch (err) {
-        // do nothing, just log the error
-      }
-    };
-
-    setIsLoading(true);
-    try {
-      const params = buildURLParams({ storage }, 1, 1000); // Fetch all keys of the specified storage type
-      const res = await api.get(`/keys?${params.toString()}`);
-      console.log("Unused keys to delete:", res.data.data);
-
-      
-      for (const key of res.data.data || []) {
-        await deleteKeyByID(key.id);
-      }
-
-      if (deletedKeysCount > 0) {
-        showToast(
-          "success",
-          `Deleted ${deletedKeysCount} unused ${storage} key(s)`,
-        );
-        fetchKeys(); // Refresh the keys list after deletion
-      } else {
-        showToast("info", `No unused ${storage} keys deleted`);
-      }
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setDropdownActions?.([
-      {
-        key: "delete-unused-software-keys",
-        label: "Delete Unused Software Keys",
-        iconClass: "bi bi-trash",
-        onClick: () => handleDeleteUnusedKeys("Software"),
-      },
-      {
-        key: "delete-unused-hsm-keys",
-        label: "Delete Unused HSM Keys",
-        iconClass: "bi bi-trash",
-        onClick: () => handleDeleteUnusedKeys("HSM"),
-      },
-    ]);
-  }, [keys, setDropdownActions]);*/
 
   return (
     <>
@@ -131,7 +50,6 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={2}
         filtersTemplate={[
           {
             key: "id",
@@ -234,11 +152,15 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={keys}
+        setItems={setKeys}
+        apiPath="/keys"
+        orderCol="createdAt"
+        idCol="id"
       />
     </>
   );

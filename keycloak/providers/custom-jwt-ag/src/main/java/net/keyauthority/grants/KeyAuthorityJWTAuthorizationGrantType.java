@@ -5,20 +5,43 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.keycloak.authentication.authenticators.client.ClientAssertionState;
-import org.keycloak.models.FederatedIdentityModel;
-import org.keycloak.models.UserModel;
-import org.keycloak.protocol.oidc.grants.JWTAuthorizationGrantType;
+import java.util.function.Function;
 
 import org.jboss.logging.Logger;
+import org.keycloak.authentication.authenticators.client.ClientAssertionState;
+import org.keycloak.models.ClientSessionContext;
+import org.keycloak.models.FederatedIdentityModel;
+import org.keycloak.models.UserModel;
+import org.keycloak.models.UserSessionModel;
+import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc.grants.JWTAuthorizationGrantType;
+import org.keycloak.services.clientpolicy.ClientPolicyContext;
 
 public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrantType {
-    
+
     private static final Logger logger = Logger.getLogger(KeyAuthorityJWTAuthorizationGrantType.class);
+    private static final String EXTERNAL_ISS = "external_iss";
+    private static final String EXTERNAL_SUB = "external_sub";
+
+    private String externalIss;
+    private String externalSub;
+
+    @Override
+    protected TokenManager.AccessTokenResponseBuilder createTokenResponseBuilder(UserModel user, UserSessionModel userSession, ClientSessionContext clientSessionCtx,  String scopeParam, Function<TokenManager.AccessTokenResponseBuilder, ClientPolicyContext> clientPolicyContextGenerator) {
+        // add the external issuer and subject as notes to the user session for later retrieval
+        userSession.setNote(EXTERNAL_ISS, externalIss);
+        userSession.setNote(EXTERNAL_SUB, externalSub);
+        logger.debugf("Added external issuer and subject notes to user session: %s, %s", externalIss, externalSub);
+        return super.createTokenResponseBuilder(user, userSession, clientSessionCtx, scopeParam, clientPolicyContextGenerator);
+    }
 
     @Override
     protected UserModel lookupUserByFederatedIdentity(FederatedIdentityModel federatedIdentity, ClientAssertionState clientAssertionState) {
+        if (clientAssertionState != null && clientAssertionState.getToken() != null) {
+            externalIss = clientAssertionState.getToken().getIssuer();
+            externalSub = clientAssertionState.getToken().getSubject();
+        }
+
         UserModel exact = super.lookupUserByFederatedIdentity(federatedIdentity, clientAssertionState);
         if (exact != null || federatedIdentity == null) {
             return exact;
@@ -34,26 +57,30 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
 
         addKubernetesCandidates(subject, candidatePatterns);
         addGitLabCandidates(subject, candidatePatterns);
+        candidatePatterns.add("*"); // any match as a last resort
         logger.debugf("Candidate federated identity patterns for subject '%s': %s", subject, candidatePatterns);
 
         for (String pattern : candidatePatterns) {
             FederatedIdentityModel wildcardLookup = new FederatedIdentityModel(
-                alias,
-                pattern,
-                federatedIdentity.getUserName()
-            );
+                    alias,
+                    pattern,
+                    federatedIdentity.getUserName());
 
             UserModel user = super.lookupUserByFederatedIdentity(wildcardLookup, clientAssertionState);
             if (user != null) {
+                logger.debugf("Found user for federated identity pattern: %s", wildcardLookup);
                 return user;
             }
-            logger.debugf("No user found for federated identity pattern: %s", wildcardLookup);
         }
 
-        // fallback to the service account user for the client
+        // Fallback to the service account user for the client
+        if (clientAssertionState == null || clientAssertionState.getClient() == null) {
+            return null;
+        }
+
         UserModel serviceAccount = session.users().getServiceAccount(clientAssertionState.getClient());
         if (serviceAccount != null) {
-            logger.warnf("Falling back to service account user: %s", serviceAccount.getUsername());
+            logger.debugf("Falling back to service account user: %s", serviceAccount.getUsername());
         }
         return serviceAccount;
     }
@@ -105,10 +132,6 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
         out.add("project_path:*:ref_type:" + refType + ":ref:" + ref);
         out.add("project_path:*:ref_type:" + refType + ":ref:*");
         out.add("project_path:*:ref_type:*:ref:*");
-
-        out.add("*:ref_type:" + refType + ":ref:" + ref);
-        out.add("*:ref_type:" + refType + ":ref:*");
-        out.add("*:ref_type:*:ref:*");
     }
 
     private static List<String> buildProjectPathPatterns(String projectPath) {

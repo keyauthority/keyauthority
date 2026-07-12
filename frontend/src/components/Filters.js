@@ -1,5 +1,13 @@
-import { useEffect, useState } from "react";
-import { Button, Card, Col, Form, Row } from "react-bootstrap";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Row,
+  CloseButton,
+} from "react-bootstrap";
 
 /*
 
@@ -7,32 +15,17 @@ filtersTemplate input example:
 {
   key: "name",
   type: "text", // can be "text", "select", "date", etc.
-  value: filters.name,
   placeholder: "Name...",
+  label: "Name",
+  options: [{ value: "", label: "All" }], // for select
 }
 
 filters, setFilters: state and setter for filters object (for parent component to react to filter changes)
 
 */
 
-export default function Filters({
-  filters,
-  setFilters,
-  filtersTemplate,
-  colsPerRow = 4,
-}) {
-  const [draftFilters, setDraftFilters] = useState({ ...filters });
-
-  useEffect(() => {
-    setDraftFilters({ ...filters });
-  }, [filters]);
-
-  const safeColsPerRow =
-    Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
-
-  const baseSpan = 12 / safeColsPerRow;
-  const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
-  const remainder = supportsFill ? filtersTemplate.length % safeColsPerRow : 0;
+export default function Filters({ filters, setFilters, filtersTemplate }) {
+  const hasValue = (v) => v !== undefined && v !== null && v !== "";
 
   const toRFC3339 = (value) => {
     if (!value) return "";
@@ -54,120 +47,184 @@ export default function Filters({
     return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
   };
 
+  const appliedEntries = useMemo(
+    () => Object.entries(filters || {}).filter(([, v]) => hasValue(v)),
+    [filters],
+  );
+
+  const appliedKeys = useMemo(
+    () => new Set(appliedEntries.map(([k]) => k)),
+    [appliedEntries],
+  );
+
+  const availableFilters = useMemo(
+    () => (filtersTemplate || []).filter((f) => !appliedKeys.has(f.key)),
+    [filtersTemplate, appliedKeys],
+  );
+
+  const [selectedFilterKey, setSelectedFilterKey] = useState(
+    availableFilters[0]?.key ?? "",
+  );
+  const [draftValue, setDraftValue] = useState("");
+
+  useEffect(() => {
+    if (!availableFilters.length) {
+      setSelectedFilterKey("");
+      setDraftValue("");
+      return;
+    }
+
+    const exists = availableFilters.some((f) => f.key === selectedFilterKey);
+    if (!exists) {
+      setSelectedFilterKey(availableFilters[0].key);
+      setDraftValue("");
+    }
+  }, [availableFilters, selectedFilterKey]);
+
+  const selectedFilter = useMemo(
+    () => (filtersTemplate || []).find((f) => f.key === selectedFilterKey),
+    [filtersTemplate, selectedFilterKey],
+  );
+
+  const applyOneFilter = () => {
+    if (!selectedFilter) return;
+
+    const raw = draftValue;
+    const normalized =
+      selectedFilter.type === "date" ? toRFC3339(raw) : (raw ?? "");
+
+    if (!hasValue(normalized)) return;
+
+    setFilters((prev) => ({
+      ...(prev || {}),
+      [selectedFilter.key]: normalized,
+    }));
+    setDraftValue("");
+  };
+
+  const removeFilter = (key) => {
+    setFilters((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const clearAll = () => {
+    setFilters({});
+    setDraftValue("");
+  };
+
+  const getFilterByKey = (key) => filtersTemplate.find((f) => f.key === key);
+
+  const getDisplayValue = (filter, value) => {
+    if (!filter) return String(value ?? "");
+    if (filter.type === "select") {
+      const opt = (filter.options || []).find((o) => o.value === value);
+      return opt?.label ?? String(value);
+    }
+    if (filter.type === "date") {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+    }
+    return String(value ?? "");
+  };
+
   return (
-    <Card className="mb-3">
-      <Card.Header>
-        <div className="d-flex justify-content-between align-items-center gap-2">
-          <h6 className="mb-0">Filters</h6>
-          <div className="d-flex gap-2 align-items-center">
-            {/* Show how many filters are applied */}
-            {Object.keys(filters).filter((key) => filters[key]).length > 0 && (
-              <span className="text-muted">
-                {Object.keys(filters).filter((key) => filters[key]).length}{" "}
-                filter(s) applied
-              </span>
-            )}
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={() => setFilters({ ...draftFilters })}
-              //disabled={Object.keys(draftFilters).every((key) => draftFilters[key] === filters[key])}
-            >
-              <i className="bi bi-funnel"></i> Apply
-              {/*{" "}
-              {
-                Object.keys(draftFilters).filter((key) => draftFilters[key])
-                  .length
-              }{" "}
-              of {filtersTemplate.length}*/}
-            </Button>
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={() => {
-                setDraftFilters({});
-                setFilters({});
-              }}
-            >
-              <i className="bi bi-x-lg"></i> Clear
-            </Button>
+    <>
+      <div className="mb-3">
+        {appliedEntries?.length > 0 && (
+          <div className="d-flex flex-wrap justify-content-end gap-2">
+            {appliedEntries.map(([key, value]) => {
+              const def = getFilterByKey(key);
+              return (
+                <Alert
+                  key={key}
+                  variant="light"
+                  className="px-3 py-2 d-flex align-items-center gap-2"
+                >
+                  <span>
+                    <strong>{def?.label || key}:</strong>{" "}
+                    {getDisplayValue(def, value)}
+                  </span>
+                  <CloseButton
+                    className="small m-0 p-0"
+                    onClick={() => removeFilter(key)}
+                  />
+                </Alert>
+              );
+            })}
           </div>
+        )}
+
+        <div className="input-group">
+          <Form.Select
+            value={selectedFilterKey}
+            onChange={(e) => {
+              setSelectedFilterKey(e.target.value);
+              setDraftValue("");
+            }}
+            className="input-group-text"
+            style={{ maxWidth: "15rem" }}
+            disabled={!availableFilters.length}
+          >
+            {availableFilters.length === 0 ? (
+              <option value="">No filters available</option>
+            ) : (
+              availableFilters.map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.label}
+                </option>
+              ))
+            )}
+          </Form.Select>
+          {!selectedFilter && (
+            <Form.Control
+              type="text"
+              value={draftValue}
+              //placeholder="No filter selected"
+              disabled
+            />
+          )}
+          {selectedFilter?.type === "text" && (
+            <Form.Control
+              type="text"
+              value={draftValue}
+              placeholder={selectedFilter.placeholder}
+              onChange={(e) => setDraftValue(e.target.value)}
+            />
+          )}
+
+          {selectedFilter?.type === "select" && (
+            <Form.Select
+              value={draftValue}
+              onChange={(e) => setDraftValue(e.target.value)}
+            >
+              {(selectedFilter.options || []).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Form.Select>
+          )}
+
+          {selectedFilter?.type === "date" && (
+            <Form.Control
+              type="datetime-local"
+              value={toDateTimeLocal(draftValue)}
+              onChange={(e) => setDraftValue(e.target.value)}
+            />
+          )}
+
+          <Button
+            variant="secondary"
+            onClick={applyOneFilter}
+            disabled={!selectedFilter || !hasValue(draftValue)}
+          >
+            <i className="bi bi-filter"></i> Apply
+          </Button>
         </div>
-      </Card.Header>
-      <Card.Body>
-        <Row className="g-3">
-          {filtersTemplate.map((filter, index) => {
-            const isLast = index === filtersTemplate.length - 1;
-
-            const md =
-              supportsFill && isLast && remainder !== 0
-                ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
-                : supportsFill
-                  ? baseSpan
-                  : undefined;
-
-            return (
-              <Col xs={12} md={md} key={filter.key}>
-                <div className="input-group">
-                  {filter.type === "text" && (
-                    <>
-                      <span className="input-group-text">{filter.label}</span>
-                      <Form.Control
-                        type="text"
-                        value={draftFilters[filter.key] ?? ""}
-                        placeholder={filter.placeholder}
-                        onChange={(e) =>
-                          setDraftFilters((prev) => ({
-                            ...prev,
-                            [filter.key]: e.target.value,
-                          }))
-                        }
-                      />
-                    </>
-                  )}
-
-                  {filter.type === "select" && (
-                    <>
-                      <span className="input-group-text">{filter.label}</span>
-                      <Form.Select
-                        value={draftFilters[filter.key] ?? ""}
-                        onChange={(e) =>
-                          setDraftFilters((prev) => ({
-                            ...prev,
-                            [filter.key]: e.target.value,
-                          }))
-                        }
-                      >
-                        {filter.options.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </Form.Select>
-                    </>
-                  )}
-
-                  {filter.type === "date" && (
-                    <>
-                      <span className="input-group-text">{filter.label}</span>
-                      <Form.Control
-                        type="datetime-local"
-                        value={toDateTimeLocal(draftFilters[filter.key] ?? "")}
-                        onChange={(e) =>
-                          setDraftFilters((prev) => ({
-                            ...prev,
-                            [filter.key]: toRFC3339(e.target.value),
-                          }))
-                        }
-                      />
-                    </>
-                  )}
-                </div>
-              </Col>
-            );
-          })}
-        </Row>
-      </Card.Body>
-    </Card>
+      </div>
+    </>
   );
 }

@@ -29,13 +29,7 @@ import JSONModal from "./JSONModal";
 
 export function Dashboard({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
-  const [certCountByExpiring, setCertCountByExpiring] = useState({});
-  const [logCountByLevel, setLogCountByLevel] = useState({});
-  const [logCountByMsg, setLogCountByMsg] = useState({});
-  const [keyCountByStorage, setKeyCountByStorage] = useState({});
-  const [keyCountByType, setKeyCountByType] = useState({});
-  const [signerCountByRoot, setSignerCountByRoot] = useState({});
-  const [secretCountByUpdated, setSecretCountByUpdated] = useState({});
+  const [dashboard, setDashboard] = useState(null);
 
   const keycloak = getKeycloak();
   const roles = getRoles(keycloak?.tokenParsed || {});
@@ -43,14 +37,42 @@ export function Dashboard({ isLoading, setIsLoading }) {
     roles.findIndex((role) => role === "KEYAUTHORITY_AUDITOR") !== -1;
 
   const api = getApi();
-  const infiniteDays = 1000000; // used to count all certs/secrets by using a very large number of days
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await api.get("/dashboard");
+        if (!cancelled) {
+          setDashboard(res.data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(errorToString(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, setIsLoading]);
 
   const dashboardBody = (cards, colsPerRow = 4) => {
     const safeColsPerRow =
       Number.isInteger(colsPerRow) && colsPerRow > 0 ? colsPerRow : 4;
 
     const baseSpan = 12 / safeColsPerRow;
-    const supportsFill = Number.isInteger(baseSpan); // exact fill only when colsPerRow divides 12
+    const supportsFill = Number.isInteger(baseSpan);
     const remainder = supportsFill ? cards.length % safeColsPerRow : 0;
 
     return (
@@ -60,10 +82,11 @@ export function Dashboard({ isLoading, setIsLoading }) {
 
           const md =
             supportsFill && isLast && remainder !== 0
-              ? 12 - baseSpan * (remainder - 1) // last item fills remaining space
+              ? 12 - baseSpan * (remainder - 1)
               : supportsFill
                 ? baseSpan
                 : undefined;
+
           return (
             <Col xs={12} md={md} key={index}>
               <Card>
@@ -90,174 +113,9 @@ export function Dashboard({ isLoading, setIsLoading }) {
     </div>
   );
 
-  const countCertsByExpiring = async (days) => {
-    const now = new Date();
-    const d = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("notAfterFrom", now.toISOString());
-      params.set("notAfterTo", d.toISOString());
-      params.set("revoked", "false");
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/certs?${params.toString()}`);
-      setCertCountByExpiring((prev) => ({
-        ...prev,
-        [days]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countLogsByLevel = async (level) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("level", level);
-      params.set("from", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogCountByLevel((prev) => ({
-        ...prev,
-        [level]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countLogsByMsg = async (msg) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("msg", msg);
-      params.set("from", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogCountByMsg((prev) => ({
-        ...prev,
-        [msg]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countKeysByStorage = async (storage) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("storage", storage);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/keys?${params.toString()}`);
-      setKeyCountByStorage((prev) => ({
-        ...prev,
-        [storage]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countKeysByType = async (type) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("type", type);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/keys?${params.toString()}`);
-      setKeyCountByType((prev) => ({
-        ...prev,
-        [type]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countSignersByRoot = async (isRoot) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("isRoot", isRoot);
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/signers?${params.toString()}`);
-      setSignerCountByRoot((prev) => ({
-        ...prev,
-        [isRoot]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  const countSecretsByUpdated = async (daysAgo) => {
-    const now = new Date();
-    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    try {
-      const params = new URLSearchParams();
-      params.set("updatedFrom", d.toISOString());
-      params.set("totalCountOnly", "true");
-
-      const res = await api.get(`/secrets?${params.toString()}`);
-      setSecretCountByUpdated((prev) => ({
-        ...prev,
-        [daysAgo]: res.data.totalCount || 0,
-      }));
-    } catch (err) {
-      // setError(errorToString(err));
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadDashboard = async () => {
-      setIsLoading(true);
-      try {
-        const calls = [
-          countCertsByExpiring(infiniteDays),
-          countCertsByExpiring(3),
-          countCertsByExpiring(7),
-          countCertsByExpiring(30),
-          countKeysByStorage("Software"),
-          countKeysByStorage("HSM"),
-          countKeysByType("RSA"),
-          countKeysByType("ECDSA"),
-          countKeysByType("Ed25519"),
-          countKeysByType("AES"),
-          countSignersByRoot(true),
-          countSignersByRoot(false),
-          countSecretsByUpdated(infiniteDays),
-          countSecretsByUpdated(60),
-        ];
-
-        if (isAuditor) {
-          calls.push(
-            countLogsByLevel("ERROR"),
-            countLogsByMsg("secret read"),
-            countLogsByMsg("certificate signed"),
-            countLogsByMsg("key created"),
-          );
-        }
-
-        await Promise.allSettled(calls);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-
-    loadDashboard();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, isAuditor, setIsLoading]);
+  if (!dashboard) {
+    return null;
+  }
 
   return (
     <>
@@ -271,27 +129,21 @@ export function Dashboard({ isLoading, setIsLoading }) {
             {
               key: "Errors",
               iconClass: "bi bi-x-circle-fill",
-              value: logCountByLevel["ERROR"],
-              valueReady: logCountByLevel?.["ERROR"],
+              value: dashboard.logs.errorCount24h,
+              valueReady: dashboard.logs !== undefined,
               variant: "danger",
             },
-            // {
-            //   key: "Keys Created",
-            //   iconClass: "bi bi-key-fill",
-            //   value: logCountByMsg["key created"],
-            //   valueReady: logCountByMsg?.["key created"],
-            // },
             {
               key: "Certificates Signed",
               iconClass: "bi bi-award-fill",
-              value: logCountByMsg["certificate signed"],
-              valueReady: logCountByMsg?.["certificate signed"],
+              value: dashboard.logs.certificatesSignedCount24h,
+              valueReady: dashboard.logs !== undefined,
             },
             {
               key: "Secret Read Requests",
               iconClass: "bi bi-lock-fill",
-              value: logCountByMsg["secret read"],
-              valueReady: logCountByMsg?.["secret read"],
+              value: dashboard.logs.secretReadCount24h,
+              valueReady: dashboard.logs !== undefined,
             },
           ],
           3,
@@ -304,30 +156,22 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Valid and Not Expiring Soon",
             iconClass: "bi bi-check-circle-fill",
-            value: certCountByExpiring[infiniteDays] - certCountByExpiring[30], // all valid certs minus those expiring in ≤30 days
-            valueReady:
-              certCountByExpiring?.[infiniteDays] && certCountByExpiring?.[30],
+            value: dashboard.certs.notExpiringSoon,
+            valueReady: dashboard.certs !== undefined,
             variant: "success",
           },
           {
             key: "Valid and Expiring Within 3 Days",
             iconClass: "bi bi-exclamation-circle-fill",
-            value: certCountByExpiring[3],
-            valueReady: certCountByExpiring?.[3],
+            value: dashboard.certs.expiringIn3Days,
+            valueReady: dashboard.certs !== undefined,
             variant: "danger",
           },
-          // {
-          //   key: "Valid and Expiring Within 7 Days",
-          //   iconClass: "bi bi-exclamation-triangle-fill",
-          //   value: certCountByExpiring[7],
-          //   valueReady: certCountByExpiring?.[7],
-          //   variant: "warning",
-          // },
           {
             key: "Valid and Expiring Within 30 Days",
             iconClass: "bi bi-exclamation-triangle-fill",
-            value: certCountByExpiring[30],
-            valueReady: certCountByExpiring?.[30],
+            value: dashboard.certs.expiringIn30Days,
+            valueReady: dashboard.certs !== undefined,
             variant: "warning",
           },
         ],
@@ -341,34 +185,34 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Software",
             iconClass: "bi bi-laptop",
-            value: keyCountByStorage["Software"],
-            valueReady: keyCountByStorage?.["Software"],
+            value: dashboard.keys.softwareTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "HSM",
             iconClass: "bi bi-safe",
-            value: keyCountByStorage["HSM"],
-            valueReady: keyCountByStorage?.["HSM"],
+            value: dashboard.keys.hsmTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "RSA",
-            value: keyCountByType["RSA"],
-            valueReady: keyCountByType?.["RSA"],
+            value: dashboard.keys.rsaTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "ECDSA",
-            value: keyCountByType["ECDSA"],
-            valueReady: keyCountByType?.["ECDSA"],
+            value: dashboard.keys.ecdsaTotal,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "Ed25519",
-            value: keyCountByType["Ed25519"],
-            valueReady: keyCountByType?.["Ed25519"],
+            value: dashboard.keys.ed25519Total,
+            valueReady: dashboard.keys !== undefined,
           },
           {
             key: "AES",
-            value: keyCountByType["AES"],
-            valueReady: keyCountByType?.["AES"],
+            value: dashboard.keys.aesTotal,
+            valueReady: dashboard.keys !== undefined,
           },
         ],
         6,
@@ -381,14 +225,14 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Root CAs",
             iconClass: "bi bi-award-fill",
-            value: signerCountByRoot[true],
-            valueReady: signerCountByRoot?.[true],
+            value: dashboard.signers.rootTotal,
+            valueReady: dashboard.signers !== undefined,
           },
           {
             key: "Intermediate CAs",
             iconClass: "bi bi-award",
-            value: signerCountByRoot[false],
-            valueReady: signerCountByRoot?.[false],
+            value: dashboard.signers.intermediateTotal,
+            valueReady: dashboard.signers !== undefined,
           },
         ],
         2,
@@ -401,18 +245,15 @@ export function Dashboard({ isLoading, setIsLoading }) {
           {
             key: "Updated in the Last 60 Days",
             iconClass: "bi bi-check-circle-fill",
-            value: secretCountByUpdated[60],
-            valueReady: secretCountByUpdated?.[60],
+            value: dashboard.secrets.updatedInLast60Days,
+            valueReady: dashboard.secrets !== undefined,
             variant: "success",
           },
           {
             key: "Not Updated in the Last 60 Days",
             iconClass: "bi bi-clock-fill",
-            value:
-              secretCountByUpdated[infiniteDays] - secretCountByUpdated[60],
-            valueReady:
-              secretCountByUpdated?.[infiniteDays] &&
-              secretCountByUpdated?.[60],
+            value: dashboard.secrets.notUpdatedInLast60Days,
+            valueReady: dashboard.secrets !== undefined,
             variant: "warning",
           },
         ],
@@ -421,40 +262,16 @@ export function Dashboard({ isLoading, setIsLoading }) {
     </>
   );
 }
-
 export function Certificates({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [certs, setCerts] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchCerts = useCallback(async () => {
-    setCerts([]);
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/certs?${params.toString()}`);
-      setCerts(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [api, filters, page, pageSize, setIsLoading]);
-
-  useEffect(() => {
-    fetchCerts();
-  }, [fetchCerts]);
 
   const cnAndSan = (cert) => {
     let names = [];
@@ -490,7 +307,6 @@ export function Certificates({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={4}
         filtersTemplate={[
           {
             key: "serial",
@@ -502,7 +318,7 @@ export function Certificates({ isLoading, setIsLoading }) {
           {
             key: "cn",
             type: "text",
-            label: "CN",
+            label: "Common Name",
             value: filters.cn,
             placeholder: "e.g. example.com",
           },
@@ -512,18 +328,7 @@ export function Certificates({ isLoading, setIsLoading }) {
             label: "SAN",
             value: filters.san,
             placeholder: "e.g. www.example.com",
-          },
-          {
-            key: "notBeforeFrom",
-            type: "date",
-            label: "Valid From",
-            value: filters.notBeforeFrom,
-          },
-          {
-            key: "notAfterTo",
-            type: "date",
-            label: "Valid To",
-            value: filters.notAfterTo,
+            colSpan: 4,
           },
           {
             key: "revoked",
@@ -535,6 +340,31 @@ export function Certificates({ isLoading, setIsLoading }) {
               { value: "true", label: "Yes" },
               { value: "false", label: "No" },
             ],
+            colSpan: 2,
+          },
+          {
+            key: "notBeforeFrom",
+            type: "date",
+            label: "Not Before From",
+            value: filters.notBeforeFrom,
+          },
+          {
+            key: "notBeforeTo",
+            type: "date",
+            label: "Not Before To",
+            value: filters.notBeforeTo,
+          },
+          {
+            key: "notAfterFrom",
+            type: "date",
+            label: "Not After From",
+            value: filters.notAfterFrom,
+          },
+          {
+            key: "notAfterTo",
+            type: "date",
+            label: "Not After To",
+            value: filters.notAfterTo,
           },
           {
             key: "signerName",
@@ -637,11 +467,15 @@ export function Certificates({ isLoading, setIsLoading }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={certs}
+        setItems={setCerts}
+        apiPath="/certs"
+        orderCol="notBefore"
+        idCol="serial"
       />
     </>
   );
@@ -650,38 +484,13 @@ export function Certificates({ isLoading, setIsLoading }) {
 export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchLogs = useCallback(async () => {
-    setLogs([]);
-    // const loadingToast = showLoadingToast("Loading logs...");
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/logs?${params.toString()}`);
-      setLogs(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      // loadingToast.dismiss();
-      setIsLoading(false);
-    }
-  }, [api, filters, page, pageSize, setIsLoading]);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
 
   const levelVariant = {
     ERROR: "danger",
@@ -691,7 +500,10 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
   };
 
   const handleExportLogs = useCallback(async () => {
-    setIsLoading(true);
+    showToast("warning", "Sorry, feature not implemented yet.");
+    return;
+
+    /*setIsLoading(true);
 
     const flattenLogItem = (item) => {
       // convert logs JSONs to .log format
@@ -701,9 +513,6 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
     };
 
     try {
-      const logs = await api
-        .get(`/logs?${buildURLParams(filters, 1, 100000).toString()}`)
-        .then((res) => res.data.data);
       const logContent = logs.map(flattenLogItem).join("\n");
       const blob = new Blob([logContent], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
@@ -718,7 +527,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       showToast("error", errorToString(err));
     } finally {
       setIsLoading(false);
-    }
+    }*/
   }, [api, filters, setIsLoading]);
 
   useEffect(() => {
@@ -747,13 +556,13 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={3}
         filtersTemplate={[
           {
             key: "level",
             type: "select",
             label: "Level",
             value: filters.level,
+            colSpan: 2,
             options: [
               { value: "", label: "-" },
               { value: "ERROR", label: "ERROR" },
@@ -763,11 +572,19 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
             ],
           },
           {
+            key: "msg",
+            type: "text",
+            label: "Message",
+            placeholder: "e.g. secret read",
+            value: filters.msg,
+          },
+          {
             key: "user",
             type: "text",
             label: "User",
             placeholder: "e.g. alice@keyauthority.net",
             value: filters.user,
+            colSpan: 4,
           },
           {
             key: "environment",
@@ -776,31 +593,27 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
             placeholder: "e.g. production",
             value: filters.environment,
           },
-          // {
-          //   key: "url",
-          //   type: "text",
-          //   label: "URL",
-          //   placeholder: "e.g. /v1/secrets/my-secret",
-          //   value: filters.url,
-          // },
+          {
+            key: "url",
+            type: "text",
+            label: "URL",
+            placeholder: "e.g. /v1/secrets/my-secret",
+            value: filters.url,
+            colSpan: 5,
+          },
           {
             key: "from",
             type: "date",
             label: "From",
             value: filters.from,
+            colSpan: 4,
           },
           {
             key: "to",
             type: "date",
             label: "To",
             value: filters.to,
-          },
-          {
-            key: "msg",
-            type: "text",
-            label: "Message",
-            placeholder: "e.g. secret read",
-            value: filters.msg,
+            colSpan: 3,
           },
         ]}
       />
@@ -891,11 +704,15 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={logs}
+        setItems={setLogs}
+        apiPath="/logs"
+        orderCol="time"
+        idCol="logEntryID"
       />
     </>
   );
@@ -905,38 +722,15 @@ export function PendingRequests({ isLoading, setIsLoading }) {
   const [error, setError] = useState(null);
   const [requests, setRequests] = useState([]);
   const [files, setFiles] = useState({});
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(0);
+  const [filters, setFilters] = useState({});
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // used to trigger re-fetching requests after approving/rejecting
 
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const [filters, setFilters] = useState({});
-
   const api = getApi();
-
-  const fetchRequests = useCallback(async () => {
-    setRequests([]);
-    // const loadingToast = showLoadingToast("Loading requests...");
-    setIsLoading(true);
-    try {
-      const params = buildURLParams(filters, page, pageSize);
-      const res = await api.get(`/pending-requests?${params.toString()}`);
-      setRequests(res.data.data || []);
-      setTotalCount(res.data.totalCount || 0);
-    } catch (err) {
-      setError(errorToString(err));
-    } finally {
-      // loadingToast.dismiss();
-      setIsLoading(false);
-    }
-  }, [api, page, pageSize, filters, setIsLoading]);
-
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
 
   const handleApproveRequest = async (requestID, useOwnToken) => {
     const confirmed = window.confirm(
@@ -954,7 +748,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
         ...prev,
         [requestID]: { data: response.data, contentTypeFromHeader },
       }));
-      fetchRequests();
+      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
     } catch (err) {
       showToast("error", errorToString(err));
     } finally {
@@ -972,7 +766,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
     try {
       await api.delete(`/pending-requests/${requestID}`);
       showToast("success", "Request rejected!");
-      fetchRequests();
+      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
     } catch (err) {
       showToast("error", errorToString(err));
     } finally {
@@ -1032,7 +826,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       <Filters
         filters={filters}
         setFilters={setFilters}
-        colsPerRow={4}
         filtersTemplate={[
           {
             key: "id",
@@ -1040,6 +833,13 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             label: "ID",
             placeholder: "e.g. 3fa85f64-57...",
             value: filters.id,
+          },
+          {
+            key: "user",
+            type: "text",
+            label: "Requester",
+            placeholder: "e.g. alice@keyauthority.net",
+            value: filters.user,
           },
           {
             key: "from",
@@ -1052,13 +852,6 @@ export function PendingRequests({ isLoading, setIsLoading }) {
             type: "date",
             label: "To",
             value: filters.to,
-          },
-          {
-            key: "user",
-            type: "text",
-            label: "Requester",
-            placeholder: "e.g. alice@keyauthority.net",
-            value: filters.user,
           },
         ]}
       />
@@ -1129,11 +922,16 @@ export function PendingRequests({ isLoading, setIsLoading }) {
       </Table>
 
       <Paginator
-        page={page}
-        setPage={setPage}
-        pageSize={pageSize}
-        setPageSize={setPageSize}
-        totalCount={totalCount}
+        key={`pending-requests-paginator-${refreshTrigger}`}
+        setError={setError}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        filters={filters}
+        items={requests}
+        setItems={setRequests}
+        apiPath="/pending-requests"
+        orderCol="createdAt"
+        idCol="id"
       />
     </>
   );

@@ -5,6 +5,7 @@ import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
 import { copyToClipboard, disclaimer, prettyCode } from "../utils/utils";
 import KeyValueTable from "./KeyValueTable";
+import JWKSModal from "./JWKSModal";
 
 export function UsefulLinks() {
   const api = getApi();
@@ -84,6 +85,8 @@ export function UsefulLinks() {
 }
 
 export function Administration() {
+  const [showJWKSModal, setShowJWKSModal] = useState(false);
+
   const keycloak = getKeycloak();
 
   const apiUrl = new URL(getApi().defaults.baseURL);
@@ -275,15 +278,33 @@ export function Administration() {
         className="img-fluid"
       />
 
+      <JWKSModal show={showJWKSModal} onHide={() => setShowJWKSModal(false)} />
+
       <Alert variant="info">
         <Alert.Heading className="fs-6 fw-bold">
-          <i className="bi bi-info-circle-fill me-1"></i> Tip
+          <i className="bi bi-info-circle-fill me-1"></i> Tips
         </Alert.Heading>
-        If you are configuring the local Kubernetes cluster as an Identity
-        Provider, set the JWKS URL to{" "}
-        <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This endpoint is
-        handled by the KeyAuthority backend, which performs the authenticated
-        JWKS retrieval from the Kubernetes API and exposes it unauthenticated.
+        <ul>
+          <li>
+            If you are configuring the local Kubernetes cluster as an Identity
+            Provider, set the JWKS URL to{" "}
+            <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This
+            endpoint is handled by the KeyAuthority backend, which performs the
+            authenticated JWKS retrieval from the Kubernetes API and exposes it
+            unauthenticated.
+          </li>
+          <li>
+            If you intend to use multiple providers that have the same issuer
+            claim in their tokens (e.g., multiple Kubernetes instances), you
+            need to <i>merge</i> them all into a single provider due to
+            Keycloak's restriction of one provider per issuer. You can use the
+            our <Link onClick={() => setShowJWKSModal(true)}>tool</Link> to
+            merge the JWKS of all providers into a single one. The joint
+            provider can be then be configured by toggling off the{" "}
+            <strong>Use JWKS URL</strong> option and pasting the merged JWKS
+            into the <strong>Validating public key</strong> field.
+          </li>
+        </ul>
       </Alert>
 
       <h5>Step 2: Configure Client for Token Exchange</h5>
@@ -332,24 +353,54 @@ export function Administration() {
 
       <ul>
         <li>
-          <strong>Kubernetes</strong>: subjects of the form{" "}
+          <strong>Kubernetes</strong>: subjects can be linked exactly, or with a
+          wildcard pattern{" "}
           <code>
             system:serviceaccount:&lt;NAMESPACE&gt;:&lt;SERVICEACCOUNT&gt;
-          </code>{" "}
-          can be linked exactly, or with wildcard patterns such as{" "}
-          <code>system:serviceaccount:dev:*</code>,{" "}
-          <code>system:serviceaccount:*:my-serviceaccount</code>, or{" "}
-          <code>system:serviceaccount:*:*</code>.
+          </code>
+          , where each placeholder can be replaced with actual values or{" "}
+          <code>*</code>. This allows you to define access control based on
+          Kubernetes namespaces and service accounts. Examples:
+          <ul>
+            <li>
+              <code>system:serviceaccount:dev:my-serviceaccount</code> matches a
+              specific service account in a specific namespace
+            </li>
+            <li>
+              <code>system:serviceaccount:dev:*</code> matches all service
+              accounts in a specific namespace
+            </li>
+          </ul>
         </li>
         <li>
-          <strong>GitLab</strong>: subjects of the form{" "}
+          <strong>GitLab</strong>: subjects can be linked exactly, or with a
+          wildcard pattern{" "}
           <code>
             project_path:&lt;PROJECT_PATH&gt;:ref_type:&lt;REF_TYPE&gt;:ref:&lt;REF&gt;
           </code>{" "}
-          can also be linked using wildcard patterns such as{" "}
-          <code>project_path:my-group/my-project:ref_type:branch:ref:main</code>
-          , <code>project_path:my-group/*:ref_type:branch:ref:main</code>, or{" "}
-          <code>project_path:*:ref_type:branch:ref:*</code>.
+          where each placeholder can be replaced with actual values or{" "}
+          <code>*</code>. This allows you to define access control based on
+          projects and branches. In the case of the <code>PROJECT_PATH</code>{" "}
+          placeholder, you can use more fine-grained patterns to match specific
+          groups or subgroups in GitLab, for example{" "}
+          <code>group/subgroup/*</code> to match all projects under a specific
+          subgroup. Examples:
+          <ul>
+            <li>
+              <code>
+                project_path:my-group/my-project:ref_type:branch:ref:main
+              </code>{" "}
+              matches a specific branch in a specific project
+            </li>
+            <li>
+              <code>project_path:my-group/*:ref_type:branch:ref:*</code> matches
+              all branches in all projects under a specific group
+            </li>
+          </ul>
+        </li>
+        <li>
+          <strong>Other providers</strong>: subjects can be linked exactly, or
+          using the wildcard pattern <code>*</code>.
         </li>
         <li>
           If no matching user exists, Keycloak will fallback to the client's
@@ -362,7 +413,8 @@ export function Administration() {
       </ul>
 
       <p>
-        If you encounter any issues with token exchange, check the Keycloak
+        Note that wildcards are <strong>not</strong> regular expressions. Also,
+        if you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
         DEBUG logs some information on the exchange process, including the
@@ -374,11 +426,10 @@ export function Administration() {
         <Alert.Heading className="fs-6 fw-bold">
           <i className="bi bi-exclamation-triangle-fill me-1"></i> Important
         </Alert.Heading>
-        Our Keycloak image comes with a JWT Authorization Grant provider that
-        supports multiple audience claims in assertion tokens and wildcard-based
-        matching for identity provider links. If you use an unmodified Keycloak
-        image, you will miss these features and hence must use an alternative
-        authentication method such as username and password.
+        Our Keycloak image is customized to support multiple audience claims in
+        assertion tokens and wildcard-based matching for identity provider
+        links. Therefore, if you use an unmodified Keycloak image, you must use
+        an alternative authentication method such as username and password.
       </Alert>
     </>
   );
@@ -1025,6 +1076,7 @@ metadata:
   annotations:
     vault.hashicorp.com/role: keyauthority
     vault.hashicorp.com/agent-inject: 'true'
+    vault.hashicorp.com/agent-pre-populate-only: 'true'
     vault.hashicorp.com/agent-inject-secret-env: ${secret}
     vault.hashicorp.com/agent-inject-template-env: |
       {{ with secret "${secret}" }}

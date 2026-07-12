@@ -243,14 +243,13 @@ export default function ImportSecretsModal({ show, onHide, onSuccess }) {
             Make sure to include the protocol (<code>http://</code> or{" "}
             <code>https://</code>) and port if needed. Also, ensure that CORS is
             configured on your Vault server, which can be done with a command
-            like:{" "}
-            {prettyCode(
-              "shell",
-              `vault write sys/config/cors enabled=true \\
-  allowed_origins="https://staging.keyauthority.com" \\
-  allowed_headers="Content-Type,Authorization,X-Vault-Token" \\
-  allowed_methods="GET,POST,PUT,DELETE,LIST,OPTIONS,PATCH"`,
-            )}
+            like{" "}
+            <code className="no-white-space-nowrap">
+              vault write sys/config/cors enabled=true
+              allowed_origins="https://staging.keyauthority.com"
+              allowed_headers="Content-Type,Authorization,X-Vault-Token"
+              allowed_methods="GET,POST,PUT,DELETE,LIST,OPTIONS,PATCH"
+            </code>
           </Form.Text>
         </Form.Group>
         <Form.Group className="mb-3">

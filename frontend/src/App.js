@@ -60,7 +60,7 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/docs/architecture" />} />
+      <Route path="/" element={<Navigate to="/activity/dashboard" />} />
       <Route path="*" element={<Main />} />
     </Routes>
   );
