@@ -286,12 +286,12 @@ export function Administration() {
         </Alert.Heading>
         <ul>
           <li>
-            If you are configuring the local Kubernetes cluster as an Identity
-            Provider, set the JWKS URL to{" "}
+            If you are configuring the Kubernetes cluster hosting KeyAuthority's
+            backend as an IdP and the JWKS of such cluster is not exposed
+            unauthenticated, you can use the JWKS URL{" "}
             <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This
-            endpoint is handled by the KeyAuthority backend, which performs the
-            authenticated JWKS retrieval from the Kubernetes API and exposes it
-            unauthenticated.
+            endpoint is handled by the backend and performs the authenticated
+            JWKS retrieval from the Kubernetes API.
           </li>
           <li>
             If you intend to use multiple providers that have the same issuer
@@ -319,20 +319,7 @@ export function Administration() {
 
       <img src="/exchange-client-config1.png" className="img-fluid" />
 
-      <h5>Step 3: Set Custom Audience for Token Exchange</h5>
-
-      <p>
-        Next, go to <code>keyauthority-exchange</code> client{" "}
-        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
-        <i className="bi bi-caret-right-fill"></i>{" "}
-        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
-        entry into the <strong>Custom audience mapping</strong> with the
-        expected audience claim of tokens from the external Identity Provider.
-      </p>
-
-      <img src="/exchange-client-config2.png" className="img-fluid" />
-
-      <h5>Step 4: Link Identity Provider User ID to Keycloak User</h5>
+      <h5>Step 3: Link Identity Provider User ID to Keycloak User</h5>
 
       <p>
         Finally, ensure that there is a Keycloak user with an{" "}
@@ -421,6 +408,21 @@ export function Administration() {
         external token's claims and the result of the exchange attempt. This can
         help diagnose issues with token validation or role mapping.
       </p>
+
+      <h5>Step 4: Set Custom Audience for Token Exchange</h5>
+
+      <p>
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
+        entry into the <strong>Custom audience mapping</strong> with the
+        expected audience claim of tokens from the external Identity Provider.
+        By default, our Keycloak image includes common audience claims for
+        Kubernetes and GitLab, therefore you might not need this step.
+      </p>
+
+      <img src="/exchange-client-config2.png" className="img-fluid" />
 
       <Alert variant="warning" className="mt-4">
         <Alert.Heading className="fs-6 fw-bold">

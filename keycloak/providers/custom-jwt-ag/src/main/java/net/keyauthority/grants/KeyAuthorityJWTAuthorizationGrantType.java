@@ -138,21 +138,14 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
         List<String> patterns = new ArrayList<>();
         patterns.add(projectPath); // exact
 
-        String[] parts = projectPath.split("/", -1);
-        if (parts.length <= 1) {
-            patterns.add("*");
-            return patterns;
-        }
-
         // my-root/path/to/project -> my-root/path/to/*, my-root/path/*, my-root/*
+        String[] parts = projectPath.split("/", -1);
         for (int keep = parts.length - 1; keep >= 1; keep--) {
             String prefix = String.join("/", Arrays.copyOfRange(parts, 0, keep));
             if (!prefix.isBlank()) {
                 patterns.add(prefix + "/*");
             }
         }
-
-        patterns.add("*");
         return patterns;
     }
 }
