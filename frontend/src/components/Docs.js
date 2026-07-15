@@ -409,7 +409,9 @@ export function Administration() {
         help diagnose issues with token validation or role mapping.
       </p>
 
-      <h5>Step 4: Set Custom Audience for Token Exchange</h5>
+      <h5>
+        Step 4: Set Custom Audience for Token Exchange (Potentially Optional)
+      </h5>
 
       <p>
         Next, go to <code>keyauthority-exchange</code> client{" "}
