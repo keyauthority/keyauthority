@@ -410,7 +410,7 @@ export function Administration() {
       </p>
 
       <h5>
-        Step 4: Set Custom Audience for Token Exchange (Potentially Optional)
+        Step 4 (Optional): Set Custom Audience for Token Exchange
       </h5>
 
       <p>
