@@ -18,6 +18,7 @@ package crypto
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/pbkdf2"
 	"crypto/rand"
@@ -103,6 +104,20 @@ func GenerateKeyAndCSR(commonName string, altNames []string,
 		}
 		privKeyFinal = pem.EncodeToMemory(&pem.Block{
 			Type:  "EC PRIVATE KEY",
+			Bytes: privKeyBytes,
+		})
+	case "ed25519":
+		// Generate a new Ed25519 private key
+		_, privKey, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate Ed25519 key: %w", err)
+		}
+		privKeyBytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to marshal Ed25519 key in DER format: %w", err)
+		}
+		privKeyFinal = pem.EncodeToMemory(&pem.Block{
+			Type:  "PRIVATE KEY",
 			Bytes: privKeyBytes,
 		})
 	default:

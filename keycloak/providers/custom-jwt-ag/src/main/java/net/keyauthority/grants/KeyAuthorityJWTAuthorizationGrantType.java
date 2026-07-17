@@ -9,6 +9,8 @@ import java.util.function.Function;
 
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.authenticators.client.ClientAssertionState;
+import org.keycloak.jose.jws.JWSHeader;
+import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.UserModel;
@@ -22,16 +24,19 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
     private static final Logger logger = Logger.getLogger(KeyAuthorityJWTAuthorizationGrantType.class);
     private static final String EXTERNAL_ISS = "external_iss";
     private static final String EXTERNAL_SUB = "external_sub";
+    private static final String EXTERNAL_KID = "external_kid";
 
     private String externalIss;
     private String externalSub;
+    private String externalKid;
 
     @Override
     protected TokenManager.AccessTokenResponseBuilder createTokenResponseBuilder(UserModel user, UserSessionModel userSession, ClientSessionContext clientSessionCtx,  String scopeParam, Function<TokenManager.AccessTokenResponseBuilder, ClientPolicyContext> clientPolicyContextGenerator) {
         // add the external issuer and subject as notes to the user session for later retrieval
         userSession.setNote(EXTERNAL_ISS, externalIss);
         userSession.setNote(EXTERNAL_SUB, externalSub);
-        logger.debugf("Added external issuer and subject notes to user session: %s, %s", externalIss, externalSub);
+        if (externalKid != null) userSession.setNote(EXTERNAL_KID, externalKid);
+        logger.debugf("Added external token info notes to user session: %s, %s, %s", externalIss, externalSub, externalKid);
         return super.createTokenResponseBuilder(user, userSession, clientSessionCtx, scopeParam, clientPolicyContextGenerator);
     }
 
@@ -40,6 +45,8 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
         if (clientAssertionState != null && clientAssertionState.getToken() != null) {
             externalIss = clientAssertionState.getToken().getIssuer();
             externalSub = clientAssertionState.getToken().getSubject();
+            JWSHeader jwsHeader = clientAssertionState.getJws().getHeader();
+            externalKid = jwsHeader != null ? jwsHeader.getKeyId() : null;
         }
 
         UserModel exact = super.lookupUserByFederatedIdentity(federatedIdentity, clientAssertionState);
@@ -125,13 +132,9 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
         for (String p : pathPatterns) {
             out.add("project_path:" + p + ":ref_type:" + refType + ":ref:" + ref);
             out.add("project_path:" + p + ":ref_type:" + refType + ":ref:*");
+            out.add("project_path:" + p + ":ref_type:*:ref:" + ref);
             out.add("project_path:" + p + ":ref_type:*:ref:*");
         }
-
-        // Broad global fallbacks
-        out.add("project_path:*:ref_type:" + refType + ":ref:" + ref);
-        out.add("project_path:*:ref_type:" + refType + ":ref:*");
-        out.add("project_path:*:ref_type:*:ref:*");
     }
 
     private static List<String> buildProjectPathPatterns(String projectPath) {
@@ -146,6 +149,8 @@ public class KeyAuthorityJWTAuthorizationGrantType extends JWTAuthorizationGrant
                 patterns.add(prefix + "/*");
             }
         }
+
+        patterns.add("*");
         return patterns;
     }
 }

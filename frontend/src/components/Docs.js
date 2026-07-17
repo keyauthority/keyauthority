@@ -347,17 +347,7 @@ export function Administration() {
           </code>
           , where each placeholder can be replaced with actual values or{" "}
           <code>*</code>. This allows you to define access control based on
-          Kubernetes namespaces and service accounts. Examples:
-          <ul>
-            <li>
-              <code>system:serviceaccount:dev:my-serviceaccount</code> matches a
-              specific service account in a specific namespace
-            </li>
-            <li>
-              <code>system:serviceaccount:dev:*</code> matches all service
-              accounts in a specific namespace
-            </li>
-          </ul>
+          Kubernetes namespaces and service accounts.
         </li>
         <li>
           <strong>GitLab</strong>: subjects can be linked exactly, or with a
@@ -371,19 +361,7 @@ export function Administration() {
           placeholder, you can use more fine-grained patterns to match specific
           groups or subgroups in GitLab, for example{" "}
           <code>group/subgroup/*</code> to match all projects under a specific
-          subgroup. Examples:
-          <ul>
-            <li>
-              <code>
-                project_path:my-group/my-project:ref_type:branch:ref:main
-              </code>{" "}
-              matches a specific branch in a specific project
-            </li>
-            <li>
-              <code>project_path:my-group/*:ref_type:branch:ref:*</code> matches
-              all branches in all projects under a specific group
-            </li>
-          </ul>
+          subgroup.
         </li>
         <li>
           <strong>Other providers</strong>: subjects can be linked exactly, or
@@ -400,8 +378,94 @@ export function Administration() {
       </ul>
 
       <p>
-        Note that wildcards are <strong>not</strong> regular expressions. Also,
-        if you encounter any issues with token exchange, check the Keycloak
+        Note that wildcards are <strong>not</strong> regular expressions. See
+        examples below of wildcard pattern matching for Kubernetes and GitLab
+        subjects:
+      </p>
+
+      <Table responsive striped hover className="align-middle">
+        <thead>
+          <tr>
+            <th>Wildcard Pattern</th>
+            <th>Description</th>
+            <th>Examples of Matching Subjects</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>system:serviceaccount:dev:*</code>
+            </td>
+            <td>
+              Matches all service accounts in the <code>dev</code> namespace
+            </td>
+            <td>
+              <code>system:serviceaccount:dev:sa1</code>
+              <br />
+              <code>system:serviceaccount:dev:default</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>system:serviceaccount:*:cert-manager</code>
+            </td>
+            <td>
+              Matches the <code>cert-manager</code> service account in any
+              namespace
+            </td>
+            <td>
+              <code>system:serviceaccount:prod:cert-manager</code>
+              <br />
+              <code>system:serviceaccount:test:cert-manager</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>project_path:infra/qa/*:ref_type:branch:ref:*</code>
+            </td>
+            <td>
+              Matches all branches in all projects under the{" "}
+              <code>infra/qa</code> group
+            </td>
+            <td>
+              <code>project_path:infra/qa/proj1:ref_type:branch:ref:main</code>
+              <br />
+              <code>
+                project_path:infra/qa/proj2:ref_type:branch:ref:feature-xyz
+              </code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>project_path:*:ref_type:tag:ref:*</code>
+            </td>
+            <td>
+              Matches all tags in all projects, regardless of group or subgroup
+            </td>
+            <td>
+              <code>project_path:app1:ref_type:tag:ref:v1.2.3</code>
+              <br />
+              <code>project_path:group/app2:ref_type:tag:ref:v2.0.0</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>*</code>
+            </td>
+            <td>Matches any subject</td>
+            <td>
+              <code>system:serviceaccount:dev:my-serviceaccount</code>
+              <br />
+              <code>
+                project_path:infra/my-project:ref_type:branch:ref:main
+              </code>
+            </td>
+          </tr>
+        </tbody>
+      </Table>
+
+      <p>
+        If you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
         DEBUG logs some information on the exchange process, including the
@@ -409,9 +473,7 @@ export function Administration() {
         help diagnose issues with token validation or role mapping.
       </p>
 
-      <h5>
-        Step 4 (Optional): Set Custom Audience for Token Exchange
-      </h5>
+      <h5>Step 4 (Optional): Set Custom Audience for Token Exchange</h5>
 
       <p>
         Next, go to <code>keyauthority-exchange</code> client{" "}
