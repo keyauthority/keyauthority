@@ -39,15 +39,6 @@ export default function Paginator({
         const res = await api.get(`${apiPath}?${params.toString()}`);
         const { data, nextCursor, hasMore } = res.data;
 
-        console.log(
-          "Fetched items:",
-          data,
-          "Next cursor:",
-          nextCursor,
-          "Has more:",
-          hasMore,
-        );
-
         setItems(data);
         setHasMore(hasMore);
       } catch (err) {

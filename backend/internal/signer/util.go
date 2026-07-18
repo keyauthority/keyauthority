@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 var (
@@ -68,6 +69,21 @@ func EllipticCurve(curve string) elliptic.Curve {
 
 func BigIntToString(i *big.Int) string {
 	return fmt.Sprintf("%x", i) // hex encoding
+}
+
+func BigIntToStringColonSeparated(i *big.Int) string {
+	hexStr := fmt.Sprintf("%x", i) // hex encoding
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr // pad with leading zero if odd length
+	}
+	var result strings.Builder
+	for i := 0; i < len(hexStr); i += 2 {
+		if i > 0 {
+			result.WriteString(":")
+		}
+		result.WriteString(hexStr[i : i+2])
+	}
+	return result.String()
 }
 
 func StringToBigInt(s string) (*big.Int, error) {

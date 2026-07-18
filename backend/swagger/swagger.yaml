@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.31
+  version: 1.4.33
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -488,6 +488,41 @@ paths:
             application/x-pem-file:
               schema:
                 type: string
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - bearerAuth: []
+
+  /v1/signers/{name}/issue/cert:
+    post:
+      summary: Issue certificate
+      description: |
+        Generate a private key and sign a certificate for its public key with the specified signer.
+      tags:
+        - Signers
+      parameters:
+        - name: name
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertIssueRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertIssueResponse"
         "400":
           description: Failed
           content:
@@ -1458,6 +1493,55 @@ components:
           description: The last update time of the signer
         config:
           $ref: "#/components/schemas/SignerConfig"
+
+    CertIssueRequest:
+      type: object
+      properties:
+        common_name:
+          type: string
+          example: "example.com"
+        alt_names:
+          type: string
+          example: "www.example.com,api.example.com"
+        exclude_cn_from_sans:
+          type: boolean
+          default: false
+        key_type:
+          type: string
+          enum: [rsa, ecdsa, ed25519]
+          default: rsa
+        ttl:
+          type: string
+          example: 720h
+        comment:
+          type: string
+          example: "Issued for example.com"
+      required:
+        - common_name
+
+    CertIssueResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            private_key:
+              type: string
+            private_key_type:
+              type: string
+            serial_number:
+              type: string
+            expiration:
+              type: integer
+              format: int64
+            certificate:
+              type: string
+            issuing_ca:
+              type: string
+            ca_chain:
+              type: array
+              items:
+                type: string
 
     CertSignRequest:
       type: object

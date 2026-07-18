@@ -188,6 +188,14 @@ func main() {
 		},
 		signerCSRHandler))
 
+	router.Handle("/v1/signers/{name}/issue/cert",
+		metricspkg.WithHttpMetrics("/v1/signers/{name}/issue/cert", withAuth(
+			map[string]internalpkg.Role{
+				http.MethodPut:  internalpkg.RoleOperator, // issue certificate
+				http.MethodPost: internalpkg.RoleOperator, // issue certificate
+			},
+			signerIssueHandler)))
+
 	router.Handle("/v1/signers/{name}/sign",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign", withAuth(
 			map[string]internalpkg.Role{
@@ -1196,6 +1204,98 @@ var signerCAChainHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.
 		logger.Info(r, "CA chain updated")
 		writeJSONOk(w, nil)
 	}
+})
+
+var signerIssueHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	signerName := mux.Vars(r)["name"]
+	signer, err := store.LoadSigner(r.Context(), signerName)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't load signer", err)
+		return
+	}
+
+	type Body struct {
+		CommonName        string `json:"common_name"`
+		AltNames          string `json:"alt_names"`
+		ExcludeCNFromSANs bool   `json:"exclude_cn_from_sans"`
+		KeyType           string `json:"key_type"`
+		TTL               string `json:"ttl"`
+		Comment           string `json:"comment"`
+	}
+	var body Body
+	if err := decodeJSONBody(r, &body); err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
+		return
+	}
+
+	if body.CommonName == "" {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "common_name is required")
+		return
+	}
+
+	// use defaults
+	if body.KeyType == "" {
+		body.KeyType = "rsa"
+	}
+	if body.TTL == "" {
+		body.TTL = "72h"
+	}
+	altNames := []string{}
+	if body.AltNames != "" {
+		altNames = strings.Split(body.AltNames, ",")
+	}
+
+	privKey, cr, err := cryptopkg.GenerateKeyAndCSR(body.CommonName, altNames,
+		body.ExcludeCNFromSANs, body.KeyType,
+	)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
+			"couldn't generate private key or CSR", err)
+		return
+	}
+
+	ttl, err := time.ParseDuration(body.TTL)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't parse TTL", err)
+		return
+	}
+
+	cert, fullChain, err := signer.Sign(cr, ttl)
+	if err != nil {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't sign certificate", err)
+		return
+	}
+
+	onCertificateSigned(r, cert, body.Comment)
+
+	type Data struct {
+		PrivateKey     string   `json:"private_key"`
+		PrivateKeyType string   `json:"private_key_type"`
+		Expiration     int64    `json:"expiration"`
+		SerialNumber   string   `json:"serial_number"`
+		Certificate    string   `json:"certificate"`
+		IssuingCA      string   `json:"issuing_ca,omitempty"`
+		CAChain        []string `json:"ca_chain,omitempty"`
+	}
+	type Resp struct {
+		Data *Data `json:"data"`
+	}
+	resp := Resp{
+		Data: &Data{
+			PrivateKey:     string(privKey),
+			PrivateKeyType: body.KeyType,
+			Certificate:    fullChain[0],
+			Expiration:     cert.NotAfter.Unix(),
+			SerialNumber:   signerpkg.BigIntToStringColonSeparated(cert.SerialNumber),
+		},
+	}
+	if len(fullChain) > 1 {
+		resp.Data.IssuingCA = fullChain[1]
+		resp.Data.CAChain = fullChain[1:]
+
+	}
+
+	writeJSONOk(w, resp)
 })
 
 var signerCSRHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

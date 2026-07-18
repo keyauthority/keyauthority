@@ -21,7 +21,6 @@ public class KeyAuthorityJWTAuthorizationGrantIdentityProvider extends JWTAuthor
         // Add the KeyAuthority-specific audiences  
         audiences.add("keyauthority://signers");
         audiences.add("keyauthority://secrets");
-        audiences.add("system:konnectivity-server");
         audiences.add(getConfig().getIssuer());
         return audiences;
     }

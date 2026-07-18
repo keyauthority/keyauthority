@@ -162,20 +162,40 @@ export function Administration() {
         KeyAuthority defines the following built-in roles that can be assigned
         to users and clients via Keycloak:
       </p>
-      <KeyValueTable
-        body={{
-          //KEYAUTHORITY_ADMIN: "Full access to all features and settings",
-          KEYAUTHORITY_OPERATOR:
-            "Access to manage resources such as keys, signers and secrets",
-          KEYAUTHORITY_AUDITOR: "Read-only access to view logs",
-          KEYAUTHORITY_APPROVER:
-            "Permissions to approve requests that are pending review and approval",
-        }}
-        header={["Role", "Access"]}
-        minKeyLen={30}
-        keysTag={"code"}
-        borderBottom={true}
-      />
+
+      <Table responsive striped className="align-middle">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Access</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_OPERATOR</code>
+            </td>
+            <td>
+              Access to manage resources such as keys, signers and secrets
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_AUDITOR</code>
+            </td>
+            <td>Read-only access to view logs</td>
+          </tr>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_APPROVER</code>
+            </td>
+            <td>
+              Permissions to approve requests that are pending review and
+              approval
+            </td>
+          </tr>
+        </tbody>
+      </Table>
 
       <h5>Environment-Scoped Roles</h5>
       <p>
@@ -222,20 +242,31 @@ export function Administration() {
         Keycloak. A KeyAuthority deployment defines two default clients:
       </p>
 
-      <KeyValueTable
-        body={{
-          "keyauthority-frontend":
-            "The web frontend client used for UI interactions",
-          "keyauthority-exchange":
-            "Used by applications and services to exchange credentials like username and password for Keycloak-issued access tokens",
-        }}
-        header={["Client", "Description"]}
-        minKeyLen={30}
-        keysTag={"code"}
-        borderBottom={true}
-      />
-
-      <p> </p>
+      <Table responsive striped className="align-middle mb-4">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Access Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>keyauthority-frontend</code>
+            </td>
+            <td>Public client for web UI interactions</td>
+          </tr>
+          <tr>
+            <td>
+              <code>keyauthority-exchange</code>
+            </td>
+            <td>
+              Confidential client for exchanging credentials for Keycloak-issued
+              access tokens
+            </td>
+          </tr>
+        </tbody>
+      </Table>
 
       <h4>External Identity Providers</h4>
 
@@ -286,12 +317,12 @@ export function Administration() {
         </Alert.Heading>
         <ul>
           <li>
-            If you are configuring the local Kubernetes cluster as an Identity
-            Provider, set the JWKS URL to{" "}
+            If you are configuring the Kubernetes cluster hosting KeyAuthority's
+            backend as an IdP and the JWKS of such cluster is not exposed
+            unauthenticated, you can use the JWKS URL{" "}
             <code>{`${apiRootUrl}/v1/oidc/jwks/kubernetes`}</code>. This
-            endpoint is handled by the KeyAuthority backend, which performs the
-            authenticated JWKS retrieval from the Kubernetes API and exposes it
-            unauthenticated.
+            endpoint is handled by the backend and performs the authenticated
+            JWKS retrieval from the Kubernetes API.
           </li>
           <li>
             If you intend to use multiple providers that have the same issuer
@@ -319,20 +350,7 @@ export function Administration() {
 
       <img src="/exchange-client-config1.png" className="img-fluid" />
 
-      <h5>Step 3: Set Custom Audience for Token Exchange</h5>
-
-      <p>
-        Next, go to <code>keyauthority-exchange</code> client{" "}
-        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
-        <i className="bi bi-caret-right-fill"></i>{" "}
-        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
-        entry into the <strong>Custom audience mapping</strong> with the
-        expected audience claim of tokens from the external Identity Provider.
-      </p>
-
-      <img src="/exchange-client-config2.png" className="img-fluid" />
-
-      <h5>Step 4: Link Identity Provider User ID to Keycloak User</h5>
+      <h5>Step 3: Link Identity Provider User ID to Keycloak User</h5>
 
       <p>
         Finally, ensure that there is a Keycloak user with an{" "}
@@ -360,17 +378,7 @@ export function Administration() {
           </code>
           , where each placeholder can be replaced with actual values or{" "}
           <code>*</code>. This allows you to define access control based on
-          Kubernetes namespaces and service accounts. Examples:
-          <ul>
-            <li>
-              <code>system:serviceaccount:dev:my-serviceaccount</code> matches a
-              specific service account in a specific namespace
-            </li>
-            <li>
-              <code>system:serviceaccount:dev:*</code> matches all service
-              accounts in a specific namespace
-            </li>
-          </ul>
+          Kubernetes namespaces and service accounts.
         </li>
         <li>
           <strong>GitLab</strong>: subjects can be linked exactly, or with a
@@ -384,19 +392,7 @@ export function Administration() {
           placeholder, you can use more fine-grained patterns to match specific
           groups or subgroups in GitLab, for example{" "}
           <code>group/subgroup/*</code> to match all projects under a specific
-          subgroup. Examples:
-          <ul>
-            <li>
-              <code>
-                project_path:my-group/my-project:ref_type:branch:ref:main
-              </code>{" "}
-              matches a specific branch in a specific project
-            </li>
-            <li>
-              <code>project_path:my-group/*:ref_type:branch:ref:*</code> matches
-              all branches in all projects under a specific group
-            </li>
-          </ul>
+          subgroup.
         </li>
         <li>
           <strong>Other providers</strong>: subjects can be linked exactly, or
@@ -413,14 +409,115 @@ export function Administration() {
       </ul>
 
       <p>
-        Note that wildcards are <strong>not</strong> regular expressions. Also,
-        if you encounter any issues with token exchange, check the Keycloak
+        Note that wildcards are <strong>not</strong> regular expressions. See
+        examples below of wildcard pattern matching for Kubernetes and GitLab
+        subjects:
+      </p>
+
+      <Table responsive striped className="align-middle">
+        <thead>
+          <tr>
+            <th>Wildcard Pattern</th>
+            <th>Description</th>
+            <th>Examples of Matching Subjects</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>system:serviceaccount:dev:*</code>
+            </td>
+            <td>
+              Matches all service accounts in the <code>dev</code> namespace
+            </td>
+            <td>
+              <code>system:serviceaccount:dev:sa1</code>
+              <br />
+              <code>system:serviceaccount:dev:default</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>system:serviceaccount:*:cert-manager</code>
+            </td>
+            <td>
+              Matches the <code>cert-manager</code> service account in any
+              namespace
+            </td>
+            <td>
+              <code>system:serviceaccount:prod:cert-manager</code>
+              <br />
+              <code>system:serviceaccount:test:cert-manager</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>project_path:infra/qa/*:ref_type:branch:ref:*</code>
+            </td>
+            <td>
+              Matches all branches in all projects under the{" "}
+              <code>infra/qa</code> group
+            </td>
+            <td>
+              <code>project_path:infra/qa/proj1:ref_type:branch:ref:main</code>
+              <br />
+              <code>
+                project_path:infra/qa/proj2:ref_type:branch:ref:feature-xyz
+              </code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>project_path:*:ref_type:tag:ref:*</code>
+            </td>
+            <td>
+              Matches all tags in all projects, regardless of group or subgroup
+            </td>
+            <td>
+              <code>project_path:app1:ref_type:tag:ref:v1.2.3</code>
+              <br />
+              <code>project_path:group/app2:ref_type:tag:ref:v2.0.0</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>*</code>
+            </td>
+            <td>Matches any subject</td>
+            <td>
+              <code>system:serviceaccount:dev:my-serviceaccount</code>
+              <br />
+              <code>
+                project_path:infra/my-project:ref_type:branch:ref:main
+              </code>
+            </td>
+          </tr>
+        </tbody>
+      </Table>
+
+      <p>
+        If you encounter any issues with token exchange, check the Keycloak
         server logs for errors related to JWT authorization grant validation or
         audience mismatches. In some cases, the backend server will also show in
         DEBUG logs some information on the exchange process, including the
         external token's claims and the result of the exchange attempt. This can
         help diagnose issues with token validation or role mapping.
       </p>
+
+      <h5>Step 4 (Optional): Set Custom Audience for Token Exchange</h5>
+
+      <p>
+        Next, go to <code>keyauthority-exchange</code> client{" "}
+        <i className="bi bi-caret-right-fill"></i> <strong>Advanced</strong> tab{" "}
+        <i className="bi bi-caret-right-fill"></i>{" "}
+        <strong>OpenID Connect Compatibility Modes</strong> section, and add an
+        entry into the <strong>Custom audience mapping</strong> with the
+        expected audience claim of tokens from the external Identity Provider.
+        By default, our Keycloak image includes common audience claims for
+        Kubernetes and GitLab, therefore you might not need this step.
+      </p>
+
+      <img src="/exchange-client-config2.png" className="img-fluid" />
 
       <Alert variant="warning" className="mt-4">
         <Alert.Heading className="fs-6 fw-bold">
