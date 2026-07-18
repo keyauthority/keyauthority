@@ -162,20 +162,40 @@ export function Administration() {
         KeyAuthority defines the following built-in roles that can be assigned
         to users and clients via Keycloak:
       </p>
-      <KeyValueTable
-        body={{
-          //KEYAUTHORITY_ADMIN: "Full access to all features and settings",
-          KEYAUTHORITY_OPERATOR:
-            "Access to manage resources such as keys, signers and secrets",
-          KEYAUTHORITY_AUDITOR: "Read-only access to view logs",
-          KEYAUTHORITY_APPROVER:
-            "Permissions to approve requests that are pending review and approval",
-        }}
-        header={["Role", "Access"]}
-        minKeyLen={30}
-        keysTag={"code"}
-        borderBottom={true}
-      />
+
+      <Table responsive striped className="align-middle">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Access</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_OPERATOR</code>
+            </td>
+            <td>
+              Access to manage resources such as keys, signers and secrets
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_AUDITOR</code>
+            </td>
+            <td>Read-only access to view logs</td>
+          </tr>
+          <tr>
+            <td>
+              <code>KEYAUTHORITY_APPROVER</code>
+            </td>
+            <td>
+              Permissions to approve requests that are pending review and
+              approval
+            </td>
+          </tr>
+        </tbody>
+      </Table>
 
       <h5>Environment-Scoped Roles</h5>
       <p>
@@ -222,20 +242,31 @@ export function Administration() {
         Keycloak. A KeyAuthority deployment defines two default clients:
       </p>
 
-      <KeyValueTable
-        body={{
-          "keyauthority-frontend":
-            "The web frontend client used for UI interactions",
-          "keyauthority-exchange":
-            "Used by applications and services to exchange credentials like username and password for Keycloak-issued access tokens",
-        }}
-        header={["Client", "Description"]}
-        minKeyLen={30}
-        keysTag={"code"}
-        borderBottom={true}
-      />
-
-      <p> </p>
+      <Table responsive striped className="align-middle mb-4">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Access Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>keyauthority-frontend</code>
+            </td>
+            <td>Public client for web UI interactions</td>
+          </tr>
+          <tr>
+            <td>
+              <code>keyauthority-exchange</code>
+            </td>
+            <td>
+              Confidential client for exchanging credentials for Keycloak-issued
+              access tokens
+            </td>
+          </tr>
+        </tbody>
+      </Table>
 
       <h4>External Identity Providers</h4>
 
@@ -383,7 +414,7 @@ export function Administration() {
         subjects:
       </p>
 
-      <Table responsive striped hover className="align-middle">
+      <Table responsive striped className="align-middle">
         <thead>
           <tr>
             <th>Wildcard Pattern</th>

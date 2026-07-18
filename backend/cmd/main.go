@@ -191,7 +191,8 @@ func main() {
 	router.Handle("/v1/signers/{name}/issue/cert",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/issue/cert", withAuth(
 			map[string]internalpkg.Role{
-				http.MethodPut: internalpkg.RoleOperator, // sign certificate (Hashicorp Vault compatible)
+				http.MethodPut:  internalpkg.RoleOperator, // issue certificate
+				http.MethodPost: internalpkg.RoleOperator, // issue certificate
 			},
 			signerIssueHandler)))
 
@@ -1225,6 +1226,19 @@ var signerIssueHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Re
 	if err := decodeJSONBody(r, &body); err != nil {
 		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't decode body", err)
 		return
+	}
+
+	if body.CommonName == "" {
+		logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "common_name is required")
+		return
+	}
+
+	// use defaults
+	if body.KeyType == "" {
+		body.KeyType = "rsa"
+	}
+	if body.TTL == "" {
+		body.TTL = "72h"
 	}
 	altNames := []string{}
 	if body.AltNames != "" {

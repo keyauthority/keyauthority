@@ -498,7 +498,7 @@ paths:
         - bearerAuth: []
 
   /v1/signers/{name}/issue/cert:
-    put:
+    post:
       summary: Issue certificate
       description: |
         Generate a private key and sign a certificate for its public key with the specified signer.

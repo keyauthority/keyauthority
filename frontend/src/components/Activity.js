@@ -530,7 +530,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
     }*/
   }, [api, filters, setIsLoading]);
 
-  useEffect(() => {
+  /*useEffect(() => {
     setDropdownActions?.([
       {
         key: "export-logs",
@@ -540,7 +540,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
       },
     ]);
     return () => setDropdownActions?.([]);
-  }, [setDropdownActions, handleExportLogs]);
+  }, [setDropdownActions, handleExportLogs]);*/
 
   return (
     <>
