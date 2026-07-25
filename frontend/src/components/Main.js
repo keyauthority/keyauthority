@@ -65,7 +65,7 @@ export default function Main() {
           icon: "bi-speedometer",
         },
         {
-          title: "Issued Certificates",
+          title: "Certificates",
           subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
           icon: "bi-award-fill",
@@ -77,7 +77,7 @@ export default function Main() {
           icon: "bi-clock-fill",
         },
         {
-          title: "Application Logs",
+          title: "Audit Logs",
           subtitle: "View recorded logs for auditing purposes",
           to: "/activity/logs",
           icon: "bi-file-text-fill",
@@ -94,7 +94,7 @@ export default function Main() {
           subtitle: "View your cryptographic keys",
           to: "/keys",
           icon: "bi-key-fill",
-          dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
+          // dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
         },
         {
           title: "Signers",

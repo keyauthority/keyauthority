@@ -354,9 +354,9 @@ func main() {
 			}
 		}()
 
-		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withCORS(router))
+		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withSecurityHeaders(withCORS(router)))
 	} else {
-		http.ListenAndServe(":"+httpPort, withCORS(router))
+		http.ListenAndServe(":"+httpPort, withSecurityHeaders(withCORS(router)))
 	}
 }
 
@@ -824,6 +824,24 @@ func getEnvironment(r *http.Request) (string, error) {
 /******************************/
 /*         Middlewares        */
 /******************************/
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Apply to API responses
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
+
+		// Only meaningful if HTML is served from this backend
+		// w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ignoredPaths := []string{"/v1/crl/", "/v1/aia/", "/v1/ocsp/"}
@@ -834,17 +852,22 @@ func withCORS(next http.Handler) http.Handler {
 				break
 			}
 		}
+
 		if shouldSetCORS {
-			w.Header().Set("Access-Control-Allow-Origin", os.Getenv(envCORSOrigin))
+			origin := os.Getenv(envCORSOrigin)
+			if origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
