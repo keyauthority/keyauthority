@@ -38,8 +38,7 @@ td {
   color: var(--bs-body-color) !important;
 }
 
-// last row border removal for key-value table
-.keyvalue-table tbody tr:last-child td {
+.keyvalue-table.no-border-bottom tbody tr:last-child td {
   border-bottom: none;
 }
 

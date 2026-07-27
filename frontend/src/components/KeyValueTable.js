@@ -4,7 +4,9 @@ import { Table } from "react-bootstrap";
 export default function KeyValueTable({
   body,
   header,
-  borderBottom = false,
+  striped = true,
+  tableClass = "",
+  borderBottom = true,
   keysClass = "",
   keysTag = "",
   minKeyLen = -1,
@@ -20,7 +22,8 @@ export default function KeyValueTable({
   return (
     <Table
       responsive
-      className={`align-middle keyvalue-table ${borderBottom ? "border-bottom" : ""}`}
+      striped={striped}
+      className={`align-middle ${tableClass} keyvalue-table ${borderBottom ? "" : "no-border-bottom"}`}
     >
       {header && (
         <thead>

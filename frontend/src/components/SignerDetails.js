@@ -299,6 +299,8 @@ function ConfigTab({
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     ID: (
                       <Link
@@ -347,6 +349,8 @@ function ConfigTab({
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Common Name": signerConfig.caTemplate.subject.commonName,
                     Country: signerConfig.caTemplate.subject.country
@@ -392,6 +396,8 @@ function ConfigTab({
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Is CA": signerConfig.isCA ? "Yes" : "No",
                     CDP:
@@ -496,6 +502,8 @@ function ConfigTab({
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Allowed Key Usages":
                       signerConfig.allowedKeyUsages?.length > 0
@@ -706,6 +714,8 @@ function CSRAndChainTab({
                 </Card.Header>
                 <Card.Body>
                   <KeyValueTable
+                    borderBottom={false}
+                    striped={false}
                     body={{
                       Serial: cert.serial,
                       Subject: cert.subject,

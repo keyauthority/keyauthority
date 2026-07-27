@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -637,6 +638,10 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 		if modulePath == "" {
 			return nil, fmt.Errorf("module-path is required in PKCS11 URI")
 		}
+		// modulePath must be /usr/lib/<user>/<module>.so or /usr/local/<user>/lib/<module>.so
+		if !regexp.MustCompile(`^/usr/(lib|local)/[a-zA-Z0-9_-]+/(lib|lib64)/[a-zA-Z0-9_-]+\.so$`).MatchString(modulePath) {
+			return nil, fmt.Errorf("module-path must be /usr/lib/<user>/<module>.so or /usr/local/<user>/lib/<module>.so, got: %s", modulePath)
+		}
 
 		// Get PIN
 		var pin string
@@ -648,6 +653,10 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 			pin = rawPin
 		} else {
 			pinPath = strings.TrimPrefix(pinPath, "file://")
+			// pinPath must be under /etc/
+			if !strings.HasPrefix(pinPath, "/etc/") {
+				return nil, fmt.Errorf("pin-source must be under /etc/, got: %s", pinPath)
+			}
 			pinBytes, err := os.ReadFile(pinPath)
 			if err != nil {
 				return nil, fmt.Errorf("read pin from %s: %w", pinPath, err)

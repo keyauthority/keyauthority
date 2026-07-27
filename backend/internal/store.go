@@ -1575,7 +1575,7 @@ func (s *Store) GetPendingRequestsWithCursor(ctx context.Context, filters url.Va
 		requests = append(requests, map[string]any{
 			"id":          id,
 			"createdAt":   createdAt,
-			"tokenInfo":   tokenInfo,
+			"token":       tokenInfo,
 			"privateBody": privateBody,
 			"method":      method,
 			"url":         url.String,
@@ -1622,8 +1622,8 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 	}
 
 	tokenInfo := map[string]any{
-		"issuer": token.Issuer,
-		"user":   user,
+		"user": user,
+		"sub":  token.Subject,
 	}
 	tokenInfoBytes, err := json.Marshal(tokenInfo)
 	if err != nil {

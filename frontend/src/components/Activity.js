@@ -872,7 +872,7 @@ export function PendingRequests({ isLoading, setIsLoading }) {
               <td style={{ maxWidth: "12rem" }} className="text-truncate">
                 {req.id}
               </td>
-              <td>{req.tokenInfo?.user || "-"}</td>
+              <td>{req.token?.user || "-"}</td>
               <td>
                 {req.method && req.url ? (
                   <>

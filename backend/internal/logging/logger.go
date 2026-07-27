@@ -40,8 +40,8 @@ const (
 	CtxKeyWriteLogToDB      = ctxKey("writeLogToDB")
 	CtxKeyToken             = ctxKey("token")
 	CtxKeyUser              = ctxKey("user")
-	CtxKeyExternalIssuer    = ctxKey("externalIssuer")
-	CtxKeyExternalSubject   = ctxKey("externalSubject")
+	CtxKeyExternalIss       = ctxKey("externalIss")
+	CtxKeyExternalSub       = ctxKey("externalSub")
 	CtxKeyRoles             = ctxKey("roles")
 	CtxKeyEnvironment       = ctxKey("environment")
 	CtxKeyApproverToken     = ctxKey("approverToken")
@@ -171,8 +171,9 @@ func (l *StdAndDBLogger) Close() {
 	}
 }
 
-func GetTokenInfoFromClaims(idToken *oidc.IDToken, full bool) (string, string, string, []string) {
-	if full {
+// GetLoggerFromContext retrieves the user, external issuer, external subject, roles
+func GetTokenInfoFromClaims(idToken *oidc.IDToken, includeRoles bool) (string, string, string, []string) {
+	if includeRoles {
 		type tokenClaimsFull struct {
 			Email             string `json:"email"`
 			PreferredUsername string `json:"preferred_username"`
@@ -218,13 +219,16 @@ func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
 		tokenAttrs := []any{}
-		if user, ok := ctx.Value(CtxKeyUser).(string); ok {
+		if user, ok := ctx.Value(CtxKeyUser).(string); ok && user != "" {
 			tokenAttrs = append(tokenAttrs, slog.String("user", user))
 		}
-		if externalIss, ok := ctx.Value(CtxKeyExternalIssuer).(string); ok && externalIss != "" {
+		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok && token != nil {
+			tokenAttrs = append(tokenAttrs, slog.String("sub", token.Subject))
+		}
+		if externalIss, ok := ctx.Value(CtxKeyExternalIss).(string); ok && externalIss != "" {
 			tokenAttrs = append(tokenAttrs, slog.String("externalIss", externalIss))
 		}
-		if externalSub, ok := ctx.Value(CtxKeyExternalSubject).(string); ok && externalSub != "" {
+		if externalSub, ok := ctx.Value(CtxKeyExternalSub).(string); ok && externalSub != "" {
 			tokenAttrs = append(tokenAttrs, slog.String("externalSub", externalSub))
 		}
 		attrs = append(attrs, slog.Group("token", tokenAttrs...))
@@ -238,9 +242,11 @@ func attrsFromContext(ctx context.Context) []any {
 		if approverToken, ok := ctx.Value(CtxKeyApproverToken).(*oidc.IDToken); ok {
 			user, _, _, _ := GetTokenInfoFromClaims(approverToken, false)
 			attrs = append(attrs,
-				slog.Group("approverToken",
-					slog.String("user", user),
-					//slog.String("issuer", approverToken.Issuer),
+				slog.Group("approver",
+					slog.Group("token",
+						slog.String("user", user),
+						slog.String("sub", approverToken.Subject),
+					),
 				),
 			)
 		}

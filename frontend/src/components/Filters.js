@@ -131,32 +131,8 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
   };
 
   return (
-    <>
-      <div className="mb-3">
-        {appliedEntries?.length > 0 && (
-          <div className="d-flex flex-wrap justify-content-end gap-2">
-            {appliedEntries.map(([key, value]) => {
-              const def = getFilterByKey(key);
-              return (
-                <Alert
-                  key={key}
-                  variant="light"
-                  className="px-3 py-2 d-flex align-items-center gap-2"
-                >
-                  <span>
-                    <strong>{def?.label || key}:</strong>{" "}
-                    {getDisplayValue(def, value)}
-                  </span>
-                  <CloseButton
-                    className="small m-0 p-0"
-                    onClick={() => removeFilter(key)}
-                  />
-                </Alert>
-              );
-            })}
-          </div>
-        )}
-
+    <Row className={`mb-3 ${appliedEntries?.length > 0 ? "g-3" : "g-0"}`}>
+      <Col>
         <div className="input-group">
           <Form.Select
             value={selectedFilterKey}
@@ -215,16 +191,40 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
               onChange={(e) => setDraftValue(e.target.value)}
             />
           )}
-
           <Button
             variant="secondary"
             onClick={applyOneFilter}
             disabled={!selectedFilter || !hasValue(draftValue)}
           >
-            <i className="bi bi-filter"></i> Apply
+            <i className="bi bi-funnel me-1"></i>Apply
           </Button>
         </div>
-      </div>
-    </>
+      </Col>
+      <Col xs="auto">
+        {appliedEntries?.length > 0 && (
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            {appliedEntries.map(([key, value]) => {
+              const def = getFilterByKey(key);
+              return (
+                <Alert
+                  key={key}
+                  variant="light"
+                  className="px-3 py-2 d-flex align-items-center gap-2 m-0"
+                >
+                  <span>
+                    <strong>{def?.label || key}:</strong>{" "}
+                    {getDisplayValue(def, value)}
+                  </span>
+                  <CloseButton
+                    className="small m-0 p-0"
+                    onClick={() => removeFilter(key)}
+                  />
+                </Alert>
+              );
+            })}
+          </div>
+        )}
+      </Col>
+    </Row>
   );
 }

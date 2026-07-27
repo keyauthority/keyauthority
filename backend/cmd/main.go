@@ -404,7 +404,7 @@ func runPeriodicTasks() {
 				logger.WarnWithContext(context.Background(), "couldn't recreate CRLs", "error", err)
 			} else {
 				logger.DebugWithContext(context.Background(), "CRL recreation completed",
-					"successCount", successCount, "failureCount", failureCount)
+					"succeeded", successCount, "failed", failureCount)
 			}
 			<-ticker.C
 		}
@@ -897,8 +897,8 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIssuer, externalIssuer)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSubject, externalSubject)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIss, externalIssuer)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSub, externalSubject)
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
 		r = r.WithContext(ctx)
 
