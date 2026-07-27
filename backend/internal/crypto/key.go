@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -638,9 +637,18 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 		if modulePath == "" {
 			return nil, fmt.Errorf("module-path is required in PKCS11 URI")
 		}
-		// modulePath must be /usr/lib/<user>/<module>.so or /usr/local/<user>/lib/<module>.so
-		if !regexp.MustCompile(`^/usr/(lib|local)/[a-zA-Z0-9_-]+/(lib|lib64)/[a-zA-Z0-9_-]+\.so$`).MatchString(modulePath) {
-			return nil, fmt.Errorf("module-path must be /usr/lib/<user>/<module>.so or /usr/local/<user>/lib/<module>.so, got: %s", modulePath)
+
+		// modulePath prefix must be in [/usr/lib/, /usr/local/, /usr/lib64/]
+		modulePathPrefixes := []string{"/usr/lib/", "/usr/lib64/", "/usr/local/"}
+		valid := false
+		for _, prefix := range modulePathPrefixes {
+			if strings.HasPrefix(modulePath, prefix) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("module-path must be under %v, got: %s", modulePathPrefixes, modulePath)
 		}
 
 		// Get PIN
