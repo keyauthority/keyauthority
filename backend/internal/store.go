@@ -1616,16 +1616,12 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 		isPrivateBody = false
 	}
 
-	user, ok := ctx.Value(loggingpkg.CtxKeyUser).(string)
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
 	if !ok {
-		user = "unknown"
+		return uuid.Nil, fmt.Errorf("missing token info in context")
 	}
-
-	tokenInfo := map[string]any{
-		"user": user,
-		"sub":  token.Subject,
-	}
-	tokenInfoBytes, err := json.Marshal(tokenInfo)
+	tiMap := tokenInfo.ToMap()
+	tokenInfoBytes, err := json.Marshal(tiMap)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("marshal token info: %w", err)
 	}

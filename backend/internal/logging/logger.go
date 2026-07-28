@@ -39,10 +39,7 @@ const (
 
 	CtxKeyWriteLogToDB      = ctxKey("writeLogToDB")
 	CtxKeyToken             = ctxKey("token")
-	CtxKeyUser              = ctxKey("user")
-	CtxKeyExternalIss       = ctxKey("externalIss")
-	CtxKeyExternalSub       = ctxKey("externalSub")
-	CtxKeyRoles             = ctxKey("roles")
+	CtxKeyTokenInfo         = ctxKey("tokenInfo")
 	CtxKeyEnvironment       = ctxKey("environment")
 	CtxKeyApproverToken     = ctxKey("approverToken")
 	CtxKeyRequestID         = ctxKey("requestID")
@@ -171,15 +168,69 @@ func (l *StdAndDBLogger) Close() {
 	}
 }
 
+type TokenInfo struct {
+	Sub               string   `json:"sub"`
+	Email             string   `json:"email,omitempty"`
+	PreferredUsername string   `json:"preferred_username,omitempty"`
+	ExternalIssuer    string   `json:"external_iss,omitempty"`
+	ExternalSubject   string   `json:"external_sub,omitempty"`
+	ExternalKeyID     string   `json:"external_kid,omitempty"`
+	Roles             []string `json:"roles,omitempty"`
+}
+
+func (t *TokenInfo) GetHumanReadableUsername() string {
+	return firstNonEmpty(t.PreferredUsername, t.Email, t.Sub)
+}
+
+func (t *TokenInfo) ToSlogAttrs() []any {
+	user := t.GetHumanReadableUsername()
+	attrs := []any{
+		slog.String("user", user),
+	}
+	if t.Sub != user {
+		attrs = append(attrs, slog.String("sub", t.Sub))
+	}
+	return attrs
+}
+
+func (t *TokenInfo) ToMap() map[string]string {
+	user := t.GetHumanReadableUsername()
+	var m = make(map[string]string)
+	m["user"] = user
+	if t.Sub != user {
+		m["sub"] = t.Sub
+	}
+	return m
+}
+
+func (t *TokenInfo) ToSlogAttrsWithJWTAuthzGrant() []any {
+	attrs := t.ToSlogAttrs()
+	externalAttrs := []any{}
+	if t.ExternalIssuer != "" {
+		externalAttrs = append(externalAttrs, slog.String("iss", t.ExternalIssuer))
+	}
+	if t.ExternalSubject != "" {
+		externalAttrs = append(externalAttrs, slog.String("sub", t.ExternalSubject))
+	}
+	if t.ExternalKeyID != "" {
+		externalAttrs = append(externalAttrs, slog.String("kid", t.ExternalKeyID))
+	}
+	if len(externalAttrs) > 0 {
+		attrs = append(attrs, slog.Group("externalJWT", externalAttrs...))
+	}
+	return attrs
+}
+
 // GetLoggerFromContext retrieves the user, external issuer, external subject, roles
-func GetTokenInfoFromClaims(idToken *oidc.IDToken, includeRoles bool) (string, string, string, []string) {
+func GetTokenInfoFromClaims(idToken *oidc.IDToken, includeRoles bool) *TokenInfo {
 	if includeRoles {
 		type tokenClaimsFull struct {
+			Sub               string `json:"sub"`
 			Email             string `json:"email"`
 			PreferredUsername string `json:"preferred_username"`
-			Sub               string `json:"sub"`
 			ExternalIssuer    string `json:"external_iss"`
 			ExternalSubject   string `json:"external_sub"`
+			ExternalKeyID     string `json:"external_kid"`
 			RealmAccess       struct {
 				Roles []string `json:"roles"`
 			} `json:"realm_access"`
@@ -195,22 +246,40 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, includeRoles bool) (string, s
 				roles = append(roles, ra.Roles...)
 			}
 		}
-		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), c.ExternalIssuer, c.ExternalSubject, roles
+		return &TokenInfo{
+			Sub:               c.Sub,
+			Email:             c.Email,
+			PreferredUsername: c.PreferredUsername,
+			ExternalIssuer:    c.ExternalIssuer,
+			ExternalSubject:   c.ExternalSubject,
+			ExternalKeyID:     c.ExternalKeyID,
+			Roles:             roles,
+		}
 	}
 
 	type tokenClaims struct {
+		Sub               string `json:"sub"`
 		Email             string `json:"email"`
 		PreferredUsername string `json:"preferred_username"`
-		Sub               string `json:"sub"`
 		ExternalIssuer    string `json:"external_iss"`
 		ExternalSubject   string `json:"external_sub"`
+		ExternalKeyID     string `json:"external_kid"`
 	}
 
 	var c tokenClaims
 	if err := idToken.Claims(&c); err == nil {
-		return firstNonEmpty(c.Email, c.PreferredUsername, c.Sub), c.ExternalIssuer, c.ExternalSubject, nil
+		return &TokenInfo{
+			Sub:               c.Sub,
+			Email:             c.Email,
+			PreferredUsername: c.PreferredUsername,
+			ExternalIssuer:    c.ExternalIssuer,
+			ExternalSubject:   c.ExternalSubject,
+			ExternalKeyID:     c.ExternalKeyID,
+		}
 	}
-	return idToken.Subject, "", "", nil
+	return &TokenInfo{
+		Sub: idToken.Subject,
+	}
 }
 
 // ---- Helpers ---- //
@@ -218,40 +287,38 @@ func GetTokenInfoFromClaims(idToken *oidc.IDToken, includeRoles bool) (string, s
 func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
-		tokenAttrs := []any{}
-		if user, ok := ctx.Value(CtxKeyUser).(string); ok && user != "" {
-			tokenAttrs = append(tokenAttrs, slog.String("user", user))
+		// actor
+		if tokenInfo, ok := ctx.Value(CtxKeyTokenInfo).(*TokenInfo); ok && tokenInfo != nil {
+			tokenAttrs := tokenInfo.ToSlogAttrsWithJWTAuthzGrant()
+			if len(tokenAttrs) > 0 {
+				attrs = append(attrs, slog.Group("token", tokenAttrs...))
+			}
 		}
-		if token, ok := ctx.Value(CtxKeyToken).(*oidc.IDToken); ok && token != nil {
-			tokenAttrs = append(tokenAttrs, slog.String("sub", token.Subject))
-		}
-		if externalIss, ok := ctx.Value(CtxKeyExternalIss).(string); ok && externalIss != "" {
-			tokenAttrs = append(tokenAttrs, slog.String("externalIss", externalIss))
-		}
-		if externalSub, ok := ctx.Value(CtxKeyExternalSub).(string); ok && externalSub != "" {
-			tokenAttrs = append(tokenAttrs, slog.String("externalSub", externalSub))
-		}
-		attrs = append(attrs, slog.Group("token", tokenAttrs...))
 
-		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
-			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
-		}
-		if originalReqID, ok := ctx.Value(CtxKeyOriginalRequestID).(uuid.UUID); ok {
-			attrs = append(attrs, slog.String(string(CtxKeyOriginalRequestID), originalReqID.String()))
-		}
+		// approver
 		if approverToken, ok := ctx.Value(CtxKeyApproverToken).(*oidc.IDToken); ok {
-			user, _, _, _ := GetTokenInfoFromClaims(approverToken, false)
+			approverTokenInfo := GetTokenInfoFromClaims(approverToken, false)
+			approverTokenAttrs := approverTokenInfo.ToSlogAttrs()
 			attrs = append(attrs,
 				slog.Group("approver",
 					slog.Group("token",
-						slog.String("user", user),
-						slog.String("sub", approverToken.Subject),
+						approverTokenAttrs...,
 					),
 				),
 			)
 		}
+
+		// environment
+		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
+			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
+		}
+
+		// request IDs
 		if requestID, ok := ctx.Value(CtxKeyRequestID).(uuid.UUID); ok {
 			attrs = append(attrs, slog.String(string(CtxKeyRequestID), requestID.String()))
+		}
+		if originalReqID, ok := ctx.Value(CtxKeyOriginalRequestID).(uuid.UUID); ok {
+			attrs = append(attrs, slog.String(string(CtxKeyOriginalRequestID), originalReqID.String()))
 		}
 	}
 	return attrs

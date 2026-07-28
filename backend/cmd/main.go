@@ -536,12 +536,12 @@ func setDefaultHttpTransport() {
 
 	defaulTransp := http.DefaultTransport.(*http.Transport)
 	if defaulTransp.TLSClientConfig == nil {
-		defaulTransp.TLSClientConfig = &tls.Config{
-			RootCAs: caPool,
-		}
-	} else {
-		defaulTransp.TLSClientConfig.RootCAs = caPool
+		defaulTransp.TLSClientConfig = &tls.Config{}
 	}
+
+	defaulTransp.TLSClientConfig.RootCAs = caPool
+	defaulTransp.TLSClientConfig.InsecureSkipVerify = false
+	defaulTransp.TLSClientConfig.MinVersion = tls.VersionTLS12
 }
 
 func writeHTTP(w http.ResponseWriter, code int, b []byte) {
@@ -636,19 +636,22 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	if roles, ok := ctx.Value(loggingpkg.CtxKeyRoles).([]string); ok {
-		envs := []string{}
-		for _, role := range roles {
-			if role == "KEYAUTHORITY_OPERATOR" {
-				return true, nil, nil // has access to all environments
-			}
-			if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
-				envs = append(envs, after)
-			}
-		}
-		return false, envs, nil
+
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+	if !ok || tokenInfo == nil {
+		return false, nil, fmt.Errorf("couldn't get accessible environments: missing token info in context")
 	}
-	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token roles in context")
+
+	envs := []string{}
+	for _, role := range tokenInfo.Roles {
+		if role == "KEYAUTHORITY_OPERATOR" {
+			return true, nil, nil // has access to all environments
+		}
+		if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
+			envs = append(envs, after)
+		}
+	}
+	return false, envs, nil
 }
 
 func getPaginatedListWithCursor(
@@ -835,6 +838,11 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 
+		// HSTS is only meaningful if HTTPS is enabled
+		/*if os.Getenv(envHTTPSPort) != "" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}*/
+
 		// Only meaningful if HTML is served from this backend
 		// w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
 
@@ -892,14 +900,11 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			return
 		}
 		// Parse immutable claims once, store in context
-		user, externalIssuer, externalSubject, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		tokenInfo := loggingpkg.GetTokenInfoFromClaims(token, true)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIss, externalIssuer)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSub, externalSubject)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyTokenInfo, tokenInfo)
 		r = r.WithContext(ctx)
 
 		// Determine environment for RBAC and logging context
@@ -915,7 +920,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		// RBAC check — use roles already extracted above
-		if !internalpkg.HasRequiredRole(roles, environment, requiredRole) {
+		if !internalpkg.HasRequiredRole(tokenInfo.Roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -1002,11 +1007,12 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
-		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get user from context")
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		if !ok || tokenInfo == nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
 		}
+		user := tokenInfo.GetHumanReadableUsername()
 
 		keyID, err := store.CreateKey(r.Context(), environment, &cfg, user)
 		if err != nil {
@@ -1714,11 +1720,12 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
-		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing user in context")
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		if !ok || tokenInfo == nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
 		}
+		user := tokenInfo.GetHumanReadableUsername()
 
 		// Recreate the original request and process it through the router
 		reqBody := bytes.NewReader(pendingReq.Body)

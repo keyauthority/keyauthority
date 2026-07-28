@@ -3,10 +3,10 @@ module github.com/keyauthority/keyauthority
 go 1.26.5
 
 require (
-	github.com/ThalesGroup/crypto11 v1.6.4
 	github.com/cert-manager/cert-manager v1.21.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
+	github.com/eclipse-keypont/crypto11 v1.6.5
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
@@ -16,7 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.85.0
+	go.step.sm/crypto v0.86.0
 	k8s.io/api v0.37.0-beta.0
 )
 

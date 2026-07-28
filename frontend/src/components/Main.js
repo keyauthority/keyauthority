@@ -78,7 +78,7 @@ export default function Main() {
         },
         {
           title: "Pending Requests",
-          subtitle: "Review and approve or reject pending requests",
+          subtitle: "Approve or reject requests that are pending approval",
           to: "/activity/pending-requests",
           icon: "bi-clock-fill",
         },

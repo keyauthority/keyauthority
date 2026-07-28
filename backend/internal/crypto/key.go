@@ -32,7 +32,7 @@ import (
 	"strings"
 	"sync"
 
-	thalesp11 "github.com/ThalesGroup/crypto11"
+	crypto11 "github.com/eclipse-keypont/crypto11"
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	"github.com/pkg/errors"
 	certstrap "github.com/square/certstrap/pkix"
@@ -103,7 +103,7 @@ type symmetricHSMKey struct {
 	keyID     []byte
 	label     []byte
 	bits      int
-	keyHandle *thalesp11.SecretKey
+	keyHandle *crypto11.SecretKey
 }
 
 type asymmetricHSMKey struct {
@@ -199,7 +199,7 @@ func closeCachedP11Context(pkcs11URI string) error {
 		return nil
 	}
 
-	p11Ctx, ok := value.(*thalesp11.Context)
+	p11Ctx, ok := value.(*crypto11.Context)
 	if !ok || p11Ctx == nil {
 		return fmt.Errorf("invalid cached PKCS#11 context for %s", pkcs11URI)
 	}
@@ -237,7 +237,7 @@ func (k *symmetricHSMKey) reloadHandle(resetCtx bool) error {
 	return nil
 }
 
-func (k *symmetricHSMKey) getHandle() *thalesp11.SecretKey {
+func (k *symmetricHSMKey) getHandle() *crypto11.SecretKey {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 	return k.keyHandle
@@ -604,7 +604,7 @@ func CloseCachedP11Contexts() error {
 
 	var firstErr error
 	for _, value := range items {
-		ctx, ok := value.(*thalesp11.Context)
+		ctx, ok := value.(*crypto11.Context)
 		if !ok || ctx == nil {
 			continue
 		}
@@ -617,7 +617,7 @@ func CloseCachedP11Contexts() error {
 	return firstErr
 }
 
-func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
+func getP11Ctx(uriStr string) (*crypto11.Context, error) {
 	if !Enterprise {
 		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
 	}
@@ -672,7 +672,7 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 			pin = strings.TrimSpace(string(pinBytes))
 		}
 
-		p11Config := &thalesp11.Config{
+		p11Config := &crypto11.Config{
 			Path: modulePath,
 			Pin:  pin,
 			// MaxSessions: 1024,
@@ -699,7 +699,7 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 			p11Config.TokenLabel = tokenLabel
 		}
 
-		p11Ctx, err := thalesp11.Configure(p11Config)
+		p11Ctx, err := crypto11.Configure(p11Config)
 		if err != nil {
 			return nil, fmt.Errorf("configure PKCS11 context: %w", err)
 		}
@@ -710,7 +710,7 @@ func getP11Ctx(uriStr string) (*thalesp11.Context, error) {
 		return nil, err
 	}
 
-	p11Ctx, ok := value.(*thalesp11.Context)
+	p11Ctx, ok := value.(*crypto11.Context)
 	if !ok || p11Ctx == nil {
 		return nil, fmt.Errorf("invalid cached PKCS#11 context for %s", uriStr)
 	}
@@ -731,7 +731,7 @@ func extractIdAndLabel(uriStr string) ([]byte, []byte, error) {
 	return idStr, []byte(object), nil
 }
 
-func generateHSMKey(p11 *thalesp11.Context, cfg *KeyConfig) error {
+func generateHSMKey(p11 *crypto11.Context, cfg *KeyConfig) error {
 	id, label, err := extractIdAndLabel(cfg.PKCS11KeyUri)
 	if err != nil {
 		return fmt.Errorf("extract id and label from PKCS11 Key URI: %w", err)
@@ -743,7 +743,7 @@ func generateHSMKey(p11 *thalesp11.Context, cfg *KeyConfig) error {
 			return nil // don't return error if key already exists, just ignore it
 		}
 
-		if _, err := p11.GenerateSecretKeyWithLabel(id, label, cfg.Bits, thalesp11.CipherAES); err != nil {
+		if _, err := p11.GenerateSecretKeyWithLabel(id, label, cfg.Bits, crypto11.CipherAES); err != nil {
 			return fmt.Errorf("generate symmetric key: %w", err)
 		}
 		return nil
