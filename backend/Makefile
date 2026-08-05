@@ -158,14 +158,17 @@ ln -sf $(1)-$(3) $(1)
 endef
 
 ##@ Swagger
-SWAGGER_VERSION = 5.32.8
+SWAGGER_VERSION = 5.32.12
 SWAGGER_DIR = ./swagger
 .PHONY: download-swagger
 download-swagger:
-	mkdir -p $(SWAGGER_DIR)
-	curl https://unpkg.com/swagger-ui@$(SWAGGER_VERSION)/dist/swagger-ui.css -o $(SWAGGER_DIR)/swagger-ui.css
-	curl https://unpkg.com/swagger-ui@$(SWAGGER_VERSION)/dist/swagger-ui-bundle.js -o $(SWAGGER_DIR)/swagger-ui-bundle.js
-	curl https://unpkg.com/swagger-ui@$(SWAGGER_VERSION)/dist/swagger-ui-standalone-preset.js -o $(SWAGGER_DIR)/swagger-ui-standalone-preset.js
+	mkdir -p $(SWAGGER_DIR)/tmp
+	wget -q -O $(SWAGGER_DIR)/tmp/swagger-ui.zip https://github.com/swagger-api/swagger-ui/archive/refs/tags/v$(SWAGGER_VERSION).zip && \
+	unzip -q $(SWAGGER_DIR)/tmp/swagger-ui.zip -d $(SWAGGER_DIR)/tmp && \
+	cp $(SWAGGER_DIR)/tmp/swagger-ui-$(SWAGGER_VERSION)/dist/swagger-ui.css $(SWAGGER_DIR) && \
+	cp $(SWAGGER_DIR)/tmp/swagger-ui-$(SWAGGER_VERSION)/dist/swagger-ui-bundle.js $(SWAGGER_DIR) && \
+	cp $(SWAGGER_DIR)/tmp/swagger-ui-$(SWAGGER_VERSION)/dist/swagger-ui-standalone-preset.js $(SWAGGER_DIR) && \
+	rm -rf $(SWAGGER_DIR)/tmp
 
 .PHONY: serve-swagger
 serve-swagger:
@@ -256,9 +259,19 @@ pretty: fmt
 	npx prettier --write "**/*.yaml"
 
 ##@ Scan
-.PHONY: scan
-scan:
+scan: scan-image scan-code
+
+.PHONY: scan-image
+scan-image:
 	trivy image $(IMG)
+
+.PHONY: scan-code
+scan-code:
+	go test ./...
+	go vet ./...
+	govulncheck ./...
+	staticcheck ./... || true
+	semgrep scan --config=./.semgrep .
 
 ##@ Test JWT exchange
 .PHONY: test-jwt-exchange
@@ -277,4 +290,3 @@ test-jwt-exchange:
 	curl -s \
 			-H "Authorization: Bearer $$token2" \
 			http://localhost:$(BACKEND_PORT)/v1/token/claims | jq
-

@@ -225,7 +225,6 @@ func main() {
 	if !tlsEnabled {
 		router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 		router.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
-		router.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 	}
 
 	// ------------ Secrets ------------ //
@@ -302,12 +301,6 @@ func main() {
 
 	router.Handle("/v1/token", tokenHandler)
 
-	router.Handle("/v1/token/claims", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAny, // get token info
-		},
-		tokenClaimsHandler))
-
 	router.Handle("/v1/health", healthHandler)
 
 	router.Handle("/v1/oidc/jwks/kubernetes", kubernetesJWKSHandler)
@@ -342,15 +335,14 @@ func main() {
 	if tlsEnabled {
 		logger.InfoWithContext(context.Background(), "TLS enabled")
 
-		// CRL, AIA, and OCSP must always be served over plain HTTP
+		// CRL and AIA must always be served over plain HTTP
 		nonTLSRouter := mux.NewRouter()
 		nonTLSRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 		nonTLSRouter.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
-		nonTLSRouter.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 		go func() {
-			logger.InfoWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) started")
+			logger.InfoWithContext(context.Background(), "non-TLS server (CRL, AIA) started")
 			if err := http.ListenAndServe(":"+httpPort, nonTLSRouter); err != nil {
-				logger.ErrorWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) stopped", "error", err)
+				logger.ErrorWithContext(context.Background(), "non-TLS server (CRL, AIA) stopped", "error", err)
 			}
 		}()
 
@@ -534,14 +526,13 @@ func setDefaultHttpTransport() {
 		}
 	}
 
-	defaulTransp := http.DefaultTransport.(*http.Transport)
-	if defaulTransp.TLSClientConfig == nil {
-		defaulTransp.TLSClientConfig = &tls.Config{}
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+	if defaultTransport.TLSClientConfig == nil {
+		defaultTransport.TLSClientConfig = &tls.Config{}
 	}
-
-	defaulTransp.TLSClientConfig.RootCAs = caPool
-	defaulTransp.TLSClientConfig.InsecureSkipVerify = false
-	defaulTransp.TLSClientConfig.MinVersion = tls.VersionTLS12
+	defaultTransport.TLSClientConfig.RootCAs = caPool
+	defaultTransport.TLSClientConfig.InsecureSkipVerify = false
+	defaultTransport.TLSClientConfig.MinVersion = tls.VersionTLS12
 }
 
 func writeHTTP(w http.ResponseWriter, code int, b []byte) {
@@ -833,18 +824,8 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
-		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
-		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
-
-		// HSTS is only meaningful if HTTPS is enabled
-		/*if os.Getenv(envHTTPSPort) != "" {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		}*/
-
-		// Only meaningful if HTML is served from this backend
-		// w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
+		// w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none';")
+		// w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
 		next.ServeHTTP(w, r)
 	})
@@ -852,7 +833,7 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ignoredPaths := []string{"/v1/crl/", "/v1/aia/", "/v1/ocsp/"}
+		ignoredPaths := []string{"/v1/crl/", "/v1/aia/"}
 		shouldSetCORS := true
 		for _, p := range ignoredPaths {
 			if strings.HasPrefix(r.URL.Path, p) {
@@ -867,8 +848,8 @@ func withCORS(next http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		}
 
 		if r.Method == http.MethodOptions {
@@ -1503,10 +1484,6 @@ var signerAIAHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 		})
 })
 
-var signerOCSPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	logErrorAndWriteHTTP(w, r, http.StatusNotImplemented, "OCSP responder is not implemented yet")
-})
-
 var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	signerName := mux.Vars(r)["name"]
 	signer, err := store.LoadSigner(r.Context(), signerName)
@@ -1838,22 +1815,6 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
-})
-
-var tokenClaimsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
-	if !ok {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
-		return
-	}
-
-	var claims map[string]any
-	if err := token.Claims(&claims); err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't parse token claims", err)
-		return
-	}
-
-	writeJSONOk(w, claims)
 })
 
 var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

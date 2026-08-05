@@ -3,10 +3,10 @@ module github.com/keyauthority/keyauthority
 go 1.26.5
 
 require (
-	github.com/cert-manager/cert-manager v1.21.0
+	github.com/cert-manager/cert-manager v1.21.1
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
-	github.com/eclipse-keypont/crypto11 v1.6.5
+	github.com/eclipse-keypont/crypto11 v1.6.8
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
@@ -16,7 +16,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.86.0
+	go.step.sm/crypto v0.87.0
 	k8s.io/api v0.37.0-beta.0
 )
 
@@ -53,8 +53,8 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.44.0 // indirect
-	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.opentelemetry.io/otel v1.45.0 // indirect
+	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
