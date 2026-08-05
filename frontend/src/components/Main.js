@@ -65,22 +65,22 @@ export default function Main() {
           icon: "bi-speedometer",
         },
         {
-          title: "Issued Certificates",
+          title: "Audit Logs",
+          subtitle: "View recorded logs for auditing purposes",
+          to: "/activity/logs",
+          icon: "bi-file-text-fill",
+        },
+        {
+          title: "Certificates",
           subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
           icon: "bi-award-fill",
         },
         {
           title: "Pending Requests",
-          subtitle: "Review and approve/reject pending requests",
+          subtitle: "Approve or reject requests that are pending approval",
           to: "/activity/pending-requests",
           icon: "bi-clock-fill",
-        },
-        {
-          title: "Application Logs",
-          subtitle: "View recorded logs for auditing purposes",
-          to: "/activity/logs",
-          icon: "bi-file-text-fill",
         },
       ],
     },
@@ -94,7 +94,7 @@ export default function Main() {
           subtitle: "View your cryptographic keys",
           to: "/keys",
           icon: "bi-key-fill",
-          dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
+          // dontShowInSidebar: true, // this page can be accessed directly, but not in the sidebar
         },
         {
           title: "Signers",
@@ -130,13 +130,15 @@ export default function Main() {
         },
         {
           title: "Build a PKI",
-          subtitle: "Learn how to use signers to build a PKI for Kubernetes",
+          subtitle:
+            "Learn how to use KeyAuthority-managed signers to build a PKI for Kubernetes",
           to: "/docs/signers",
           icon: "bi-award-fill",
         },
         {
           title: "Use Secrets",
-          subtitle: "Learn how your applications can access secrets",
+          subtitle:
+            "Learn how your applications can access KeyAuthority-managed secrets",
           to: "/docs/secrets",
           icon: "bi-lock-fill",
         },

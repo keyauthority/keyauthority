@@ -73,7 +73,7 @@ function SecretDetails({
       setSecretMetadata(metadata);
     } catch (err) {
       setError(errorToString(err));
-      navigation.navigate("/secrets");
+      navigate("/secrets");
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +114,7 @@ function SecretDetails({
             kv.map((entry) => [
               entry.key,
               <div
-                className="d-flex justify-content-between align-items-start gap-3"
+                className="d-flex justify-content-between align-items-center gap-3"
                 key={entry.key}
               >
                 <div
@@ -125,18 +125,10 @@ function SecretDetails({
                       : {}
                   }
                 >
-                  <pre
-                    className="mb-0"
-                    style={{
-                      fontFamily: "inherit", // use body font
-                      fontSize: "inherit",
-                      whiteSpace: "pre-wrap", // keep newlines, wrap long lines
-                      wordBreak: "break-word",
-                    }}
-                  >
+                  <div className="p-1 rounded">
                     {getDisplayValue(entry.key, entry.value)}
-                  </pre>
-                </div>{" "}
+                  </div>
+                </div>
                 <div className="d-flex gap-1">
                   <Button
                     variant="outline-secondary"

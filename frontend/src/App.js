@@ -13,15 +13,6 @@ function App() {
       keycloak.realm.slice(1) +
       " | KeyAuthority";
 
-    // set theme as per user preference
-    const prefersDarkScheme = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    document.documentElement.setAttribute(
-      "data-bs-theme",
-      prefersDarkScheme ? "dark" : "light",
-    );
-
     // auto-logout
     const idleTimeout = 5 * 60 * 1000; // 5 minutes
     const events = [

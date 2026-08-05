@@ -293,12 +293,14 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Private Key</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Key used by for signing operations
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     ID: (
                       <Link
@@ -341,12 +343,14 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">CA Template</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Fields of the certificate template used when creating CA CSRs
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Common Name": signerConfig.caTemplate.subject.commonName,
                     Country: signerConfig.caTemplate.subject.country
@@ -386,12 +390,14 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Certificate Template</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Fields included in the certificates issued by this signer
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Is CA": signerConfig.isCA ? "Yes" : "No",
                     CDP:
@@ -489,13 +495,15 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Policy</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Rules that control what this signer is allowed to issue and
                   how it operates
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
+                  borderBottom={false}
+                  striped={false}
                   body={{
                     "Allowed Key Usages":
                       signerConfig.allowedKeyUsages?.length > 0
@@ -700,12 +708,14 @@ function CSRAndChainTab({
               <Card className="mb-3" key={index}>
                 <Card.Header>
                   <h6 className="mb-0">Certificate {index + 1}</h6>
-                  <span className="text-muted small">
+                  <div className="text-muted small">
                     {cert.subject === cert.issuer ? "Root" : "Intermediate"}
-                  </span>
+                  </div>
                 </Card.Header>
                 <Card.Body>
                   <KeyValueTable
+                    borderBottom={false}
+                    striped={false}
                     body={{
                       Serial: cert.serial,
                       Subject: cert.subject,

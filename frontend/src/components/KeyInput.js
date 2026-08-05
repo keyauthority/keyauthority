@@ -48,7 +48,7 @@ export default function KeyInput({
   return (
     <>
       <Row className="g-3 mb-3">
-        <Col>
+        <Col md={12}>
           <Form.Group>
             <Form.Label>Environment</Form.Label>
             {isGlobalOperator ? (

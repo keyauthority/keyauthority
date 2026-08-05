@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.33
+  version: 1.4.35
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -1304,26 +1304,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-  /v1/token/claims:
-    get:
-      summary: Get token claims
-      description: |
-        Get the claims of the current Bearer token.
-      tags:
-        - Miscellaneous
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-        "400":
-          description: Failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
 
   /v1/health:
     get:
@@ -1677,27 +1657,13 @@ components:
         username:
           type: string
           example: myuser
-        role_id:
-          type: string
-          example: myuser
-          description: |
-            Used for Vault AppRole authentication. 
-            Treated same as username.
         password:
           type: string
           example: S3cureP@ssw0rd!
-        secret_id:
-          type: string
-          example: S3cureP@ssw0rd!
-          description: |
-            Used for Vault AppRole authentication. 
-            Treated same as password.
         jwt:
           type: string
           description: |
-            A token, possibly external, such as a JWT issued by an OIDC provider. 
-            This token will not be verified at this endpoint, instead the API will return it as-is.
-            Verification will be handled in future requests.
+            An external token issued by an OIDC provider.
 
     Error:
       type: object

@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { Alert, Button, Table, Dropdown } from "react-bootstrap";
 import { Link } from "react-router-dom";
+import { getApi } from "../axios";
 import Paginator from "./Paginator";
 import Filters from "./Filters";
 import JSONModal from "./JSONModal";
@@ -23,6 +24,8 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
+
+  const api = getApi();
 
   const handleCheckReadiness = async (keyId) => {
     setIsLoading(true);

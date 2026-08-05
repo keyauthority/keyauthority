@@ -1,5 +1,5 @@
 ARG UBI_MAJOR_VERSION=10
-ARG UBI_VERSION=10.2-1784094212
+ARG UBI_VERSION=10.2-1785778687
 ARG RUNTIME_GID=4001
 
 FROM node:trixie AS builder
@@ -20,18 +20,22 @@ FROM registry.access.redhat.com/ubi${UBI_MAJOR_VERSION}/ubi-minimal:${UBI_VERSIO
 ARG RUNTIME_GID
 
 # Install nginx
-RUN microdnf install -y nginx && \
+RUN microdnf install -y nginx jq gettext && \
     microdnf clean all
 
 # Copy built frontend from builder stage, nginx config, and set permissions
 COPY --from=builder /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
-RUN DIRS="/usr/share/nginx/html /var/log/nginx /var/lib/nginx /tmp/nginx" && \
+COPY nginx.conf /etc/nginx/nginx.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+RUN DIRS="/usr/share/nginx/html /var/log/nginx /var/lib/nginx /tmp/nginx /etc/nginx" && \
     mkdir -p $DIRS && \
     chgrp -R ${RUNTIME_GID} $DIRS && \
-    chmod -R g+rwX $DIRS
+    chmod -R g+rwX $DIRS && \
+    chmod +x /docker-entrypoint.sh
 
 EXPOSE 8080
 HEALTHCHECK CMD curl --fail http://localhost:8080 || exit 1
 USER 1001
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

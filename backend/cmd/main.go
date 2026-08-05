@@ -225,7 +225,6 @@ func main() {
 	if !tlsEnabled {
 		router.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 		router.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
-		router.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 	}
 
 	// ------------ Secrets ------------ //
@@ -302,12 +301,6 @@ func main() {
 
 	router.Handle("/v1/token", tokenHandler)
 
-	router.Handle("/v1/token/claims", withAuth(
-		map[string]internalpkg.Role{
-			http.MethodGet: internalpkg.RoleAny, // get token info
-		},
-		tokenClaimsHandler))
-
 	router.Handle("/v1/health", healthHandler)
 
 	router.Handle("/v1/oidc/jwks/kubernetes", kubernetesJWKSHandler)
@@ -342,21 +335,20 @@ func main() {
 	if tlsEnabled {
 		logger.InfoWithContext(context.Background(), "TLS enabled")
 
-		// CRL, AIA, and OCSP must always be served over plain HTTP
+		// CRL and AIA must always be served over plain HTTP
 		nonTLSRouter := mux.NewRouter()
 		nonTLSRouter.Handle("/v1/crl/{hashOfSignerName:.*}", signerCRLHandler)
 		nonTLSRouter.Handle("/v1/aia/{hashOfSignerName:.*}", signerAIAHandler)
-		nonTLSRouter.Handle("/v1/ocsp/{hashOfSignerName:.*}", signerOCSPHandler)
 		go func() {
-			logger.InfoWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) started")
+			logger.InfoWithContext(context.Background(), "non-TLS server (CRL, AIA) started")
 			if err := http.ListenAndServe(":"+httpPort, nonTLSRouter); err != nil {
-				logger.ErrorWithContext(context.Background(), "non-TLS server (CRL, AIA, OCSP) stopped", "error", err)
+				logger.ErrorWithContext(context.Background(), "non-TLS server (CRL, AIA) stopped", "error", err)
 			}
 		}()
 
-		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withCORS(router))
+		http.ListenAndServeTLS(":"+httpsPort, tlsCert, tlsKey, withSecurityHeaders(withCORS(router)))
 	} else {
-		http.ListenAndServe(":"+httpPort, withCORS(router))
+		http.ListenAndServe(":"+httpPort, withSecurityHeaders(withCORS(router)))
 	}
 }
 
@@ -404,7 +396,7 @@ func runPeriodicTasks() {
 				logger.WarnWithContext(context.Background(), "couldn't recreate CRLs", "error", err)
 			} else {
 				logger.DebugWithContext(context.Background(), "CRL recreation completed",
-					"successCount", successCount, "failureCount", failureCount)
+					"succeeded", successCount, "failed", failureCount)
 			}
 			<-ticker.C
 		}
@@ -534,14 +526,13 @@ func setDefaultHttpTransport() {
 		}
 	}
 
-	defaulTransp := http.DefaultTransport.(*http.Transport)
-	if defaulTransp.TLSClientConfig == nil {
-		defaulTransp.TLSClientConfig = &tls.Config{
-			RootCAs: caPool,
-		}
-	} else {
-		defaulTransp.TLSClientConfig.RootCAs = caPool
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+	if defaultTransport.TLSClientConfig == nil {
+		defaultTransport.TLSClientConfig = &tls.Config{}
 	}
+	defaultTransport.TLSClientConfig.RootCAs = caPool
+	defaultTransport.TLSClientConfig.InsecureSkipVerify = false
+	defaultTransport.TLSClientConfig.MinVersion = tls.VersionTLS12
 }
 
 func writeHTTP(w http.ResponseWriter, code int, b []byte) {
@@ -636,19 +627,22 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	if roles, ok := ctx.Value(loggingpkg.CtxKeyRoles).([]string); ok {
-		envs := []string{}
-		for _, role := range roles {
-			if role == "KEYAUTHORITY_OPERATOR" {
-				return true, nil, nil // has access to all environments
-			}
-			if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
-				envs = append(envs, after)
-			}
-		}
-		return false, envs, nil
+
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+	if !ok || tokenInfo == nil {
+		return false, nil, fmt.Errorf("couldn't get accessible environments: missing token info in context")
 	}
-	return false, nil, fmt.Errorf("couldn't get accessible environments: missing token roles in context")
+
+	envs := []string{}
+	for _, role := range tokenInfo.Roles {
+		if role == "KEYAUTHORITY_OPERATOR" {
+			return true, nil, nil // has access to all environments
+		}
+		if after, ok1 := strings.CutPrefix(role, "KEYAUTHORITY_OPERATOR_"); ok1 {
+			envs = append(envs, after)
+		}
+	}
+	return false, envs, nil
 }
 
 func getPaginatedListWithCursor(
@@ -824,9 +818,22 @@ func getEnvironment(r *http.Request) (string, error) {
 /******************************/
 /*         Middlewares        */
 /******************************/
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Apply to API responses
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		// w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none';")
+		// w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ignoredPaths := []string{"/v1/crl/", "/v1/aia/", "/v1/ocsp/"}
+		ignoredPaths := []string{"/v1/crl/", "/v1/aia/"}
 		shouldSetCORS := true
 		for _, p := range ignoredPaths {
 			if strings.HasPrefix(r.URL.Path, p) {
@@ -834,17 +841,22 @@ func withCORS(next http.Handler) http.Handler {
 				break
 			}
 		}
+
 		if shouldSetCORS {
-			w.Header().Set("Access-Control-Allow-Origin", os.Getenv(envCORSOrigin))
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Vault-Token")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			origin := os.Getenv(envCORSOrigin)
+			if origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -869,14 +881,11 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 			return
 		}
 		// Parse immutable claims once, store in context
-		user, externalIssuer, externalSubject, roles := loggingpkg.GetTokenInfoFromClaims(token, true)
+		tokenInfo := loggingpkg.GetTokenInfoFromClaims(token, true)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyUser, user)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalIssuer, externalIssuer)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyExternalSubject, externalSubject)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyRoles, roles)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyTokenInfo, tokenInfo)
 		r = r.WithContext(ctx)
 
 		// Determine environment for RBAC and logging context
@@ -892,7 +901,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 
 		// RBAC check — use roles already extracted above
-		if !internalpkg.HasRequiredRole(roles, environment, requiredRole) {
+		if !internalpkg.HasRequiredRole(tokenInfo.Roles, environment, requiredRole) {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"insufficient permissions", fmt.Errorf("missing required role: %d", requiredRole))
 			return
@@ -979,11 +988,12 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
-		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get user from context")
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		if !ok || tokenInfo == nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
 		}
+		user := tokenInfo.GetHumanReadableUsername()
 
 		keyID, err := store.CreateKey(r.Context(), environment, &cfg, user)
 		if err != nil {
@@ -1474,10 +1484,6 @@ var signerAIAHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Requ
 		})
 })
 
-var signerOCSPHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	logErrorAndWriteHTTP(w, r, http.StatusNotImplemented, "OCSP responder is not implemented yet")
-})
-
 var signerRevokeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	signerName := mux.Vars(r)["name"]
 	signer, err := store.LoadSigner(r.Context(), signerName)
@@ -1691,11 +1697,12 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		user, ok := r.Context().Value(loggingpkg.CtxKeyUser).(string)
-		if !ok {
-			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing user in context")
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		if !ok || tokenInfo == nil {
+			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
 		}
+		user := tokenInfo.GetHumanReadableUsername()
 
 		// Recreate the original request and process it through the router
 		reqBody := bytes.NewReader(pendingReq.Body)
@@ -1808,22 +1815,6 @@ var tokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 			"client_token": token,
 		},
 	})
-})
-
-var tokenClaimsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
-	if !ok {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
-		return
-	}
-
-	var claims map[string]any
-	if err := token.Claims(&claims); err != nil {
-		logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't parse token claims", err)
-		return
-	}
-
-	writeJSONOk(w, claims)
 })
 
 var kubernetesJWKSHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

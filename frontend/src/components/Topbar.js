@@ -97,6 +97,8 @@ const ProfileModal = ({ show, onHide, keycloak }) => {
       </Modal.Header>
       <Modal.Body>
         <KeyValueTable
+          striped={false}
+          borderBottom={false}
           body={{
             User: token.preferred_username || "-",
             Roles:

@@ -189,9 +189,8 @@ func VerifyToken(r *http.Request) (*oidc.IDToken, error) {
 	}
 
 	verifier := provider.Verifier(&oidc.Config{
-		// ClientID:          internalClient.ClientID,
-		SkipClientIDCheck: true, // set true if using public clients without enforcing audience
-		SkipIssuerCheck:   skipIssuerCheck,
+		ClientID:        "keyauthority", // this audience must be configured in Keycloak (e.g. through a Client Scope)
+		SkipIssuerCheck: skipIssuerCheck,
 	})
 
 	idToken, err := verifier.Verify(r.Context(), tokenStr)

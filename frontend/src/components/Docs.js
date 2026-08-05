@@ -303,11 +303,13 @@ export function Administration() {
         URL, and all other required fields.
       </p>
 
-      <img
-        src="/new-idp.png"
-        alt="Identity Provider Config"
-        className="img-fluid"
-      />
+      <div className="text-center w-100 mx-auto" style={{ maxWidth: "1300px" }}>
+        <img
+          src="/new-idp.png"
+          alt="Identity Provider Config"
+          className="img-fluid"
+        />
+      </div>
 
       <JWKSModal show={showJWKSModal} onHide={() => setShowJWKSModal(false)} />
 
@@ -348,7 +350,9 @@ export function Administration() {
         allow token exchange for the newly created Identity Provider.
       </p>
 
-      <img src="/exchange-client-config1.png" className="img-fluid" />
+      <div className="text-center w-100 mx-auto" style={{ maxWidth: "1300px" }}>
+        <img src="/exchange-client-config1.png" className="img-fluid" />
+      </div>
 
       <h5>Step 3: Link Identity Provider User ID to Keycloak User</h5>
 
@@ -360,7 +364,9 @@ export function Administration() {
         the appropriate roles and permissions.
       </p>
 
-      <img src="/user-idp-link.png" className="img-fluid" />
+      <div className="text-center w-100 mx-auto" style={{ maxWidth: "1300px" }}>
+        <img src="/user-idp-link.png" className="img-fluid" />
+      </div>
 
       <p>
         In addition to exact matches, KeyAuthority's custom JWT Authorization
@@ -517,7 +523,9 @@ export function Administration() {
         Kubernetes and GitLab, therefore you might not need this step.
       </p>
 
-      <img src="/exchange-client-config2.png" className="img-fluid" />
+      <div className="text-center w-100 mx-auto" style={{ maxWidth: "1300px" }}>
+        <img src="/exchange-client-config2.png" className="img-fluid" />
+      </div>
 
       <Alert variant="warning" className="mt-4">
         <Alert.Heading className="fs-6 fw-bold">

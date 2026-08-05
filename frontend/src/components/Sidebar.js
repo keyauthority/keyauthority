@@ -1,6 +1,7 @@
 import { Nav, Col, ListGroup } from "react-bootstrap";
 import { NavLink as RouterNavLink } from "react-router-dom";
 import Topbar from "./Topbar";
+import { Fragment } from "react";
 
 export default function Sidebar({ sidebarSections, selectedItem }) {
   return (
@@ -24,7 +25,7 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
         }}
       >
         {sidebarSections.map((section) => (
-          <>
+          <Fragment key={section.key}>
             <ListGroup.Item
               disabled
               key={section.key}
@@ -50,7 +51,7 @@ export default function Sidebar({ sidebarSections, selectedItem }) {
                   {item.title}
                 </ListGroup.Item>
               ))}
-          </>
+          </Fragment>
         ))}
       </ListGroup>
     </Col>

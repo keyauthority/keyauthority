@@ -1575,7 +1575,7 @@ func (s *Store) GetPendingRequestsWithCursor(ctx context.Context, filters url.Va
 		requests = append(requests, map[string]any{
 			"id":          id,
 			"createdAt":   createdAt,
-			"tokenInfo":   tokenInfo,
+			"token":       tokenInfo,
 			"privateBody": privateBody,
 			"method":      method,
 			"url":         url.String,
@@ -1616,16 +1616,12 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 		isPrivateBody = false
 	}
 
-	user, ok := ctx.Value(loggingpkg.CtxKeyUser).(string)
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
 	if !ok {
-		user = "unknown"
+		return uuid.Nil, fmt.Errorf("missing token info in context")
 	}
-
-	tokenInfo := map[string]any{
-		"issuer": token.Issuer,
-		"user":   user,
-	}
-	tokenInfoBytes, err := json.Marshal(tokenInfo)
+	tiMap := tokenInfo.ToMap()
+	tokenInfoBytes, err := json.Marshal(tiMap)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("marshal token info: %w", err)
 	}
