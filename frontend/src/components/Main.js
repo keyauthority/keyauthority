@@ -130,13 +130,15 @@ export default function Main() {
         },
         {
           title: "Build a PKI",
-          subtitle: "Learn how to use KeyAuthority-managed signers to build a PKI for Kubernetes",
+          subtitle:
+            "Learn how to use KeyAuthority-managed signers to build a PKI for Kubernetes",
           to: "/docs/signers",
           icon: "bi-award-fill",
         },
         {
           title: "Use Secrets",
-          subtitle: "Learn how your applications can access KeyAuthority-managed secrets",
+          subtitle:
+            "Learn how your applications can access KeyAuthority-managed secrets",
           to: "/docs/secrets",
           icon: "bi-lock-fill",
         },

@@ -106,7 +106,7 @@ export default function JWKSModal({ show, onHide }) {
   }, [jwksEntries]);
 
   return (
-    <Modal show={show} onHide={onHide}>
+    <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
         <Modal.Title className="text-truncate">Merge Multiple JWKS</Modal.Title>
       </Modal.Header>

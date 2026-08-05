@@ -293,9 +293,9 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Private Key</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Key used by for signing operations
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -343,9 +343,9 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">CA Template</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Fields of the certificate template used when creating CA CSRs
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -390,9 +390,9 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Certificate Template</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Fields included in the certificates issued by this signer
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -495,10 +495,10 @@ function ConfigTab({
             <Card>
               <Card.Header>
                 <h6 className="mb-0">Policy</h6>
-                <span className="text-muted small">
+                <div className="text-muted small">
                   Rules that control what this signer is allowed to issue and
                   how it operates
-                </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <KeyValueTable
@@ -708,9 +708,9 @@ function CSRAndChainTab({
               <Card className="mb-3" key={index}>
                 <Card.Header>
                   <h6 className="mb-0">Certificate {index + 1}</h6>
-                  <span className="text-muted small">
+                  <div className="text-muted small">
                     {cert.subject === cert.issuer ? "Root" : "Intermediate"}
-                  </span>
+                  </div>
                 </Card.Header>
                 <Card.Body>
                   <KeyValueTable

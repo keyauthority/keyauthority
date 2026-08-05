@@ -249,7 +249,7 @@ export function prettyCode(language, code, copyButton = true) {
       <SyntaxHighlighter
         language={language}
         style={isDarkMode ? atomOneDark : atomOneLight}
-        className="rounded p-2"
+        className={`rounded p-2 border ${isDarkMode ? "border-dark-subtle" : "border-light-subtle"}`}
       >
         {codeString}
       </SyntaxHighlighter>
