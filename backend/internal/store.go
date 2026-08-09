@@ -2037,14 +2037,14 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 	in30Days := now.AddDate(0, 0, 30)
 
 	certQuery := `SELECT 
-        COUNT(CASE WHEN not_after <= $1 THEN 1 END) as in_3_days,
-        COUNT(CASE WHEN not_after <= $2 THEN 1 END) as in_7_days,
-        COUNT(CASE WHEN not_after <= $3 THEN 1 END) as in_30_days,
-				COUNT(CASE WHEN not_after > $3 THEN 1 END) as not_expiring_soon
-    FROM certs
-    JOIN signers ON certs.signer_name = signers.name
-    JOIN keys ON signers.private_key_id = keys.id
-    WHERE certs.revoked = false AND not_after > now()`
+		COUNT(CASE WHEN not_after <= $1 THEN 1 END) as in_3_days,
+		COUNT(CASE WHEN not_after <= $2 THEN 1 END) as in_7_days,
+		COUNT(CASE WHEN not_after <= $3 THEN 1 END) as in_30_days,
+		COUNT(CASE WHEN not_after > $3 THEN 1 END) as not_expiring_soon
+	FROM certs
+	JOIN signers ON certs.signer_name = signers.name
+	JOIN keys ON signers.private_key_id = keys.id
+	WHERE certs.revoked = false AND not_after > now()`
 
 	certArgs := []any{in3Days, in7Days, in30Days}
 	certIdx := 4
@@ -2069,14 +2069,14 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 
 	// Keys counts
 	keyQuery := `SELECT 
-        COUNT(CASE WHEN config->>'pkcs11URI' IS NULL OR config->>'pkcs11URI' = '' THEN 1 END) as software,
-        COUNT(CASE WHEN config->>'pkcs11URI' IS NOT NULL AND config->>'pkcs11URI' != '' THEN 1 END) as hsm,
-        COUNT(CASE WHEN config->>'type' = 'RSA' THEN 1 END) as rsa,
-        COUNT(CASE WHEN config->>'type' = 'ECDSA' THEN 1 END) as ecdsa,
-        COUNT(CASE WHEN config->>'type' = 'Ed25519' THEN 1 END) as ed25519,
-        COUNT(CASE WHEN config->>'type' = 'AES' THEN 1 END) as aes
-    FROM keys
-    WHERE 1=1`
+		COUNT(CASE WHEN config->>'pkcs11URI' IS NULL OR config->>'pkcs11URI' = '' THEN 1 END) as software,
+		COUNT(CASE WHEN config->>'pkcs11URI' IS NOT NULL AND config->>'pkcs11URI' != '' THEN 1 END) as hsm,
+		COUNT(CASE WHEN config->>'type' = 'RSA' THEN 1 END) as rsa,
+		COUNT(CASE WHEN config->>'type' = 'ECDSA' THEN 1 END) as ecdsa,
+		COUNT(CASE WHEN config->>'type' = 'Ed25519' THEN 1 END) as ed25519,
+		COUNT(CASE WHEN config->>'type' = 'AES' THEN 1 END) as aes
+	FROM keys
+	WHERE 1=1`
 
 	keyArgs := []any{}
 	keyIdx := 1
@@ -2103,11 +2103,11 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 
 	// Signers counts
 	signerQuery := `SELECT 
-        COUNT(CASE WHEN signers.config->>'isCA' = 'true' THEN 1 END) as root,
-        COUNT(CASE WHEN signers.config->>'isCA' = 'false' OR signers.config->>'isCA' IS NULL THEN 1 END) as intermediate
-    FROM signers
-    JOIN keys ON signers.private_key_id = keys.id
-    WHERE 1=1`
+		COUNT(CASE WHEN signers.config->>'isCA' = 'true' THEN 1 END) as root,
+		COUNT(CASE WHEN signers.config->>'isCA' = 'false' OR signers.config->>'isCA' IS NULL THEN 1 END) as intermediate
+	FROM signers
+	JOIN keys ON signers.private_key_id = keys.id
+	WHERE 1=1`
 
 	signerArgs := []any{}
 	signerIdx := 1
@@ -2132,11 +2132,11 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 	last60Days := now.AddDate(0, 0, -60)
 
 	secretQuery := `SELECT 
-        COUNT(CASE WHEN updated_at >= $1 THEN 1 END) as updated_60,
-				COUNT(CASE WHEN updated_at < $1 THEN 1 END) as not_updated_60
-    FROM secrets
-    JOIN keys ON secrets.encryption_key_id = keys.id
-    WHERE 1=1`
+		COUNT(CASE WHEN updated_at >= $1 THEN 1 END) as updated_60,
+		COUNT(CASE WHEN updated_at < $1 THEN 1 END) as not_updated_60
+	FROM secrets
+	JOIN keys ON secrets.encryption_key_id = keys.id
+	WHERE 1=1`
 
 	secretArgs := []any{last60Days}
 	secretIdx := 2
@@ -2161,11 +2161,11 @@ func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, acces
 	last24h := now.Add(-24 * time.Hour)
 
 	logQuery := `SELECT 
-        COUNT(CASE WHEN level = 'ERROR' THEN 1 END) as errors,
-        COUNT(CASE WHEN msg = 'certificate signed' THEN 1 END) as certs_signed,
-        COUNT(CASE WHEN msg = 'secret read' THEN 1 END) as secret_reads
-    FROM logs
-    WHERE log_time >= $1`
+		COUNT(CASE WHEN level = 'ERROR' THEN 1 END) as errors,
+		COUNT(CASE WHEN msg = 'certificate signed' THEN 1 END) as certs_signed,
+		COUNT(CASE WHEN msg = 'secret read' THEN 1 END) as secret_reads
+	FROM logs
+	WHERE log_time >= $1`
 
 	if err := s.DB.QueryRowContext(ctx, logQuery, last24h).Scan(
 		&dashboard.Logs.ErrorCount24h,

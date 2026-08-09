@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/cert-manager/cert-manager v1.21.1
 	github.com/coreos/go-oidc/v3 v3.20.0
-	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
+	github.com/digitorus/pdfsign v0.9.0
 	github.com/eclipse-keypont/crypto11 v1.6.8
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -17,7 +17,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/square/certstrap v1.3.0
 	go.step.sm/crypto v0.87.0
-	k8s.io/api v0.37.0-beta.0
+	k8s.io/api v0.38.0-alpha.0
 )
 
 require (
@@ -69,8 +69,8 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.3 // indirect
-	k8s.io/apimachinery v0.37.0-beta.0 // indirect
-	k8s.io/client-go v0.37.0-beta.0 // indirect
+	k8s.io/apimachinery v0.38.0-alpha.0 // indirect
+	k8s.io/client-go v0.38.0-alpha.0 // indirect
 	k8s.io/component-base v0.36.3 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect

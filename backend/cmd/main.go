@@ -627,7 +627,6 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-
 	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
 	if !ok || tokenInfo == nil {
 		return false, nil, fmt.Errorf("couldn't get accessible environments: missing token info in context")
@@ -658,12 +657,7 @@ func getPaginatedListWithCursor(
 		return
 	}
 
-	writeJSONOk(w, map[string]any{
-		"data":       result.Items,
-		"nextCursor": result.NextCursor,
-		"hasMore":    result.HasMore,
-		"pageSize":   result.PageSize,
-	})
+	writeJSONOk(w, result)
 }
 
 func getPaginatedListWithAccessibleEnvsAndCursor(
@@ -853,7 +847,7 @@ func withCORS(next http.Handler) http.Handler {
 		}
 
 		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
