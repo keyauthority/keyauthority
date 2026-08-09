@@ -115,9 +115,9 @@ const classes = {
     (darkMode ? " bg-dark-subtle" : " bg-light"),
   kcLoginClass: "py-4",
 
-  //kcHeaderClass: "",
-  kcHeaderWrapperClass: "pb-4",
-  kcFormCardClass: "py-4 border-top",
+  kcHeaderClass: "border-bottom mb-4 pb-4",
+  kcHeaderWrapperClass: "",
+  kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
   kcFormHeaderClass: "opacity-90 pb-3",
