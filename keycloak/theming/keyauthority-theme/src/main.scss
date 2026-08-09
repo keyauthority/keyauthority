@@ -34,8 +34,10 @@ $primary: #c62828; // Primary color: deep red
   opacity: 0.95;
 }
 
-.kcFormCardClass {
-  min-width: 450px;
+@include media-breakpoint-up(sm) {
+  .kcFormCardClass {
+    min-width: 450px;
+  }
 }
 
 .btn-outline-primary {

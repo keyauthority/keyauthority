@@ -109,15 +109,15 @@ const darkMode =
   document.documentElement.getAttribute("data-bs-theme") === "dark";
 
 const classes = {
-  kcHtmlClass: "",
+  //kcHtmlClass: "",
   kcBodyClass:
     "mw-100 mh-100 min-vh-100 d-flex align-items-center justify-content-center" +
     (darkMode ? " bg-dark-subtle" : " bg-light"),
-  kcLoginClass: "py-4",
+  //kcLoginClass: "",
 
   kcHeaderClass: "border-bottom mb-4 pb-4",
-  kcHeaderWrapperClass: "",
-  kcFormCardClass: "",
+  //kcHeaderWrapperClass: "",
+  //kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
   kcFormHeaderClass: "opacity-90 pb-3",
