@@ -115,12 +115,11 @@ const classes = {
     (darkMode ? " bg-dark-subtle" : " bg-light"),
   //kcLoginClass: "",
 
-  kcHeaderClass: "border-bottom mb-4 pb-4",
-  //kcHeaderWrapperClass: "",
+  //kcHeaderClass: "",
   //kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
-  kcFormHeaderClass: "opacity-90 pb-3",
+  kcFormHeaderClass: "opacity-90 pb-3 pt-4 mt-4 border-top",
   //kcInputWrapperClass: "",
   kcInputClass: "form-control",
   kcInputErrorMessageClass: "text-danger",
