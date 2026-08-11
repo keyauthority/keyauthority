@@ -108,18 +108,21 @@ const darkMode =
   window.matchMedia("(prefers-color-scheme: dark)").matches ||
   document.documentElement.getAttribute("data-bs-theme") === "dark";
 
+const bodyBg = darkMode ? " bg-darker" : " bg-light";
+const formBg = darkMode ? " bg-dark-subtle" : " bg-body";
+const formBorder = darkMode ? " border-dark-subtle" : " ";
+const formShadow = darkMode ? " shadow" : " shadow-sm";
+
 const classes = {
   //kcHtmlClass: "",
-  kcBodyClass:
-    "mw-100 mh-100 min-vh-100 d-flex align-items-center justify-content-center" +
-    (darkMode ? " bg-dark-subtle" : " bg-light"),
-  //kcLoginClass: "",
+  kcBodyClass: `min-vh-100 d-flex justify-content-center align-items-center${bodyBg}`,
+  kcLoginClass: `mt-2 mb-4 p-5 border rounded-4${formShadow} ${formBorder} ${formBg}`,
 
-  //kcHeaderClass: "",
+  kcHeaderClass: "text-center mb-3",
   //kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
-  kcFormHeaderClass: "opacity-90 pb-3 pt-4 mt-4 border-top",
+  kcFormHeaderClass: "opacity-85 pb-4 text-center",
   //kcInputWrapperClass: "",
   kcInputClass: "form-control",
   kcInputErrorMessageClass: "text-danger",

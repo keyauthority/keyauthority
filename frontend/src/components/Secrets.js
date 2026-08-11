@@ -5,7 +5,6 @@ import Filters from "./Filters";
 import Paginator from "./Paginator";
 import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
 
-import ImportSecretsModal from "./ImportSecretsModal";
 import SecretModal from "./SecretModal";
 
 export default function Secrets({
@@ -17,7 +16,6 @@ export default function Secrets({
   const [secrets, setSecrets] = useState([]);
   const [filters, setFilters] = useState({});
   const [showSecretModal, setShowSecretModal] = useState(false);
-  const [showImportSecretsModal, setShowImportSecretsModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const navigate = useNavigate();
@@ -32,14 +30,6 @@ export default function Secrets({
           setShowSecretModal(true);
         },
       },
-      {
-        key: "import-secrets",
-        label: "Import From HC Vault",
-        iconClass: "bi bi-upload",
-        onClick: () => {
-          setShowImportSecretsModal(true);
-        },
-      },
     ]);
     return () => setDropdownActions?.([]);
   }, [setDropdownActions]);
@@ -52,17 +42,6 @@ export default function Secrets({
         onHide={() => setShowSecretModal(false)}
         onSuccess={(updatedSecret) => {
           navigate(`/secrets/${encodeURIComponent(updatedSecret)}`);
-        }}
-      />
-
-      <ImportSecretsModal
-        show={showImportSecretsModal}
-        onHide={() => setShowImportSecretsModal(false)}
-        onSuccess={(imported, skipped, failed) => {
-          showImportResultToast(imported, skipped, failed);
-          if (imported.size > 0) {
-            setRefreshTrigger((prev) => prev + 1);
-          }
         }}
       />
 

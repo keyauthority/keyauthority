@@ -35,12 +35,16 @@ $primary: #c62828; // Primary color: deep red
 }
 
 @include media-breakpoint-up(sm) {
-  .kcFormCardClass {
-    min-width: 430px;
+  .kcLoginClass {
+    min-width: 450px;
   }
 }
 
 .btn-outline-primary {
   --bs-btn-color: rgb(var(--bs-link-color-rgb));
   --bs-btn-border-color: rgb(var(--bs-link-color-rgb));
+}
+
+.bg-darker {
+  background-color: darken(rgb(33, 37, 41), 6%) !important;
 }
