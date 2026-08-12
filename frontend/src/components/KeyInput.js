@@ -197,7 +197,7 @@ export default function KeyInput({
           >
             pkcs11
           </a>{" "}
-          for further details - leave empty for software key
+          for further details -leave empty for software key
         </Form.Text>
       </Form.Group>
     </>

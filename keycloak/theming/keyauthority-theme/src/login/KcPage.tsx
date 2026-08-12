@@ -116,13 +116,13 @@ const formShadow = darkMode ? " shadow" : " shadow-sm";
 const classes = {
   //kcHtmlClass: "",
   kcBodyClass: `min-vh-100 d-flex justify-content-center align-items-center${bodyBg}`,
-  kcLoginClass: `mt-2 mb-4 p-5 border rounded-4${formShadow} ${formBorder} ${formBg}`,
+  kcLoginClass: `mt-2 mb-4 p-5 border rounded-3${formShadow} ${formBorder} ${formBg}`,
 
-  kcHeaderClass: "text-center mb-3",
+  //kcHeaderClass: "",
   //kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
-  kcFormHeaderClass: "opacity-85 pb-4 text-center",
+  kcFormHeaderClass: "opacity-85 py-3",
   //kcInputWrapperClass: "",
   kcInputClass: "form-control",
   kcInputErrorMessageClass: "text-danger",

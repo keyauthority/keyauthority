@@ -840,7 +840,7 @@ func withCORS(next http.Handler) http.Handler {
 		}
 
 		if originOK && !pathIgnored {
-			// logger.Debug(r, "CORS headers set", "origin", origin)
+			logger.Debug(r, "CORS headers set", "origin", origin)
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")

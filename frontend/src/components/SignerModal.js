@@ -609,13 +609,16 @@ export default function SignerModal({
               <Row>
                 {[
                   "cert sign",
-                  "crl sign",
-                  "digital signature",
                   "key encipherment",
+                  "code signing",
+                  "crl sign",
                   "server auth",
+                  "email protection",
+                  "digital signature",
                   "client auth",
+                  "s/mime",
                 ].map((usage) => (
-                  <Col md={6} key={usage}>
+                  <Col md={4} key={usage}>
                     <Form.Check
                       type="checkbox"
                       label={usage}
@@ -636,7 +639,8 @@ export default function SignerModal({
                 ))}
               </Row>
               <Form.Text className="text-muted">
-                Key usages allowed in certificates issued by this signer
+                Key usages allowed in certificates issued by this signer -add
+                more via REST.
               </Form.Text>
             </Form.Group>
 
