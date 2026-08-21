@@ -77,6 +77,7 @@ export function showToast(type, content, autoClose = "auto", options = {}) {
   }
 
   toast[type](content, {
+    // position: "top-right",
     theme: isDarkMode ? "dark" : "light",
     autoClose: calculatedAutoClose,
     ...options,

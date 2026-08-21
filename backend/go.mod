@@ -1,11 +1,11 @@
 module github.com/keyauthority/keyauthority
 
-go 1.26.5
+go 1.27.0
 
 require (
 	github.com/cert-manager/cert-manager v1.21.1
 	github.com/coreos/go-oidc/v3 v3.20.0
-	github.com/digitorus/pdfsign v0.0.0-20260407063256-85ede6424a74
+	github.com/digitorus/pdfsign v0.9.0
 	github.com/eclipse-keypont/crypto11 v1.6.8
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -16,8 +16,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/square/certstrap v1.3.0
-	go.step.sm/crypto v0.87.0
-	k8s.io/api v0.37.0-beta.0
+	go.step.sm/crypto v0.89.0
+	k8s.io/api v0.38.0-alpha.0
 )
 
 require (
@@ -28,9 +28,9 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/digitorus/pdf v0.2.0 // indirect
-	github.com/digitorus/pkcs7 v0.0.0-20250730155240-ffadbf3f398c // indirect
+	github.com/digitorus/pkcs7 v0.0.0-20260821105541-05f79448fa77 // indirect
 	github.com/digitorus/timestamp v0.0.0-20250524132541-c45532741eea // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/go-ldap/ldap/v3 v3.4.14 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -58,20 +58,20 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apiextensions-apiserver v0.36.3 // indirect
-	k8s.io/apimachinery v0.37.0-beta.0 // indirect
-	k8s.io/client-go v0.37.0-beta.0 // indirect
-	k8s.io/component-base v0.36.3 // indirect
+	k8s.io/apiextensions-apiserver v0.36.4 // indirect
+	k8s.io/apimachinery v0.38.0-alpha.0 // indirect
+	k8s.io/client-go v0.38.0-alpha.0 // indirect
+	k8s.io/component-base v0.36.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect

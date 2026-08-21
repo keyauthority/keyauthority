@@ -108,22 +108,21 @@ const darkMode =
   window.matchMedia("(prefers-color-scheme: dark)").matches ||
   document.documentElement.getAttribute("data-bs-theme") === "dark";
 
+const bodyBg = darkMode ? " bg-darker" : " bg-light";
+const formBg = darkMode ? " bg-dark-subtle" : " bg-body";
+const formBorder = darkMode ? " border-dark-subtle" : " ";
+const formShadow = darkMode ? " shadow" : " shadow-sm";
+
 const classes = {
-  kcHtmlClass: "",
-  kcBodyClass:
-    "mw-100 mh-100 min-vh-100 d-flex align-items-center justify-content-center" +
-    (darkMode ? " bg-dark-subtle" : " bg-light"),
-  kcLoginClass: "py-4",
+  //kcHtmlClass: "",
+  kcBodyClass: `min-vh-100 d-flex justify-content-center align-items-center${bodyBg}`,
+  kcLoginClass: `mt-2 mb-4 p-5 border rounded-3${formShadow} ${formBorder} ${formBg}`,
 
-  kcHeaderClass: "",
-  kcHeaderWrapperClass:
-    "bg-body border border-bottom-0 rounded-3 rounded-bottom-0 p-5 pt-5 pb-3 shadow-sm",
-
-  kcFormCardClass:
-    "bg-body border border-top-0 rounded-3 rounded-top-0 p-5 pt-0 shadow-sm",
+  //kcHeaderClass: "",
+  //kcFormCardClass: "",
   kcLocaleMainClass: "d-none",
 
-  kcFormHeaderClass: "opacity-85 pb-3",
+  kcFormHeaderClass: "opacity-85 py-3",
   //kcInputWrapperClass: "",
   kcInputClass: "form-control",
   kcInputErrorMessageClass: "text-danger",

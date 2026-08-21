@@ -90,7 +90,6 @@ func GenerateKeyAndCSR(commonName string, altNames []string,
 			Type:  "RSA PRIVATE KEY",
 			Bytes: privKeyBytes,
 		})
-
 	case "ecdsa":
 		// Generate a new ECDSA private key using the P-384 curve
 		privKey, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
