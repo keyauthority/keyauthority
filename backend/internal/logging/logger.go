@@ -30,21 +30,29 @@ import (
 	"github.com/google/uuid"
 )
 
-type ctxKey string
-
 const (
 	envLogLevel           = "LOG_LEVEL"
 	envLogDBBatchSize     = "LOG_DB_BATCH_SIZE"
 	envLogDBFlushInterval = "LOG_DB_FLUSH_INTERVAL"
-
-	CtxKeyWriteLogToDB      = ctxKey("writeLogToDB")
-	CtxKeyToken             = ctxKey("token")
-	CtxKeyTokenInfo         = ctxKey("tokenInfo")
-	CtxKeyEnvironment       = ctxKey("environment")
-	CtxKeyApproverToken     = ctxKey("approverToken")
-	CtxKeyRequestID         = ctxKey("requestID")
-	CtxKeyOriginalRequestID = ctxKey("originalRequestID")
 )
+
+type CtxKeyWriteLogToDB struct{}
+type CtxKeyToken struct{}
+type CtxKeyTokenInfo struct{}
+type CtxKeyEnvironment struct{}
+type CtxKeyApproverToken struct{}
+type CtxKeyRequestID struct{}
+type CtxKeyOriginalRequestID struct{}
+
+func (c *CtxKeyEnvironment) String() string {
+	return "environment"
+}
+func (c *CtxKeyRequestID) String() string {
+	return "requestID"
+}
+func (c *CtxKeyOriginalRequestID) String() string {
+	return "originalRequestID"
+}
 
 type StdAndDBLogger struct {
 	stdLogger *slog.Logger
@@ -107,7 +115,7 @@ func isError(val any) bool {
 func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.InfoContext(ctx, msg, attrs...)
-	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.InfoContext(ctx, msg, attrs...)
 	}
 }
@@ -115,7 +123,7 @@ func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args .
 func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.InfoContext(r.Context(), msg, attrs...)
-	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.InfoContext(r.Context(), msg, attrs...)
 	}
 }
@@ -123,7 +131,7 @@ func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
 func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.ErrorContext(ctx, msg, attrs...)
-	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.ErrorContext(ctx, msg, removeErrorArgs(attrs)...)
 	}
 }
@@ -131,7 +139,7 @@ func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args 
 func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.ErrorContext(r.Context(), msg, attrs...)
-	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.ErrorContext(r.Context(), msg, removeErrorArgs(attrs)...)
 	}
 }
@@ -139,7 +147,7 @@ func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
 func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.WarnContext(ctx, msg, attrs...)
-	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.WarnContext(ctx, msg, removeErrorArgs(attrs)...)
 	}
 }
@@ -147,7 +155,7 @@ func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args .
 func (l *StdAndDBLogger) Warn(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.WarnContext(r.Context(), msg, attrs...)
-	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB).(bool); ok && saveToDB {
+	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
 		l.dbLogger.WarnContext(r.Context(), msg, removeErrorArgs(attrs)...)
 	}
 }
@@ -288,7 +296,7 @@ func attrsFromContext(ctx context.Context) []any {
 	var attrs []any
 	if ctx != nil {
 		// actor
-		if tokenInfo, ok := ctx.Value(CtxKeyTokenInfo).(*TokenInfo); ok && tokenInfo != nil {
+		if tokenInfo, ok := ctx.Value(CtxKeyTokenInfo{}).(*TokenInfo); ok && tokenInfo != nil {
 			tokenAttrs := tokenInfo.ToSlogAttrsWithJWTAuthzGrant()
 			if len(tokenAttrs) > 0 {
 				attrs = append(attrs, slog.Group("token", tokenAttrs...))
@@ -296,7 +304,7 @@ func attrsFromContext(ctx context.Context) []any {
 		}
 
 		// approver
-		if approverToken, ok := ctx.Value(CtxKeyApproverToken).(*oidc.IDToken); ok {
+		if approverToken, ok := ctx.Value(CtxKeyApproverToken{}).(*oidc.IDToken); ok {
 			approverTokenInfo := GetTokenInfoFromClaims(approverToken, false)
 			approverTokenAttrs := approverTokenInfo.ToSlogAttrs()
 			attrs = append(attrs,
@@ -309,16 +317,16 @@ func attrsFromContext(ctx context.Context) []any {
 		}
 
 		// environment
-		if environment, ok := ctx.Value(CtxKeyEnvironment).(string); ok {
-			attrs = append(attrs, slog.String(string(CtxKeyEnvironment), environment))
+		if environment, ok := ctx.Value(CtxKeyEnvironment{}).(string); ok {
+			attrs = append(attrs, slog.String((&CtxKeyEnvironment{}).String(), environment))
 		}
 
 		// request IDs
-		if requestID, ok := ctx.Value(CtxKeyRequestID).(uuid.UUID); ok {
-			attrs = append(attrs, slog.String(string(CtxKeyRequestID), requestID.String()))
+		if requestID, ok := ctx.Value(CtxKeyRequestID{}).(uuid.UUID); ok {
+			attrs = append(attrs, slog.String((&CtxKeyRequestID{}).String(), requestID.String()))
 		}
-		if originalReqID, ok := ctx.Value(CtxKeyOriginalRequestID).(uuid.UUID); ok {
-			attrs = append(attrs, slog.String(string(CtxKeyOriginalRequestID), originalReqID.String()))
+		if originalReqID, ok := ctx.Value(CtxKeyOriginalRequestID{}).(uuid.UUID); ok {
+			attrs = append(attrs, slog.String((&CtxKeyOriginalRequestID{}).String(), originalReqID.String()))
 		}
 	}
 	return attrs
@@ -344,6 +352,9 @@ func attrsFromRequest(r *http.Request) []any {
 			slog.String("method", r.Method),
 			slog.String("url", reqURL),
 		)
+		if r.RemoteAddr != "" {
+			attrs = append(attrs, slog.String("remoteAddr", r.RemoteAddr))
+		}
 	}
 	return attrs
 }

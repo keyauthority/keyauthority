@@ -627,7 +627,7 @@ func onCertificateSigned(r *http.Request, cert *x509.Certificate, comment string
 }
 
 func getAccessibleEnvs(ctx context.Context) (bool, []string, error) {
-	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
 	if !ok || tokenInfo == nil {
 		return false, nil, fmt.Errorf("couldn't get accessible environments: missing token info in context")
 	}
@@ -714,7 +714,7 @@ func isInsertSecretRequest(r *http.Request) bool {
 
 func requiresApproval(r *http.Request) bool {
 	// already approved, no need for approval again
-	if _, ok := r.Context().Value(loggingpkg.CtxKeyOriginalRequestID).(uuid.UUID); ok {
+	if _, ok := r.Context().Value(loggingpkg.CtxKeyOriginalRequestID{}).(uuid.UUID); ok {
 		return false
 	}
 
@@ -879,8 +879,8 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		tokenInfo := loggingpkg.GetTokenInfoFromClaims(token, true)
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken, token)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyTokenInfo, tokenInfo)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyToken{}, token)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyTokenInfo{}, tokenInfo)
 		r = r.WithContext(ctx)
 
 		// Determine environment for RBAC and logging context
@@ -891,7 +891,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 		}
 		if environment != "" {
 			ctx = r.Context()
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
+			ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment{}, environment)
 			r = r.WithContext(ctx)
 		}
 
@@ -906,11 +906,11 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 
 		// Save logs to DB only after token is verified and RBAC is checked
 		ctx = r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, true)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB{}, true)
 		r = r.WithContext(ctx)
 
 		// Prevent requester and approver from being the same user
-		approverToken, ok := ctx.Value(loggingpkg.CtxKeyApproverToken).(*oidc.IDToken)
+		approverToken, ok := ctx.Value(loggingpkg.CtxKeyApproverToken{}).(*oidc.IDToken)
 		if ok && approverToken.Subject == token.Subject && approverToken.Issuer == token.Issuer {
 			logErrorAndWriteHTTP(w, r, http.StatusForbidden,
 				"cannot guarantee that requester and approver are different users")
@@ -934,7 +934,7 @@ func withAuth(requiredRoles map[string]internalpkg.Role, next http.Handler) http
 				return
 			}
 
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyRequestID, requestID)
+			ctx = context.WithValue(ctx, loggingpkg.CtxKeyRequestID{}, requestID)
 			r = r.WithContext(ctx)
 
 			logger.Info(r, "pending request created", "id", requestID)
@@ -983,7 +983,7 @@ var keysHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
 		if !ok || tokenInfo == nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
@@ -1529,8 +1529,8 @@ var signerACMEHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Req
 		}
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment, environment)
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, true)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyEnvironment{}, environment)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB{}, true)
 		r = r.WithContext(ctx)
 	}
 
@@ -1692,7 +1692,7 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			return
 		}
 
-		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
 		if !ok || tokenInfo == nil {
 			logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
 			return
@@ -1702,10 +1702,10 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 		// Recreate the original request and process it through the router
 		reqBody := bytes.NewReader(pendingReq.Body)
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyOriginalRequestID, id)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyOriginalRequestID{}, id)
 
 		// Remove the writeToDB flag from context to prevent double logging
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB, false)
+		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB{}, false)
 
 		// Execute the pending request using the approver's token
 		if r.URL.Query().Get("useOwnToken") == "true" {
@@ -1724,13 +1724,13 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 			pendingReq.Header.Set("Authorization", r.Header.Get("Authorization"))
 
 		} else {
-			token, ok := r.Context().Value(loggingpkg.CtxKeyToken).(*oidc.IDToken)
+			token, ok := r.Context().Value(loggingpkg.CtxKeyToken{}).(*oidc.IDToken)
 			if !ok {
 				logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
 				return
 			}
 
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyApproverToken, token)
+			ctx = context.WithValue(ctx, loggingpkg.CtxKeyApproverToken{}, token)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, pendingReq.Method, pendingReq.URL.String(), reqBody)
@@ -1745,7 +1745,8 @@ var pendingRequestHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http
 
 		if !(rr.Code >= 200 && rr.Code < 300) {
 			logErrorAndWriteHTTP(w, r.WithContext(ctx), http.StatusInternalServerError,
-				"pending request approved but execution failed", err)
+				"pending request approved but execution failed",
+				fmt.Errorf("execution failed with status code: %d", rr.Code))
 			return
 		}
 

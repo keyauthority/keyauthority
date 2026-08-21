@@ -1616,7 +1616,7 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 		isPrivateBody = false
 	}
 
-	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo).(*loggingpkg.TokenInfo)
+	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
 	if !ok {
 		return uuid.Nil, fmt.Errorf("missing token info in context")
 	}
