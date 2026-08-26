@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package internal
+package database
 
 import (
 	"context"
@@ -87,12 +87,12 @@ type PendingRequestPublic struct {
 	TokenInfo   map[string]any `json:"token"`
 }
 
-type Store struct {
+type Database struct {
 	DB              *sql.DB
 	SoftwareKeyPass []byte
 }
 
-func NewStore(ctx context.Context) (*Store, error) {
+func NewDatabase(ctx context.Context) (*Database, error) {
 	softwareKeyPass := []byte(os.Getenv(envSoftwareKeyPass))
 	if len(softwareKeyPass) == 0 {
 		return nil, fmt.Errorf("missing required env var: %s", envSoftwareKeyPass)
@@ -126,10 +126,10 @@ func NewStore(ctx context.Context) (*Store, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
-	return &Store{DB: db, SoftwareKeyPass: softwareKeyPass}, nil
+	return &Database{DB: db, SoftwareKeyPass: softwareKeyPass}, nil
 }
 
-func (s *Store) Close() error {
+func (s *Database) Close() error {
 	// close DB first to prevent new key loads
 	var dbErr error
 	if s.DB != nil {
@@ -373,7 +373,7 @@ func applyKeyFilters(query string, args []any, idx int, filters url.Values) (str
 	return query, args, idx
 }
 
-func (s *Store) GetKeysWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetKeysWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
 	query := `SELECT id, environment, config, created_at FROM keys WHERE 1=1`
 	args := []any{}
 	idx := 1
@@ -435,7 +435,7 @@ func (s *Store) GetKeysWithCursor(ctx context.Context, hasAccessToAllEnvs bool, 
 	}, nil
 }
 
-func (s *Store) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyConfig, createdBy string) (uuid.UUID, error) {
+func (s *Database) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyConfig, createdBy string) (uuid.UUID, error) {
 	// marshal config
 	if cleanCfg, err := withKeyConfigDefaults(cfg); err != nil {
 		return uuid.Nil, fmt.Errorf("apply key config defaults: %w", err)
@@ -464,7 +464,7 @@ func (s *Store) CreateKey(ctx context.Context, env string, cfg *cryptopkg.KeyCon
 	return id, nil
 }
 
-func (s *Store) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error) {
+func (s *Database) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error) {
 	var cfgJSON []byte
 	var createdAt time.Time
 	var env string
@@ -487,7 +487,7 @@ func (s *Store) GetKey(ctx context.Context, id uuid.UUID) (map[string]any, error
 	}, nil
 }
 
-func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
+func (s *Database) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, error) {
 	if cachedKey, found := keyCache.Get(id.String()); found {
 		if key, ok := cachedKey.(*cryptopkg.Key); ok && key != nil {
 			return key, nil
@@ -519,7 +519,7 @@ func (s *Store) LoadKey(ctx context.Context, id uuid.UUID) (*cryptopkg.Key, erro
 	return key, nil
 }
 
-func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
+func (s *Database) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
 	key, err := s.LoadKey(ctx, id)
 	if err != nil {
 		return fmt.Errorf("load key: %w", err)
@@ -548,7 +548,7 @@ func (s *Store) CheckKeyReadiness(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Store) GetKeyEnvironment(ctx context.Context, id string) (string, error) {
+func (s *Database) GetKeyEnvironment(ctx context.Context, id string) (string, error) {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return "", fmt.Errorf("invalid key ID: %w", err)
@@ -564,7 +564,7 @@ func (s *Store) GetKeyEnvironment(ctx context.Context, id string) (string, error
 	return env, nil
 }
 
-func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) error {
+func (s *Database) DeleteKey(ctx context.Context, id uuid.UUID) error {
 	_, err := s.DB.ExecContext(ctx, `
 		DELETE FROM keys
 		WHERE id = $1
@@ -606,7 +606,7 @@ func applySignerFilters(query string, args []any, idx int, filters url.Values) (
 	return query, args, idx
 }
 
-func (s *Store) GetSignersWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetSignersWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
 	query := `SELECT keys.environment, signers.name, signers.private_key_id, signers.config, signers.updated_at, signers.name
         FROM signers
         JOIN keys ON signers.private_key_id = keys.id
@@ -681,7 +681,7 @@ func (s *Store) GetSignersWithCursor(ctx context.Context, hasAccessToAllEnvs boo
 	}, nil
 }
 
-func (s *Store) CreateSigner(ctx context.Context, name string, keyID uuid.UUID, cfg *signerpkg.SignerConfig) error {
+func (s *Database) CreateSigner(ctx context.Context, name string, keyID uuid.UUID, cfg *signerpkg.SignerConfig) error {
 	// check if signer already exists
 	var exists bool
 	if err := s.DB.QueryRowContext(ctx, `
@@ -717,7 +717,7 @@ func (s *Store) CreateSigner(ctx context.Context, name string, keyID uuid.UUID, 
 	return err
 }
 
-func (s *Store) GetAllSigners(ctx context.Context) ([]string, error) {
+func (s *Database) GetAllSigners(ctx context.Context) ([]string, error) {
 	var signers []string
 	rows, err := s.DB.QueryContext(ctx, `
 		SELECT name
@@ -743,7 +743,7 @@ func (s *Store) GetAllSigners(ctx context.Context) ([]string, error) {
 	return signers, nil
 }
 
-func (s *Store) DeleteSigner(ctx context.Context, name string) error {
+func (s *Database) DeleteSigner(ctx context.Context, name string) error {
 	_, err := s.DB.ExecContext(ctx, `
 		DELETE FROM signers
 		WHERE name = $1
@@ -751,7 +751,7 @@ func (s *Store) DeleteSigner(ctx context.Context, name string) error {
 	return err
 }
 
-func (s *Store) GetPrivateKeyID(ctx context.Context, name string) (uuid.UUID, error) {
+func (s *Database) GetPrivateKeyID(ctx context.Context, name string) (uuid.UUID, error) {
 	var id uuid.UUID
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT private_key_id
@@ -763,7 +763,7 @@ func (s *Store) GetPrivateKeyID(ctx context.Context, name string) (uuid.UUID, er
 	return id, nil
 }
 
-func (s *Store) GetSignerEnvironment(ctx context.Context, name string) (string, error) {
+func (s *Database) GetSignerEnvironment(ctx context.Context, name string) (string, error) {
 	var env string
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT k.environment
@@ -776,7 +776,7 @@ func (s *Store) GetSignerEnvironment(ctx context.Context, name string) (string, 
 	return env, nil
 }
 
-func (s *Store) GetSignerConfig(ctx context.Context, name string) (*signerpkg.SignerConfig, error) {
+func (s *Database) GetSignerConfig(ctx context.Context, name string) (*signerpkg.SignerConfig, error) {
 	var cfgJSON []byte
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT config
@@ -792,7 +792,7 @@ func (s *Store) GetSignerConfig(ctx context.Context, name string) (*signerpkg.Si
 	return &cfg, nil
 }
 
-func (s *Store) SetSignerConfig(ctx context.Context, name string, cfg *signerpkg.SignerConfig) error {
+func (s *Database) SetSignerConfig(ctx context.Context, name string, cfg *signerpkg.SignerConfig) error {
 	// marshal config
 	cfgJSON, err := json.Marshal(withSignerConfigDefaults(cfg))
 	if err != nil {
@@ -807,7 +807,7 @@ func (s *Store) SetSignerConfig(ctx context.Context, name string, cfg *signerpkg
 	return err
 }
 
-func (s *Store) GetSignerCAChain(ctx context.Context, name string) ([]byte, error) {
+func (s *Database) GetSignerCAChain(ctx context.Context, name string) ([]byte, error) {
 	var caChain []byte
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT ca_chain
@@ -819,7 +819,7 @@ func (s *Store) GetSignerCAChain(ctx context.Context, name string) ([]byte, erro
 	return caChain, nil
 }
 
-func (s *Store) GetSignerCACertByHash(ctx context.Context, hash string) ([]byte, error) {
+func (s *Database) GetSignerCACertByHash(ctx context.Context, hash string) ([]byte, error) {
 	if cachedCACert, found := caCertCache.Get(hash); found {
 		return cachedCACert.([]byte), nil
 	}
@@ -852,7 +852,7 @@ func (s *Store) GetSignerCACertByHash(ctx context.Context, hash string) ([]byte,
 	return caCertPEM, nil
 }
 
-func (s *Store) SetSignerCAChain(ctx context.Context, name string, caChain []byte) error {
+func (s *Database) SetSignerCAChain(ctx context.Context, name string, caChain []byte) error {
 	var hash string
 	if err := s.DB.QueryRowContext(ctx, `
 		UPDATE signers
@@ -867,7 +867,7 @@ func (s *Store) SetSignerCAChain(ctx context.Context, name string, caChain []byt
 	return nil
 }
 
-func (s *Store) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {
+func (s *Database) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {
 	var crl []byte
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT crl
@@ -879,7 +879,7 @@ func (s *Store) GetSignerCRL(ctx context.Context, name string) ([]byte, error) {
 	return crl, nil
 }
 
-func (s *Store) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, error) {
+func (s *Database) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, error) {
 	if cachedCRL, found := crlCache.Get(hash); found {
 		return cachedCRL.([]byte), nil
 	}
@@ -897,7 +897,7 @@ func (s *Store) GetSignerCRLByHash(ctx context.Context, hash string) ([]byte, er
 	return crl, nil
 }
 
-func (s *Store) SetSignerCRL(ctx context.Context, name string, der []byte) error {
+func (s *Database) SetSignerCRL(ctx context.Context, name string, der []byte) error {
 	var hash string
 	if err := s.DB.QueryRowContext(ctx, `
 		UPDATE signers
@@ -912,7 +912,7 @@ func (s *Store) SetSignerCRL(ctx context.Context, name string, der []byte) error
 	return nil
 }
 
-func (s *Store) LoadSigner(ctx context.Context, name string, args ...any) (*signerpkg.Signer, error) {
+func (s *Database) LoadSigner(ctx context.Context, name string, args ...any) (*signerpkg.Signer, error) {
 	pvkID, err := s.GetPrivateKeyID(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("get signer private key ID: %w", err)
@@ -1009,7 +1009,7 @@ func applyCertFilters(query string, args []any, idx int, filters url.Values) (st
 	return query, args, idx
 }
 
-func (s *Store) GetCertsWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetCertsWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
 	query := `SELECT certs.serial, certs.signer_name, certs.cn, certs.sans, certs.not_before, certs.not_after, certs.revoked, certs.comment, keys.environment
 				FROM certs
 				JOIN signers ON certs.signer_name = signers.name
@@ -1080,7 +1080,7 @@ func (s *Store) GetCertsWithCursor(ctx context.Context, hasAccessToAllEnvs bool,
 	}, nil
 }
 
-func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Certificate, comment string) error {
+func (s *Database) InsertCert(ctx context.Context, signerName string, cert *x509.Certificate, comment string) error {
 	cn := cert.Subject.CommonName
 	sans := append(cert.DNSNames, cert.EmailAddresses...)
 	der := cert.Raw
@@ -1096,7 +1096,7 @@ func (s *Store) InsertCert(ctx context.Context, signerName string, cert *x509.Ce
 	return err
 }
 
-func (s *Store) SetCertAsRevoked(ctx context.Context, serial string) error {
+func (s *Database) SetCertAsRevoked(ctx context.Context, serial string) error {
 	bi, err := signerpkg.StringToBigInt(serial)
 	if err != nil {
 		return fmt.Errorf("invalid serial number: %w", err)
@@ -1115,7 +1115,7 @@ func (s *Store) SetCertAsRevoked(ctx context.Context, serial string) error {
 	return err
 }
 
-func (s *Store) GetCertPEM(ctx context.Context, serial string) ([]byte, error) {
+func (s *Database) GetCertPEM(ctx context.Context, serial string) ([]byte, error) {
 	var der []byte
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT der FROM certs WHERE serial = $1
@@ -1158,7 +1158,7 @@ func applySecretFilters(query string, args []any, idx int, filters url.Values) (
 	return query, args, idx
 }
 
-func (s *Store) GetEncryptionKeyID(ctx context.Context, name string) (uuid.UUID, error) {
+func (s *Database) GetEncryptionKeyID(ctx context.Context, name string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := s.DB.QueryRowContext(ctx, `
 		SELECT encryption_key_id
@@ -1171,7 +1171,7 @@ func (s *Store) GetEncryptionKeyID(ctx context.Context, name string) (uuid.UUID,
 	return id, nil
 }
 
-func (s *Store) GetSecretsWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetSecretsWithCursor(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string, filters url.Values) (*CursorPaginationResult, error) {
 	query := "SELECT keys.environment, secrets.name, secrets.encryption_key_id, secrets.updated_at, secrets.name FROM secrets JOIN keys ON secrets.encryption_key_id = keys.id WHERE 1=1"
 	args := []any{}
 	idx := 1
@@ -1235,7 +1235,7 @@ func (s *Store) GetSecretsWithCursor(ctx context.Context, hasAccessToAllEnvs boo
 	}, nil
 }
 
-func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID uuid.UUID, data map[string]string) error {
+func (s *Database) InsertSecret(ctx context.Context, name string, encryptionKeyID uuid.UUID, data map[string]string) error {
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal secret data: %w", err)
@@ -1258,7 +1258,7 @@ func (s *Store) InsertSecret(ctx context.Context, name string, encryptionKeyID u
 	return err
 }
 
-func (s *Store) GetSecretEnvironment(ctx context.Context, name string) (string, error) {
+func (s *Database) GetSecretEnvironment(ctx context.Context, name string) (string, error) {
 	var env string
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT k.environment
@@ -1271,7 +1271,7 @@ func (s *Store) GetSecretEnvironment(ctx context.Context, name string) (string, 
 	return env, nil
 }
 
-func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, error) {
+func (s *Database) GetSecret(ctx context.Context, name string) (map[string]any, error) {
 	var ct []byte
 	var environment string
 	var keyID uuid.UUID
@@ -1313,7 +1313,7 @@ func (s *Store) GetSecret(ctx context.Context, name string) (map[string]any, err
 	return resp, nil
 }
 
-func (s *Store) UpdateSecret(ctx context.Context, name string, newData map[string]string, patch bool) error {
+func (s *Database) UpdateSecret(ctx context.Context, name string, newData map[string]string, patch bool) error {
 	secret, err := s.GetSecret(ctx, name)
 	if err != nil {
 		return fmt.Errorf("get secret: %w", err)
@@ -1369,7 +1369,7 @@ func (s *Store) UpdateSecret(ctx context.Context, name string, newData map[strin
 	return nil
 }
 
-func (s *Store) DeleteSecret(ctx context.Context, name string) error {
+func (s *Database) DeleteSecret(ctx context.Context, name string) error {
 	_, err := s.DB.ExecContext(ctx, `
 		DELETE FROM secrets
 		WHERE name = $1
@@ -1424,7 +1424,7 @@ func applyLogFilters(query string, args []any, idx int, filters url.Values) (str
 	return query, args, idx
 }
 
-func (s *Store) GetLogsWithCursor(ctx context.Context, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetLogsWithCursor(ctx context.Context, filters url.Values) (*CursorPaginationResult, error) {
 	query := `SELECT id, log_time, entry FROM logs WHERE 1=1`
 	args := []any{}
 	idx := 1
@@ -1488,7 +1488,7 @@ func (s *Store) GetLogsWithCursor(ctx context.Context, filters url.Values) (*Cur
 /*                 ACME Functions                    */
 /*****************************************************/
 
-func (s *Store) InsertACMEAccount(uri string, jwk *jose.JSONWebKey) error {
+func (s *Database) InsertACMEAccount(uri string, jwk *jose.JSONWebKey) error {
 	jwkJSON, _ := jwk.MarshalJSON()
 	_, err := s.DB.Exec(`
 		INSERT INTO acme_accounts (uri, public_key_jwk) 
@@ -1498,7 +1498,7 @@ func (s *Store) InsertACMEAccount(uri string, jwk *jose.JSONWebKey) error {
 	return err
 }
 
-func (s *Store) GetACMEAccount(uri string) (*jose.JSONWebKey, error) {
+func (s *Database) GetACMEAccount(uri string) (*jose.JSONWebKey, error) {
 	var jwkJSON []byte
 	err := s.DB.QueryRow(`
         SELECT public_key_jwk FROM acme_accounts WHERE uri = $1`,
@@ -1539,7 +1539,7 @@ func applyPendingRequestFilters(query string, args []any, idx int, filters url.V
 	return query, args, idx
 }
 
-func (s *Store) GetPendingRequestsWithCursor(ctx context.Context, filters url.Values) (*CursorPaginationResult, error) {
+func (s *Database) GetPendingRequestsWithCursor(ctx context.Context, filters url.Values) (*CursorPaginationResult, error) {
 	query := `SELECT id, created_at, token_info, private_body, method, url FROM pending_requests WHERE 1=1`
 	args := []any{}
 	idx := 1
@@ -1603,8 +1603,8 @@ func (s *Store) GetPendingRequestsWithCursor(ctx context.Context, filters url.Va
 	}, nil
 }
 
-func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPrivate, token *oidc.IDToken) (uuid.UUID, error) {
-	// Store a pending HTTP request in the database
+func (s *Database) InsertPendingRequest(ctx context.Context, p *PendingRequestPrivate, token *oidc.IDToken) (uuid.UUID, error) {
+	// Database a pending HTTP request in the database
 	// Encrypt the Authorization header and body using the software key password before storing
 
 	var urlStr string
@@ -1657,7 +1657,7 @@ func (s *Store) InsertPendingRequest(ctx context.Context, p *PendingRequestPriva
 	return id, nil
 }
 
-func (s *Store) GetPendingRequestBody(ctx context.Context, id uuid.UUID) ([]byte, error) {
+func (s *Database) GetPendingRequestBody(ctx context.Context, id uuid.UUID) ([]byte, error) {
 	var isPrivateBody bool
 	var encryptedBody []byte
 	if err := s.DB.QueryRowContext(ctx, `
@@ -1679,7 +1679,7 @@ func (s *Store) GetPendingRequestBody(ctx context.Context, id uuid.UUID) ([]byte
 	return cryptopkg.DecryptWithPwd(encryptedBody, s.SoftwareKeyPass)
 }
 
-func (s *Store) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRequestPrivate, error) {
+func (s *Database) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRequestPrivate, error) {
 	var method string
 	var urlStr sql.NullString
 	var encryptedToken []byte
@@ -1731,7 +1731,7 @@ func (s *Store) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRe
 	}, nil
 }
 
-func (s *Store) GetPendingRequestUser(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *Database) GetPendingRequestUser(ctx context.Context, id uuid.UUID) (string, error) {
 	var user string
 	if err := s.DB.QueryRowContext(ctx, `
 		SELECT (token_info->>'user') AS user
@@ -1743,7 +1743,7 @@ func (s *Store) GetPendingRequestUser(ctx context.Context, id uuid.UUID) (string
 	return user, nil
 }
 
-func (s *Store) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
+func (s *Database) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
 	_, err := s.DB.ExecContext(ctx, `
 		DELETE FROM pending_requests
 		WHERE id = $1
@@ -1755,7 +1755,7 @@ func (s *Store) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
 /*   One-Time & Periodic Tasks (Cleanup, Inventory, Metrics, etc...)  */
 /**********************************************************************/
 
-func (s *Store) RunCleanupTasks(ctx context.Context) error {
+func (s *Database) RunCleanupTasks(ctx context.Context) error {
 	// clean up certs that expired more than 30 days ago
 	if _, err := s.DB.ExecContext(ctx, `
 		DELETE FROM certs
@@ -1800,7 +1800,7 @@ func ecdsaBitsFromCurve(curve string) int {
 	}
 }
 
-func (s *Store) collectKeyInventoryMetrics(ctx context.Context) (map[metricspkg.KeyInventoryBucket]float64, error) {
+func (s *Database) collectKeyInventoryMetrics(ctx context.Context) (map[metricspkg.KeyInventoryBucket]float64, error) {
 	keysTotalAgg := map[metricspkg.KeyInventoryBucket]float64{}
 
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, environment, config FROM keys`)
@@ -1858,7 +1858,7 @@ func (s *Store) collectKeyInventoryMetrics(ctx context.Context) (map[metricspkg.
 	return keysTotalAgg, nil
 }
 
-func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.CertInventoryItem, error) {
+func (s *Database) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.CertInventoryItem, error) {
 	var inventory []metricspkg.CertInventoryItem
 
 	// query all CA chains from signers
@@ -1966,7 +1966,7 @@ func (s *Store) collectCertInventoryMetrics(ctx context.Context) ([]metricspkg.C
 	return inventory, rows.Err()
 }
 
-func (s *Store) RefreshInventoryMetrics(ctx context.Context) error {
+func (s *Database) RefreshInventoryMetrics(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
 		metricspkg.ObserveInventoryRefreshDuration(time.Since(start))
@@ -2027,7 +2027,7 @@ type DashboardData struct {
 	} `json:"logs"`
 }
 
-func (s *Store) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string) (*DashboardData, error) {
+func (s *Database) GetDashboard(ctx context.Context, hasAccessToAllEnvs bool, accessibleEnvs []string) (*DashboardData, error) {
 	dashboard := &DashboardData{}
 
 	// Certs counts (with environment restrictions if needed)

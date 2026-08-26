@@ -30,10 +30,7 @@ jobs:
   build-multiplatform:
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || '' }}
-    strategy:
-      matrix:
-        enterprise: ${{ inputs.directory == 'backend' && fromJSON('["false", "true"]') || fromJSON('["false"]') }}
-    name: Build and Push (${{ inputs.directory }}${{ inputs.directory == 'backend' && matrix.enterprise == 'true' && ', Enterprise' || '' }})
+    name: Build and Push (${{ inputs.directory }})
 
     steps:
       - name: Checkout source code
@@ -98,8 +95,8 @@ jobs:
           BUILDER: ${{ inputs.builder_mode == 'docker-cloud' && steps.buildx_cloud.outputs.name || '' }}
         run: |
           echo "🚀 Building and pushing image..."
-          echo "    Image: $(make print-img ENTERPRISE=${{ matrix.enterprise }})"
+          echo "    Image: $(make print-img)"
           echo "    Platforms: ${{ inputs.platforms }}"
           echo "    Build Mode: ${{ inputs.builder_mode }}"
           echo "    Beta: ${{ github.ref != 'refs/heads/main' && 'Yes' || 'No' }}"
-          make docker-buildx PLATFORMS=${{ inputs.platforms }} ENTERPRISE=${{ matrix.enterprise }}
+          make docker-buildx PLATFORMS=${{ inputs.platforms }}

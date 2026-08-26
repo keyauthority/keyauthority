@@ -184,18 +184,6 @@ function SignerDetails({
           />
         </Tab>
 
-        {/* Sign Doc Tab */}
-        <Tab
-          eventKey="signdoc"
-          title="Sign Document (beta)"
-          disabled={!canSign || signerConfig?.isCA}
-        >
-          <SignDocumentTab
-            signerName={signerName}
-            isLoading={isLoading}
-            setIsLoading={setIsLoading}
-          />
-        </Tab>
         {/* Usage Examples Tab */}
         <Tab
           eventKey="examples"
@@ -946,93 +934,6 @@ function RevokeCertificateTab({ signerName, isLoading, setIsLoading }) {
         </Col>
       </Row>
     </Form>
-  );
-}
-
-function SignDocumentTab({ signerName, isLoading, setIsLoading }) {
-  const [file, setFile] = useState(null);
-  const [signedFileUrl, setSignedFileUrl] = useState("");
-
-  const api = getApi();
-
-  useEffect(() => {
-    setFile(null);
-    setSignedFileUrl("");
-  }, [signerName]);
-
-  const handleSignDocument = async () => {
-    if (!file) return;
-
-    setIsLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("document", file);
-      //formData.append("ttl", `${ttl}h`);
-
-      const response = await api.post(
-        `/signers/${signerName}/sign-document`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          responseType: "blob", // Important for file downloads
-        },
-      );
-      setSignedFileUrl(window.URL.createObjectURL(new Blob([response.data])));
-      setFile(null);
-      //setTTL(0);
-    } catch (err) {
-      // Axios error with blob response
-      if (err.response && err.response.data instanceof Blob) {
-        try {
-          const text = await err.response.data.text();
-          showToast("error", errorToString({ response: { data: text } }));
-        } catch {
-          showToast("error", errorToString(err));
-        }
-      } else {
-        showToast("error", errorToString(err));
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <Form.Group>
-        <Form.Label>Document</Form.Label>
-        <Form.Control
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => {
-            setFile(e.target.files[0]);
-          }}
-        />
-        <Form.Text>Upload a PDF document</Form.Text>
-      </Form.Group>
-
-      <div className="d-flex justify-content-end mb-3">
-        <Button
-          variant="primary"
-          onClick={handleSignDocument}
-          disabled={!file || file.type !== "application/pdf"}
-        >
-          Sign Document
-        </Button>
-      </div>
-
-      {signedFileUrl && (
-        <Alert variant="success" className="mb-2">
-          Document signed! Click{" "}
-          <a href={signedFileUrl} download={"signed-document.pdf"}>
-            here
-          </a>{" "}
-          to download it.
-        </Alert>
-      )}
-    </div>
   );
 }
 

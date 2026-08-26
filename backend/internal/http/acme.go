@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package internal
+package http
 
 import (
 	"context"
@@ -38,6 +38,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	databasepkg "github.com/keyauthority/keyauthority/internal/database"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
 )
 
@@ -89,7 +90,7 @@ type ChallengeStore struct {
 
 type ACMEResponder struct {
 	baseURL string
-	store   *Store
+	store   *databasepkg.Database
 	// callback when a certificate is signed, for unified logging/storage
 	onCertificateSigned func(*http.Request, *x509.Certificate, string)
 }
@@ -314,7 +315,7 @@ func (a *ACMEResponder) validateRequest(r *http.Request, structuredPayload any, 
 	return publicKey, nil
 }
 
-func NewACMEResponder(store *Store,
+func NewACMEResponder(store *databasepkg.Database,
 	onCertificateSigned func(*http.Request, *x509.Certificate, string)) *ACMEResponder {
 	go func() {
 		for {
@@ -373,14 +374,14 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				return nil, http.StatusNotFound, jsonHeader, errors.New("account does not exist")
 			}
 			return toJSON(map[string]any{
-					"status":  "valid",
-					"contact": accountPayload.Contact,
-					"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-				}), http.StatusOK, map[string]string{
-					"Location":     accountURI,
-					"Content-Type": "application/json",
-					"Replay-Nonce": generateNonce(),
-				}, nil
+				"status":  "valid",
+				"contact": accountPayload.Contact,
+				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+			}), http.StatusOK, map[string]string{
+				"Location":     accountURI,
+				"Content-Type": "application/json",
+				"Replay-Nonce": generateNonce(),
+			}, nil
 		}
 
 		if os.Getenv(envTSMustBeAgreed) == "true" && !accountPayload.TermsOfServiceAgreed {
@@ -394,14 +395,14 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		}
 
 		return toJSON(map[string]any{
-				"status":  "valid",
-				"contact": accountPayload.Contact,
-				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-			}), http.StatusCreated, map[string]string{
-				"Location":     accountURI,
-				"Content-Type": "application/json",
-				"Replay-Nonce": generateNonce(),
-			}, nil
+			"status":  "valid",
+			"contact": accountPayload.Contact,
+			"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+		}), http.StatusCreated, map[string]string{
+			"Location":     accountURI,
+			"Content-Type": "application/json",
+			"Replay-Nonce": generateNonce(),
+		}, nil
 
 	case "/acct":
 		return toJSON(map[string]any{
@@ -493,13 +494,13 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		orderStore.Unlock()
 
 		return toJSON(map[string]any{
-				"status":         "pending",
-				"authorizations": authorizations,
-				"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
-			}), http.StatusCreated, map[string]string{
-				"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
-				"Content-Type": "application/json",
-			}, nil
+			"status":         "pending",
+			"authorizations": authorizations,
+			"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
+		}), http.StatusCreated, map[string]string{
+			"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
+			"Content-Type": "application/json",
+		}, nil
 
 	case "/orders":
 		orders := []string{}
