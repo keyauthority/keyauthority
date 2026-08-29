@@ -17,9 +17,25 @@ limitations under the License.
 package main
 
 import (
+	"context"
+
 	httppkg "github.com/keyauthority/keyauthority/internal/http"
 )
 
 func main() {
-	httppkg.NewServer().Start()
+	server := httppkg.NewServer()
+	defer server.Close()
+
+	ctx := context.Background()
+	server.ConnectDatabase(ctx)
+	server.CreateLogger(ctx)
+	server.SetDefaultHttpTransport(ctx)
+	server.CreateAuthenticator(ctx)
+	server.CreateACMEResponder(ctx)
+
+	server.SetHandlers()
+	server.ListenAndServe(ctx)
+	server.RunPeriodicTasks(ctx)
+
+	select {}
 }

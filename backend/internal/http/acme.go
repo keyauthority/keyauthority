@@ -89,8 +89,8 @@ type ChallengeStore struct {
 }
 
 type ACMEResponder struct {
-	baseURL string
-	store   *databasepkg.Database
+	baseURL  string
+	database *databasepkg.Database
 	// callback when a certificate is signed, for unified logging/storage
 	onCertificateSigned func(*http.Request, *x509.Certificate, string)
 }
@@ -275,7 +275,7 @@ func (a *ACMEResponder) validateJWS(r *http.Request, bodyBytes []byte, requireKe
 		publicKey = header.JSONWebKey
 
 	} else if header.KeyID != "" {
-		publicKey, err = a.store.GetACMEAccount(header.KeyID)
+		publicKey, err = a.database.GetACMEAccount(header.KeyID)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unknown key ID: %s", header.KeyID)
 		}
@@ -315,7 +315,7 @@ func (a *ACMEResponder) validateRequest(r *http.Request, structuredPayload any, 
 	return publicKey, nil
 }
 
-func NewACMEResponder(store *databasepkg.Database,
+func NewACMEResponder(db *databasepkg.Database,
 	onCertificateSigned func(*http.Request, *x509.Certificate, string)) *ACMEResponder {
 	go func() {
 		for {
@@ -327,7 +327,7 @@ func NewACMEResponder(store *databasepkg.Database,
 
 	return &ACMEResponder{
 		baseURL:             os.Getenv(envServerURL),
-		store:               store,
+		database:            db,
 		onCertificateSigned: onCertificateSigned,
 	}
 }
@@ -369,7 +369,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		accountURI := a.baseURL + "/v1/signers/" + name + "/acme/acct/" + accountID
 
 		if accountPayload.OnlyReturnExisting {
-			_, err := a.store.GetACMEAccount(accountURI)
+			_, err := a.database.GetACMEAccount(accountURI)
 			if err != nil {
 				return nil, http.StatusNotFound, jsonHeader, errors.New("account does not exist")
 			}
@@ -389,7 +389,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				errors.New("termsOfServiceAgreed must be true")
 		}
 
-		if err := a.store.InsertACMEAccount(accountURI, publicKey); err != nil {
+		if err := a.database.InsertACMEAccount(accountURI, publicKey); err != nil {
 			return nil, http.StatusInternalServerError, jsonHeader,
 				fmt.Errorf("failed to store account: %v", err)
 		}
@@ -635,7 +635,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 			ttl := time.Until(order.NotAfter)
 
 			// we do not want to issue CA certs via ACME
-			signerCfg, err := a.store.GetSignerConfig(r.Context(), name)
+			signerCfg, err := a.database.GetSignerConfig(r.Context(), name)
 			if err != nil {
 				return nil, http.StatusInternalServerError, jsonHeader,
 					fmt.Errorf("couldn't get signer config: %v", err)
@@ -647,7 +647,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 			}
 
 			// load the signer to sign the CSR
-			signer, err := a.store.LoadSigner(r.Context(), name)
+			signer, err := a.database.LoadSigner(r.Context(), name)
 			if err != nil {
 				return nil, http.StatusBadRequest, jsonHeader, fmt.Errorf("couldn't load signer: %v", err)
 			}

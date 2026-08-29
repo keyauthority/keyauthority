@@ -1,12 +1,18 @@
 # KeyAuthority
 
+KeyAuthority is a platform for managing Public Key Infrastructure (PKI) and application secrets across your Kubernetes environments. It simplifies certificate lifecycle management and secure secret distribution for applications and microservices.
+
+Visit [keyauthority.net](https://keyauthority.net/) for further information.
+
+## Layout
+
 This repository contains KeyAuthority source code, with its four main components:
 - PostgreSQL database (in `./postgres`)
 - Keycloak identity and access management (in `./keycloak`)
 - Backend service (in `./backend`)
 - Frontend web application (in `./frontend`)
 
-## Deploy KeyAuthority on local Docker
+## Deploy it locally on Docker
 
 To deploy KeyAuthority locally using Docker, follow these steps:
 

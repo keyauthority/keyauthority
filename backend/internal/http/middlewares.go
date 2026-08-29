@@ -58,7 +58,7 @@ func (server *Server) withCORS(next http.Handler) http.Handler {
 		}
 
 		if originOK && !pathIgnored {
-			server.Log.Debug(r, "CORS headers set", "origin", origin)
+			server.log.Debug(r, "CORS headers set", "origin", origin)
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -120,7 +120,7 @@ func (server *Server) withAuth(requiredRoles map[string]authpkg.Role, next http.
 			return
 		}
 
-		server.Log.Debug(r, "token verified and required role satisfied")
+		server.log.Debug(r, "token verified and required role satisfied")
 
 		// Save logs to DB only after token is verified and RBAC is checked
 		ctx = r.Context()
@@ -139,7 +139,7 @@ func (server *Server) withAuth(requiredRoles map[string]authpkg.Role, next http.
 		if server.requiresApproval(r) {
 			body, _ := io.ReadAll(r.Body)
 			ctx = r.Context()
-			requestID, err := server.DB.InsertPendingRequest(ctx,
+			requestID, err := server.db.InsertPendingRequest(ctx,
 				&databasepkg.PendingRequestPrivate{
 					Method: r.Method,
 					Header: r.Header.Clone(),
@@ -155,7 +155,7 @@ func (server *Server) withAuth(requiredRoles map[string]authpkg.Role, next http.
 			ctx = context.WithValue(ctx, loggingpkg.CtxKeyRequestID{}, requestID)
 			r = r.WithContext(ctx)
 
-			server.Log.Info(r, "pending request created", "id", requestID)
+			server.log.Info(r, "pending request created", "id", requestID)
 			writeHTTPWithHeaders(w, http.StatusPreconditionRequired, []byte(requestID.String()),
 				map[string]string{"Content-Type": "text/plain"})
 			return

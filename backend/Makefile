@@ -195,7 +195,6 @@ docker-run: load-shared-env
 	docker run -d --rm -p $(BACKEND_PORT):8081 \
 		--name backend \
 		--user 65535:4001 \
-		-v "$(PWD)/ignore/primus/etc/primus:/etc/primus" \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
 		-e METRICS_PORT=$(METRICS_PORT) \
@@ -216,8 +215,6 @@ docker-run: load-shared-env
 		-e POSTGRESQL_DATABASE=$(POSTGRES_DB) \
 		-e POSTGRESQL_PORT_NUMBER=$(POSTGRES_PORT) \
 		-e SOFTHSM2_CONF=/etc/softhsm/softhsm.conf \
-		-e SOFTHSM_SO_PIN=1234 \
-		-e SOFTHSM_PIN=5678 \
 		$(IMG)
 
 .PHONY: run
@@ -241,8 +238,6 @@ run: load-shared-env
 	POSTGRESQL_DATABASE=$(POSTGRES_DB) \
 	POSTGRESQL_PORT_NUMBER=$(POSTGRES_PORT) \
 	SOFTHSM2_CONF=./ignore/softhsm/etc/softhsm/softhsm.conf \
-	SOFTHSM_SO_PIN=1234 \
-	SOFTHSM_PIN=5678 \
 	go run cmd/server/main.go
 
 ##@ Stop and remove local docker container
@@ -269,21 +264,3 @@ scan-code:
 	govulncheck ./...
 	staticcheck ./... || true
 	semgrep scan --config=./.semgrep .
-
-##@ Test JWT exchange
-.PHONY: test-jwt-exchange
-test-jwt-exchange:
-	@token1=$$(step crypto jwt sign \
-			--key test-jwks-key.json \
-			--password-file /dev/null \
-			--iss "https://local.keyauthority.net" \
-			--aud "keyauthority://secrets" \
-			--sub "local:keyauthority" \
-			--exp "$$(date -v+87600H +%s)"); \
-	token2=$$(curl -s -X POST \
-			-H "Content-Type: application/json" \
-			-d "{ \"jwt\": \"$$token1\" }" \
-			http://localhost:$(BACKEND_PORT)/v1/token | jq -r '.auth.client_token'); \
-	curl -s \
-			-H "Authorization: Bearer $$token2" \
-			http://localhost:$(BACKEND_PORT)/v1/token/claims | jq
