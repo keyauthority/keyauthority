@@ -56,106 +56,6 @@ type Service struct {
 	challengeStore *ChallengeStore
 }
 
-func keyID(key *jose.JSONWebKey) string {
-	// Generate a consistent key ID from the public key
-	keyBytes, _ := key.MarshalJSON()
-	hash := sha256.Sum256(keyBytes)
-	return base64.RawURLEncoding.EncodeToString(hash[:16])
-}
-
-func jwkThumbprint(key *jose.JSONWebKey) (string, error) {
-	thumbprint, err := key.Thumbprint(crypto.SHA256)
-	if err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(thumbprint), nil
-}
-
-// validateJWS reads and validates a JWS-protected request
-func (a *Service) validateJWS(r *http.Request, bodyBytes []byte, requireKeyID bool) (*jose.JSONWebKey, []byte, error) {
-	// Parse as JWS object directly - v4 API requires signature algorithms
-	jws, err := jose.ParseSigned(string(bodyBytes),
-		[]jose.SignatureAlgorithm{
-			jose.RS256, jose.RS384, jose.RS512,
-			jose.ES256, jose.ES384, jose.ES512,
-			jose.EdDSA,
-		})
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid JWS: %v", err)
-	}
-
-	// Get the protected header - v4 API uses Signatures slice
-	if len(jws.Signatures) == 0 {
-		return nil, nil, fmt.Errorf("no JWS signatures")
-	}
-
-	header := jws.Signatures[0].Header
-
-	// Validate nonce from extra headers
-	if nonce, ok := header.ExtraHeaders["nonce"].(string); ok && nonce != "" {
-		if !validateNonce(nonce) {
-			return nil, nil, fmt.Errorf("invalid or expired nonce")
-		}
-	}
-
-	// Validate URL from extra headers
-	if url, ok := header.ExtraHeaders["url"].(string); ok && url != "" {
-		expectedURL := a.baseURL + r.URL.String()
-		if url != expectedURL {
-			return nil, nil, fmt.Errorf("URL mismatch, expected %s but got %s", expectedURL, url)
-		}
-	}
-
-	// Get the verification key
-	var publicKey *jose.JSONWebKey
-
-	if header.JSONWebKey != nil {
-		if requireKeyID {
-			return nil, nil, fmt.Errorf("embedded JWK not allowed for this endpoint")
-		}
-		publicKey = header.JSONWebKey
-
-	} else if header.KeyID != "" {
-		publicKey, err = a.database.GetACMEAccount(header.KeyID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("unknown key ID: %s", header.KeyID)
-		}
-
-	} else {
-		return nil, nil, fmt.Errorf("missing both JWK and kid")
-	}
-
-	// Verify signature using go-jose v4 API
-	payload, err := jws.Verify(publicKey.Key)
-	if err != nil {
-		return nil, nil, fmt.Errorf("signature verification failed: %v", err)
-	}
-
-	return publicKey, payload, nil
-}
-
-// validateRequest reads and validates a JWS-protected request,
-// unmarshals the payload into structuredPayload if provided and returns the public key
-func (a *Service) validateRequest(r *http.Request, structuredPayload any, requiredKeyID bool) (*jose.JSONWebKey, error) {
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate JWS (new account, so no keyID required)
-	publicKey, payload, err := a.validateJWS(r, bodyBytes, requiredKeyID)
-	if err != nil {
-		return nil, fmt.Errorf("JWS validation failed: %v", err)
-	}
-
-	if len(payload) > 0 && structuredPayload != nil {
-		if err := json.Unmarshal(payload, structuredPayload); err != nil {
-			return nil, fmt.Errorf("invalid payload JSON: %v", err)
-		}
-	}
-	return publicKey, nil
-}
-
 func NewService(log *loggingpkg.Logger, db *databasepkg.Database) *Service {
 	return &Service{
 		baseURL:  os.Getenv(envServerURL),
@@ -227,14 +127,14 @@ func (a *Service) BuildResponse(r *http.Request) ([]byte, int, map[string]string
 				return nil, http.StatusNotFound, jsonHeader, errors.New("account does not exist")
 			}
 			return toJSON(map[string]any{
-					"status":  "valid",
-					"contact": accountPayload.Contact,
-					"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-				}), http.StatusOK, map[string]string{
-					"Location":     accountURI,
-					"Content-Type": "application/json",
-					"Replay-Nonce": generateNonce(),
-				}, nil
+				"status":  "valid",
+				"contact": accountPayload.Contact,
+				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+			}), http.StatusOK, map[string]string{
+				"Location":     accountURI,
+				"Content-Type": "application/json",
+				"Replay-Nonce": generateNonce(),
+			}, nil
 		}
 
 		if os.Getenv(envTSMustBeAgreed) == "true" && !accountPayload.TermsOfServiceAgreed {
@@ -248,14 +148,14 @@ func (a *Service) BuildResponse(r *http.Request) ([]byte, int, map[string]string
 		}
 
 		return toJSON(map[string]any{
-				"status":  "valid",
-				"contact": accountPayload.Contact,
-				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-			}), http.StatusCreated, map[string]string{
-				"Location":     accountURI,
-				"Content-Type": "application/json",
-				"Replay-Nonce": generateNonce(),
-			}, nil
+			"status":  "valid",
+			"contact": accountPayload.Contact,
+			"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+		}), http.StatusCreated, map[string]string{
+			"Location":     accountURI,
+			"Content-Type": "application/json",
+			"Replay-Nonce": generateNonce(),
+		}, nil
 
 	case "/acct":
 		return toJSON(map[string]any{
@@ -348,13 +248,13 @@ func (a *Service) BuildResponse(r *http.Request) ([]byte, int, map[string]string
 		a.orderStore.orders[id] = order
 
 		return toJSON(map[string]any{
-				"status":         "pending",
-				"authorizations": authorizations,
-				"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
-			}), http.StatusCreated, map[string]string{
-				"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
-				"Content-Type": "application/json",
-			}, nil
+			"status":         "pending",
+			"authorizations": authorizations,
+			"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
+		}), http.StatusCreated, map[string]string{
+			"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
+			"Content-Type": "application/json",
+		}, nil
 
 	case "/orders":
 		orders := []string{}
@@ -557,6 +457,106 @@ func (a *Service) BuildResponse(r *http.Request) ([]byte, int, map[string]string
 		return nil, http.StatusNotFound, jsonHeader,
 			errors.New("ACME endpoint not found")
 	}
+}
+
+func keyID(key *jose.JSONWebKey) string {
+	// Generate a consistent key ID from the public key
+	keyBytes, _ := key.MarshalJSON()
+	hash := sha256.Sum256(keyBytes)
+	return base64.RawURLEncoding.EncodeToString(hash[:16])
+}
+
+func jwkThumbprint(key *jose.JSONWebKey) (string, error) {
+	thumbprint, err := key.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(thumbprint), nil
+}
+
+// validateJWS reads and validates a JWS-protected request
+func (a *Service) validateJWS(r *http.Request, bodyBytes []byte, requireKeyID bool) (*jose.JSONWebKey, []byte, error) {
+	// Parse as JWS object directly - v4 API requires signature algorithms
+	jws, err := jose.ParseSigned(string(bodyBytes),
+		[]jose.SignatureAlgorithm{
+			jose.RS256, jose.RS384, jose.RS512,
+			jose.ES256, jose.ES384, jose.ES512,
+			jose.EdDSA,
+		})
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid JWS: %v", err)
+	}
+
+	// Get the protected header - v4 API uses Signatures slice
+	if len(jws.Signatures) == 0 {
+		return nil, nil, fmt.Errorf("no JWS signatures")
+	}
+
+	header := jws.Signatures[0].Header
+
+	// Validate nonce from extra headers
+	if nonce, ok := header.ExtraHeaders["nonce"].(string); ok && nonce != "" {
+		if !validateNonce(nonce) {
+			return nil, nil, fmt.Errorf("invalid or expired nonce")
+		}
+	}
+
+	// Validate URL from extra headers
+	if url, ok := header.ExtraHeaders["url"].(string); ok && url != "" {
+		expectedURL := a.baseURL + r.URL.String()
+		if url != expectedURL {
+			return nil, nil, fmt.Errorf("URL mismatch, expected %s but got %s", expectedURL, url)
+		}
+	}
+
+	// Get the verification key
+	var publicKey *jose.JSONWebKey
+
+	if header.JSONWebKey != nil {
+		if requireKeyID {
+			return nil, nil, fmt.Errorf("embedded JWK not allowed for this endpoint")
+		}
+		publicKey = header.JSONWebKey
+
+	} else if header.KeyID != "" {
+		publicKey, err = a.database.GetACMEAccount(header.KeyID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unknown key ID: %s", header.KeyID)
+		}
+
+	} else {
+		return nil, nil, fmt.Errorf("missing both JWK and kid")
+	}
+
+	// Verify signature using go-jose v4 API
+	payload, err := jws.Verify(publicKey.Key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("signature verification failed: %v", err)
+	}
+
+	return publicKey, payload, nil
+}
+
+// validateRequest reads and validates a JWS-protected request,
+// unmarshals the payload into structuredPayload if provided and returns the public key
+func (a *Service) validateRequest(r *http.Request, structuredPayload any, requiredKeyID bool) (*jose.JSONWebKey, error) {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate JWS (new account, so no keyID required)
+	publicKey, payload, err := a.validateJWS(r, bodyBytes, requiredKeyID)
+	if err != nil {
+		return nil, fmt.Errorf("JWS validation failed: %v", err)
+	}
+
+	if len(payload) > 0 && structuredPayload != nil {
+		if err := json.Unmarshal(payload, structuredPayload); err != nil {
+			return nil, fmt.Errorf("invalid payload JSON: %v", err)
+		}
+	}
+	return publicKey, nil
 }
 
 func httpGetWithRetry(ctx context.Context, url string,

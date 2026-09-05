@@ -135,22 +135,22 @@ func (server *Server) CreateAuthenticator(ctx context.Context) {
 
 func (server *Server) CreateACMEService(ctx context.Context) {
 	server.acme = acmepkg.NewService(server.log, server.db)
-	server.log.InfoWithContext(ctx, "ACME responder ready")
+	server.log.InfoWithContext(ctx, "ACME service ready")
 }
 
 func (server *Server) Shutdown(ctx context.Context) error {
 	var shutdownErrors []error
 
-	for _, httpServer := range []*http.Server{
+	for _, s := range []*http.Server{
 		server.httpsServer,
 		server.httpServer,
 		server.metricsServer,
 	} {
-		if httpServer == nil {
+		if s == nil {
 			continue
 		}
 
-		if err := httpServer.Shutdown(ctx); err != nil {
+		if err := s.Shutdown(ctx); err != nil {
 			shutdownErrors = append(shutdownErrors, err)
 		}
 	}

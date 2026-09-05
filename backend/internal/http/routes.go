@@ -183,7 +183,7 @@ func (server *Server) registerPendingRequestRoutes() {
 func (server *Server) registerMiscRoutes() {
 	server.handler.Handle("/v1/dashboard", server.withAuth(
 		map[string]authpkg.Role{
-			http.MethodGet: authpkg.RoleAny,
+			http.MethodGet: authpkg.RoleAny, // get dashboard
 		},
 		server.dashboardHandler()))
 
