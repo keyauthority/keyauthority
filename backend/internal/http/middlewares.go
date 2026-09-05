@@ -30,6 +30,10 @@ import (
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 )
 
+const (
+	envCORSOrigin = "CORS_ORIGIN"
+)
+
 func (server *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")

@@ -18,15 +18,21 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	httppkg "github.com/keyauthority/keyauthority/internal/http"
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	server := httppkg.NewServer()
 	defer server.Close()
 
-	ctx := context.Background()
 	server.ConnectDatabase(ctx)
 	server.CreateLogger(ctx)
 	server.SetDefaultHttpTransport(ctx)
@@ -37,5 +43,13 @@ func main() {
 	server.ListenAndServe(ctx)
 	server.RunPeriodicTasks(ctx)
 
-	select {}
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		// The logger is still available here because Close has not run yet.
+		// Prefer an existing logger method if it is safe without a request context.
+	}
 }
