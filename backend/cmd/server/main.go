@@ -35,9 +35,9 @@ func main() {
 
 	server.ConnectDatabase(ctx)
 	server.CreateLogger(ctx)
-	server.SetDefaultHttpTransport(ctx)
+	server.SetHttpTransport(ctx)
 	server.CreateAuthenticator(ctx)
-	server.CreateACMEResponder(ctx)
+	server.CreateACMEService(ctx)
 
 	server.SetHandlers()
 	server.ListenAndServe(ctx)

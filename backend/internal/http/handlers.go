@@ -37,6 +37,7 @@ import (
 	"github.com/gorilla/mux"
 	authpkg "github.com/keyauthority/keyauthority/internal/auth"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
+	eventspkg "github.com/keyauthority/keyauthority/internal/events"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
 )
@@ -385,7 +386,7 @@ func (server *Server) signerSignHandler() http.Handler {
 			return
 		}
 
-		server.onCertificateSigned()(r, cert, body.Comment)
+		eventspkg.OnCertificateSigned(r, server.log, server.db, cert, body.Comment)
 
 		type Data struct {
 			Certificate string   `json:"certificate"`

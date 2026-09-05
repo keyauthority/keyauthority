@@ -28,6 +28,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	acmepkg "github.com/keyauthority/keyauthority/internal/acme"
 	authpkg "github.com/keyauthority/keyauthority/internal/auth"
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	databasepkg "github.com/keyauthority/keyauthority/internal/database"
@@ -43,9 +44,9 @@ const (
 
 type Server struct {
 	version  string
-	log      *loggingpkg.StdAndDBLogger
+	log      *loggingpkg.Logger
 	db       *databasepkg.Database
-	acme     *ACMEResponder
+	acme     *acmepkg.Service
 	envCache *cachepkg.Cache // Cache prefix:name/id -> environment
 
 	handler        *mux.Router
@@ -92,7 +93,7 @@ func (server *Server) CreateLogger(ctx context.Context) {
 	server.log.InfoWithContext(ctx, "logger ready")
 }
 
-func (server *Server) SetDefaultHttpTransport(ctx context.Context) {
+func (server *Server) SetHttpTransport(ctx context.Context) {
 	caPool, err := x509.SystemCertPool()
 	if err != nil {
 		server.log.ErrorWithContext(ctx, "couldn't load system cert pool",
@@ -132,8 +133,8 @@ func (server *Server) CreateAuthenticator(ctx context.Context) {
 	server.log.InfoWithContext(ctx, "authenticator ready")
 }
 
-func (server *Server) CreateACMEResponder(ctx context.Context) {
-	server.acme = NewACMEResponder(server.db, server.onCertificateSigned())
+func (server *Server) CreateACMEService(ctx context.Context) {
+	server.acme = acmepkg.NewService(server.log, server.db)
 	server.log.InfoWithContext(ctx, "ACME responder ready")
 }
 

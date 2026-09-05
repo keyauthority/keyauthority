@@ -131,6 +131,11 @@ func (server *Server) RunPeriodicTasks(ctx context.Context) {
 			}
 		}
 	}()
+
+	// ACME Cleanup
+	if server.acme != nil {
+		go server.acme.RunCleanup(ctx)
+	}
 }
 
 func (server *Server) recreateCRLs(ctx context.Context) (int, int, error) {
