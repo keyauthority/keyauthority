@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -49,7 +50,6 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		// The logger is still available here because Close has not run yet.
-		// Prefer an existing logger method if it is safe without a request context.
+		fmt.Fprintf(os.Stderr, "server shutdown failed: %v\n", err)
 	}
 }

@@ -41,20 +41,20 @@ func (server *Server) registerKeyRoutes() {
 			http.MethodGet:  authpkg.RoleAny,      // get keys
 			http.MethodPost: authpkg.RoleOperator, // create key
 		},
-		server.keysHandler()))
+		http.HandlerFunc(server.handleGetKeysOrCreateKey)))
 
 	server.handler.Handle("/v1/keys/{id}", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet:    authpkg.RoleOperator, // get key
 			http.MethodDelete: authpkg.RoleOperator, // delete key
 		},
-		server.keyHandler()))
+		http.HandlerFunc(server.handleGetKey)))
 
 	server.handler.Handle("/v1/keys/{id}/ready", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleOperator, // get key readiness
 		},
-		server.keyReadinessHandler()))
+		http.HandlerFunc(server.handleGetKeyReadiness)))
 }
 
 func (server *Server) registerSignerRoutes() {
@@ -62,60 +62,64 @@ func (server *Server) registerSignerRoutes() {
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleAny, // get signers
 		},
-		server.signersHandler()))
+		http.HandlerFunc(server.handleGetSigners)))
 
 	server.handler.Handle("/v1/signers/{name}", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodPost:   authpkg.RoleOperator, // create signer
 			http.MethodDelete: authpkg.RoleOperator, // delete signer
 		},
-		server.signerHandler()))
+		http.HandlerFunc(server.handleCreateOrDeleteSigner)))
 
 	server.handler.Handle("/v1/signers/{name}/private-key", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleOperator, // get private key ID
 		},
-		server.signerPrivateKeyHandler()))
+		http.HandlerFunc(server.handleGetSignerPrivateKeyID)))
 
 	server.handler.Handle("/v1/signers/{name}/config", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleOperator, // get signer config
 			http.MethodPut: authpkg.RoleOperator, // update signer config
 		},
-		server.signerConfigHandler()))
+		http.HandlerFunc(server.handleGetOrUpdateSignerConfig)))
 
 	server.handler.Handle("/v1/signers/{name}/ca-chain", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleOperator, // get CA chain
 			http.MethodPut: authpkg.RoleOperator, // update CA chain
 		},
-		server.signerCAChainHandler()))
+		http.HandlerFunc(server.handleGetOrUpdateSignerCAChain)))
 
 	server.handler.Handle("/v1/signers/{name}/ca-csr", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleOperator, // create CA CSR
 		},
-		server.signerCSRHandler()))
+		http.HandlerFunc(server.handleCreateSignerCARequest)))
 
 	server.handler.Handle("/v1/signers/{name}/sign",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/sign", server.withAuth(
 			map[string]authpkg.Role{
 				http.MethodPost: authpkg.RoleOperator, // sign certificate
 			},
-			server.signerSignHandler())))
+			http.HandlerFunc(server.handleSignerSign))))
 
 	server.handler.Handle("/v1/signers/{name}/revoke",
 		metricspkg.WithHttpMetrics("/v1/signers/{name}/revoke", server.withAuth(
 			map[string]authpkg.Role{
 				http.MethodPost: authpkg.RoleOperator, // revoke certificate
 			},
-			server.signerRevokeHandler())))
+			http.HandlerFunc(server.handleSignerRevoke))))
 
-	server.nonTLSHandler.Handle("/v1/crl/{hashOfSignerName:.*}", server.signerCRLHandler())
-	server.nonTLSHandler.Handle("/v1/aia/{hashOfSignerName:.*}", server.signerAIAHandler())
+	server.nonTLSHandler.Handle("/v1/crl/{hashOfSignerName:.*}",
+		http.HandlerFunc(server.handleGetSignerCRL))
+
+	server.nonTLSHandler.Handle("/v1/aia/{hashOfSignerName:.*}",
+		http.HandlerFunc(server.handleGetSignerAIA))
 
 	// Leave this here until the ACME-specific refactor.
-	server.handler.PathPrefix("/v1/signers/{name}/acme").Handler(server.signerACMEHandler())
+	server.handler.PathPrefix("/v1/signers/{name}/acme").
+		Handler(http.HandlerFunc(server.handleSignerACME))
 }
 
 func (server *Server) registerSecretRoutes() {
@@ -123,14 +127,14 @@ func (server *Server) registerSecretRoutes() {
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleAny, // get secrets
 		},
-		server.secretsHandler()))
+		http.HandlerFunc(server.handleGetSecrets)))
 
 	server.handler.Handle("/v1/secrets/data/{name:.+}",
 		metricspkg.WithHttpMetrics("/v1/secrets/data/{name}", server.withAuth(
 			map[string]authpkg.Role{
 				http.MethodGet: authpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
 			},
-			server.secretHandler())))
+			http.HandlerFunc(server.handleGetOrUpdateOrDeleteSecret))))
 
 	server.handler.Handle("/v1/secrets/{name:.+}",
 		metricspkg.WithHttpMetrics("/v1/secrets/{name}", server.withAuth(
@@ -141,7 +145,7 @@ func (server *Server) registerSecretRoutes() {
 				http.MethodPatch:  authpkg.RoleOperator, // patch secret
 				http.MethodDelete: authpkg.RoleOperator, // delete secret
 			},
-			server.secretHandler())))
+			http.HandlerFunc(server.handleGetOrUpdateOrDeleteSecret))))
 }
 
 func (server *Server) registerCertificateRoutes() {
@@ -149,13 +153,13 @@ func (server *Server) registerCertificateRoutes() {
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleAny, // get certs
 		},
-		server.certsHandler()))
+		http.HandlerFunc(server.handleGetCerts)))
 
 	server.handler.Handle("/v1/certs/{serial}/pem", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleAny, // get cert PEM
 		},
-		server.certHandler()))
+		http.HandlerFunc(server.handleGetCertPEM)))
 }
 
 func (server *Server) registerPendingRequestRoutes() {
@@ -163,7 +167,13 @@ func (server *Server) registerPendingRequestRoutes() {
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleApprover, // get pending requests
 		},
-		server.pendingRequestsHandler()))
+		http.HandlerFunc(server.handleGetPendingRequests)))
+
+	server.handler.Handle("/v1/pending-requests/{id}/body", server.withAuth(
+		map[string]authpkg.Role{
+			http.MethodGet: authpkg.RoleApprover, // get pending request body
+		},
+		http.HandlerFunc(server.handleGetPendingRequestBody)))
 
 	server.handler.Handle("/v1/pending-requests/{id}",
 		metricspkg.WithHttpMetrics("/v1/pending-requests/{id}", server.withAuth(
@@ -171,39 +181,33 @@ func (server *Server) registerPendingRequestRoutes() {
 				http.MethodPost:   authpkg.RoleApprover, // approve pending request
 				http.MethodDelete: authpkg.RoleApprover, // reject pending request
 			},
-			server.pendingRequestHandler())))
-
-	server.handler.Handle("/v1/pending-requests/{id}/body", server.withAuth(
-		map[string]authpkg.Role{
-			http.MethodGet: authpkg.RoleApprover, // get pending request body
-		},
-		server.pendingRequestBodyHandler()))
+			http.HandlerFunc(server.handleApproveOrRejectPendingRequest))))
 }
 
 func (server *Server) registerMiscRoutes() {
-	server.handler.Handle("/v1/dashboard", server.withAuth(
-		map[string]authpkg.Role{
-			http.MethodGet: authpkg.RoleAny, // get dashboard
-		},
-		server.dashboardHandler()))
-
 	server.handler.Handle("/v1/logs", server.withAuth(
 		map[string]authpkg.Role{
 			http.MethodGet: authpkg.RoleAuditor, // get logs
 		},
-		server.logsHandler()))
+		http.HandlerFunc(server.handleGetLogs)))
 
-	server.handler.Handle("/v1/token", server.tokenHandler())
+	server.handler.Handle("/v1/dashboard", server.withAuth(
+		map[string]authpkg.Role{
+			http.MethodGet: authpkg.RoleAny, // get dashboard
+		},
+		http.HandlerFunc(server.handleGetDashboard)))
 
-	server.handler.Handle("/v1/health", server.healthHandler())
+	server.handler.Handle("/v1/token", http.HandlerFunc(server.handleGetToken))
 
-	server.handler.Handle("/v1/oidc/jwks/kubernetes", server.kubernetesJWKSHandler())
+	server.handler.Handle("/v1/health", http.HandlerFunc(server.handleGetHealthStatus))
+
+	server.handler.Handle("/v1/oidc/jwks/kubernetes", http.HandlerFunc(server.handleGetKubernetesJWKS))
 }
 
 func (server *Server) registerVaultCompatibilityRoutes() {
-	server.handler.Handle("/v1/auth/{mount}/login", server.tokenHandler())
+	server.handler.Handle("/v1/auth/{mount}/login", http.HandlerFunc(server.handleGetToken))
 
-	server.handler.Handle("/v1/sys/health", server.healthHandler())
+	server.handler.Handle("/v1/sys/health", http.HandlerFunc(server.handleGetHealthStatus))
 
 	server.handler.PathPrefix("/v1/sys/internal/ui/mounts/").Handler(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

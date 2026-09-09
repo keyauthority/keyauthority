@@ -28,12 +28,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	capi "k8s.io/api/certificates/v1beta1"
 )
 
@@ -273,56 +271,4 @@ func (s *Signer) SignCRL(existingCRL []byte, additional []RevocationPair) ([]byt
 	}
 
 	return newCRL, nil
-}
-
-func (s *Signer) SignPDF(pdf []byte) ([]byte, error) {
-	var chain []*x509.Certificate
-	for _, pemStr := range s.CAChain {
-		block, _ := pem.Decode([]byte(pemStr))
-		if block == nil {
-			return nil, fmt.Errorf("failed to parse PEM in CA chain")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("parse certificate in CA chain: %w", err)
-		}
-		if cert.SerialNumber == s.CA.Certificate.SerialNumber {
-			continue // skip leaf cert if included in chain
-		}
-		chain = append(chain, cert)
-	}
-
-	id := uuid.New()
-	inputPath := fmt.Sprintf("/tmp/keyauthority-input-%s.pdf", id)
-	outputPath := fmt.Sprintf("/tmp/keyauthority-signed-%s.pdf", id)
-
-	if err := os.WriteFile(inputPath, pdf, 0600); err != nil {
-		return nil, fmt.Errorf("write input pdf: %w", err)
-	}
-	defer os.Remove(inputPath)
-	defer os.Remove(outputPath)
-
-	// Sign the PDF
-	if err := SignPDF(
-		s.CA.PrivateKey,
-		s.CA.Certificate,
-		chain,
-		SigningOptions{
-			InputFile:   inputPath,
-			OutputFile:  outputPath,
-			Signer:      s.CA.Certificate.Subject.CommonName,
-			Reason:      "Document signed by KeyAuthority",
-			Location:    "KeyAuthority",
-			ContactInfo: "https://keyauthority.net",
-			TSA:         "https://freetsa.org/tsr",
-			HashAlgo:    "SHA256",
-		}); err != nil {
-		return nil, fmt.Errorf("sign pdf: %w", err)
-	}
-
-	signedPDF, err := os.ReadFile(outputPath)
-	if err != nil {
-		return nil, fmt.Errorf("read signed pdf: %w", err)
-	}
-	return signedPDF, nil
 }

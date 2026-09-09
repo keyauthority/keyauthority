@@ -77,7 +77,6 @@ func (server *Server) RunPeriodicTasks(ctx context.Context) {
 			storeCleanupInterval = 24 * time.Hour
 		}
 
-		time.Sleep(storeCleanupInterval) // initial delay before first cleanup
 		ticker := time.NewTicker(storeCleanupInterval)
 		defer ticker.Stop()
 
