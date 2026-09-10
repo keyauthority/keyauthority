@@ -17,7 +17,6 @@ import {
   prettyTime,
   copyToClipboard,
   prettyEnv,
-  buildURLParams,
   getRoles,
 } from "../utils/utils";
 import { errorToString } from "../utils/error";

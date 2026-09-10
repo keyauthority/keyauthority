@@ -54,12 +54,12 @@ func (c *CtxKeyOriginalRequestID) String() string {
 	return "originalRequestID"
 }
 
-type StdAndDBLogger struct {
+type Logger struct {
 	stdLogger *slog.Logger
 	dbLogger  *slog.Logger
 }
 
-func NewLogger(ctx context.Context, db *sql.DB) (*StdAndDBLogger, error) {
+func NewLogger(ctx context.Context, db *sql.DB) (*Logger, error) {
 	batchSizeStr := os.Getenv(envLogDBBatchSize)
 	if batchSizeStr == "" {
 		batchSizeStr = "50" // default
@@ -87,7 +87,7 @@ func NewLogger(ctx context.Context, db *sql.DB) (*StdAndDBLogger, error) {
 	// Create the database logger
 	pgHandler := NewPGHandler(db, batchSize, flushInterval)
 
-	return &StdAndDBLogger{
+	return &Logger{
 		stdLogger: slog.New(stdHandler),
 		dbLogger:  slog.New(pgHandler),
 	}, nil
@@ -112,7 +112,7 @@ func isError(val any) bool {
 	return ok
 }
 
-func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) InfoWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.InfoContext(ctx, msg, attrs...)
 	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -120,7 +120,7 @@ func (l *StdAndDBLogger) InfoWithContext(ctx context.Context, msg string, args .
 	}
 }
 
-func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
+func (l *Logger) Info(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.InfoContext(r.Context(), msg, attrs...)
 	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -128,7 +128,7 @@ func (l *StdAndDBLogger) Info(r *http.Request, msg string, args ...any) {
 	}
 }
 
-func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) ErrorWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.ErrorContext(ctx, msg, attrs...)
 	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -136,7 +136,7 @@ func (l *StdAndDBLogger) ErrorWithContext(ctx context.Context, msg string, args 
 	}
 }
 
-func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
+func (l *Logger) Error(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.ErrorContext(r.Context(), msg, attrs...)
 	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -144,7 +144,7 @@ func (l *StdAndDBLogger) Error(r *http.Request, msg string, args ...any) {
 	}
 }
 
-func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) WarnWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.WarnContext(ctx, msg, attrs...)
 	if saveToDB, ok := ctx.Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -152,7 +152,7 @@ func (l *StdAndDBLogger) WarnWithContext(ctx context.Context, msg string, args .
 	}
 }
 
-func (l *StdAndDBLogger) Warn(r *http.Request, msg string, args ...any) {
+func (l *Logger) Warn(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.WarnContext(r.Context(), msg, attrs...)
 	if saveToDB, ok := r.Context().Value(CtxKeyWriteLogToDB{}).(bool); ok && saveToDB {
@@ -160,17 +160,17 @@ func (l *StdAndDBLogger) Warn(r *http.Request, msg string, args ...any) {
 	}
 }
 
-func (l *StdAndDBLogger) DebugWithContext(ctx context.Context, msg string, args ...any) {
+func (l *Logger) DebugWithContext(ctx context.Context, msg string, args ...any) {
 	attrs := append(attrsFromContext(ctx), args...)
 	l.stdLogger.DebugContext(ctx, msg, attrs...)
 }
 
-func (l *StdAndDBLogger) Debug(r *http.Request, msg string, args ...any) {
+func (l *Logger) Debug(r *http.Request, msg string, args ...any) {
 	attrs := append(attrsFromRequest(r), args...)
 	l.stdLogger.DebugContext(r.Context(), msg, attrs...)
 }
 
-func (l *StdAndDBLogger) Close() {
+func (l *Logger) Close() {
 	if l.dbLogger != nil {
 		l.dbLogger.Handler().(*PGHandler).Close()
 	}

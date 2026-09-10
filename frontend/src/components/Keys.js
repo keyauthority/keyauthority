@@ -6,13 +6,7 @@ import Paginator from "./Paginator";
 import Filters from "./Filters";
 import JSONModal from "./JSONModal";
 
-import {
-  prettyTime,
-  prettyEnv,
-  showToast,
-  buildURLParams,
-  copyToClipboard,
-} from "../utils/utils";
+import { prettyTime, prettyEnv, showToast } from "../utils/utils";
 
 import { errorToString } from "../utils/error";
 

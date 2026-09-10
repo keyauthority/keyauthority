@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package internal
+package acme
 
 import (
 	"context"
 	"crypto"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -28,17 +27,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
+	databasepkg "github.com/keyauthority/keyauthority/internal/database"
+	eventspkg "github.com/keyauthority/keyauthority/internal/events"
+	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 )
 
 const (
@@ -46,292 +44,48 @@ const (
 	envTSMustBeAgreed = "ACME_TERMS_OF_SERVICE_MUST_BE_AGREED"
 )
 
-type JWSRequest struct {
-	Protected string `json:"protected"`
-	Payload   string `json:"payload"`
-	Signature string `json:"signature"`
-}
-
-type JWSProtected struct {
-	Algorithm string           `json:"alg"`
-	Nonce     string           `json:"nonce,omitempty"`
-	URL       string           `json:"url,omitempty"`
-	KeyID     string           `json:"kid,omitempty"`
-	JWK       *jose.JSONWebKey `json:"jwk,omitempty"`
-}
-
-type Order struct {
-	Cert            []*x509.Certificate
-	Status          string // pending, ready, processing, valid, invalid
-	NotAfter        time.Time
-	ExpiresAt       time.Time
-	VerifiedDomains map[string]bool
-	Tokens          []string
-}
-
-type OrderStore struct {
-	sync.Mutex
-	orders map[string]*Order
-}
-
-type Challenge struct {
-	Status           string //pending, processing, valid, invalid
-	Token            string
-	KeyAuthorization string
-	Domain           string
-	ExpiresAt        time.Time
-}
-
-type ChallengeStore struct {
-	sync.Mutex
-	challenges map[string]*Challenge
-}
-
-type ACMEResponder struct {
-	baseURL string
-	store   *Store
-	// callback when a certificate is signed, for unified logging/storage
-	onCertificateSigned func(*http.Request, *x509.Certificate, string)
-}
-
 var (
-	randomLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-	jsonHeader  = map[string]string{"Content-Type": "application/json"}
-
-	orderStore = &OrderStore{
-		orders: make(map[string]*Order),
-	}
-	challengeStore = ChallengeStore{
-		challenges: make(map[string]*Challenge),
-	}
+	jsonHeader = map[string]string{"Content-Type": "application/json"}
 )
 
-func cleanUpExpiredChallenges() {
-	challengeStore.Lock()
-	defer challengeStore.Unlock()
-	for token, challenge := range challengeStore.challenges {
-		if time.Now().After(challenge.ExpiresAt) {
-			delete(challengeStore.challenges, token)
+type Service struct {
+	baseURL        string
+	log            *loggingpkg.Logger
+	database       *databasepkg.Database
+	orderStore     *OrderStore
+	challengeStore *ChallengeStore
+}
+
+func NewService(log *loggingpkg.Logger, db *databasepkg.Database) *Service {
+	return &Service{
+		baseURL:  os.Getenv(envServerURL),
+		log:      log,
+		database: db,
+		orderStore: &OrderStore{
+			orders: make(map[string]*Order),
+		},
+		challengeStore: &ChallengeStore{
+			challenges: make(map[string]*Challenge),
+		},
+	}
+}
+
+func (a *Service) RunCleanup(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.cleanUpExpiredChallenges()
+			a.cleanUpExpiredOrders()
 		}
 	}
 }
 
-func cleanUpExpiredOrders() {
-	orderStore.Lock()
-	defer orderStore.Unlock()
-	for id, order := range orderStore.orders {
-		if time.Now().After(order.ExpiresAt) {
-			delete(orderStore.orders, id)
-		}
-	}
-}
-
-func getOrder(id string) *Order {
-	orderStore.Lock()
-	order := orderStore.orders[id]
-	orderStore.Unlock()
-	return order
-}
-
-func updateOrder(order *Order, update func(*Order)) {
-	orderStore.Lock()
-	update(order)
-	orderStore.Unlock()
-}
-
-func getChallenge(token string) *Challenge {
-	challengeStore.Lock()
-	challenge := challengeStore.challenges[token]
-	challengeStore.Unlock()
-	return challenge
-}
-
-func updateChallenge(challenge *Challenge, update func(*Challenge)) {
-	challengeStore.Lock()
-	update(challenge)
-	challengeStore.Unlock()
-}
-
-func updateOrderStatus(order *Order) {
-	unverifiedChallenges := len(order.Tokens)
-	if order.Status == "pending" {
-		for _, token := range order.Tokens {
-			if challenge := getChallenge(token); challenge != nil {
-				switch challenge.Status {
-				case "invalid":
-					updateOrder(order, func(o *Order) {
-						o.Status = "invalid"
-					})
-				case "valid":
-					unverifiedChallenges -= 1
-					if unverifiedChallenges == 0 {
-						updateOrder(order, func(o *Order) {
-							o.Status = "ready"
-							o.VerifiedDomains[challenge.Domain] = true
-						})
-					}
-				}
-			}
-		}
-	}
-}
-
-func randomID() (string, error) {
-	r, err := rand.Int(rand.Reader, randomLimit)
-	if err != nil {
-		return "", err
-	}
-	return signerpkg.BigIntToString(r), nil
-}
-
-// self-validating nonces with expiration
-func generateNonce() string {
-	data := map[string]any{
-		"exp": time.Now().Add(10 * time.Minute).Unix(),
-		"rnd": uuid.New().String(), // actual random data
-	}
-
-	jsonData, _ := json.Marshal(data)
-	return base64.RawURLEncoding.EncodeToString(jsonData)
-}
-
-func validateNonce(nonce string) bool {
-	decoded, err := base64.RawURLEncoding.DecodeString(nonce)
-	if err != nil {
-		return false
-	}
-
-	var data map[string]any
-	if json.Unmarshal(decoded, &data) != nil {
-		return false
-	}
-
-	exp, ok := data["exp"].(float64)
-	if !ok {
-		return false
-	}
-
-	return time.Now().Unix() < int64(exp)
-}
-
-func keyID(key *jose.JSONWebKey) string {
-	// Generate a consistent key ID from the public key
-	keyBytes, _ := key.MarshalJSON()
-	hash := sha256.Sum256(keyBytes)
-	return base64.RawURLEncoding.EncodeToString(hash[:16])
-}
-
-func jwkThumbprint(key *jose.JSONWebKey) (string, error) {
-	thumbprint, err := key.Thumbprint(crypto.SHA256)
-	if err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(thumbprint), nil
-}
-
-// validateJWS reads and validates a JWS-protected request
-func (a *ACMEResponder) validateJWS(r *http.Request, bodyBytes []byte, requireKeyID bool) (*jose.JSONWebKey, []byte, error) {
-	// Parse as JWS object directly - v4 API requires signature algorithms
-	jws, err := jose.ParseSigned(string(bodyBytes),
-		[]jose.SignatureAlgorithm{
-			jose.RS256, jose.RS384, jose.RS512,
-			jose.ES256, jose.ES384, jose.ES512,
-			jose.EdDSA,
-		})
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid JWS: %v", err)
-	}
-
-	// Get the protected header - v4 API uses Signatures slice
-	if len(jws.Signatures) == 0 {
-		return nil, nil, fmt.Errorf("no JWS signatures")
-	}
-
-	header := jws.Signatures[0].Header
-
-	// Validate nonce from extra headers
-	if nonce, ok := header.ExtraHeaders["nonce"].(string); ok && nonce != "" {
-		if !validateNonce(nonce) {
-			return nil, nil, fmt.Errorf("invalid or expired nonce")
-		}
-	}
-
-	// Validate URL from extra headers
-	if url, ok := header.ExtraHeaders["url"].(string); ok && url != "" {
-		expectedURL := a.baseURL + r.URL.String()
-		if url != expectedURL {
-			return nil, nil, fmt.Errorf("URL mismatch, expected %s but got %s", expectedURL, url)
-		}
-	}
-
-	// Get the verification key
-	var publicKey *jose.JSONWebKey
-
-	if header.JSONWebKey != nil {
-		if requireKeyID {
-			return nil, nil, fmt.Errorf("embedded JWK not allowed for this endpoint")
-		}
-		publicKey = header.JSONWebKey
-
-	} else if header.KeyID != "" {
-		publicKey, err = a.store.GetACMEAccount(header.KeyID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("unknown key ID: %s", header.KeyID)
-		}
-
-	} else {
-		return nil, nil, fmt.Errorf("missing both JWK and kid")
-	}
-
-	// Verify signature using go-jose v4 API
-	payload, err := jws.Verify(publicKey.Key)
-	if err != nil {
-		return nil, nil, fmt.Errorf("signature verification failed: %v", err)
-	}
-
-	return publicKey, payload, nil
-}
-
-// validateRequest reads and validates a JWS-protected request,
-// unmarshals the payload into structuredPayload if provided and returns the public key
-func (a *ACMEResponder) validateRequest(r *http.Request, structuredPayload any, requiredKeyID bool) (*jose.JSONWebKey, error) {
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate JWS (new account, so no keyID required)
-	publicKey, payload, err := a.validateJWS(r, bodyBytes, requiredKeyID)
-	if err != nil {
-		return nil, fmt.Errorf("JWS validation failed: %v", err)
-	}
-
-	if len(payload) > 0 && structuredPayload != nil {
-		if err := json.Unmarshal(payload, structuredPayload); err != nil {
-			return nil, fmt.Errorf("invalid payload JSON: %v", err)
-		}
-	}
-	return publicKey, nil
-}
-
-func NewACMEResponder(store *Store,
-	onCertificateSigned func(*http.Request, *x509.Certificate, string)) *ACMEResponder {
-	go func() {
-		for {
-			time.Sleep(10 * time.Minute)
-			cleanUpExpiredChallenges()
-			cleanUpExpiredOrders()
-		}
-	}()
-
-	return &ACMEResponder{
-		baseURL:             os.Getenv(envServerURL),
-		store:               store,
-		onCertificateSigned: onCertificateSigned,
-	}
-}
-
-func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]string, error) {
+func (a *Service) BuildResponse(r *http.Request) ([]byte, int, map[string]string, error) {
 	name := mux.Vars(r)["name"]
 	pathSuffix := strings.TrimPrefix(r.URL.Path, "/v1/signers/"+name+"/acme")
 
@@ -368,19 +122,19 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		accountURI := a.baseURL + "/v1/signers/" + name + "/acme/acct/" + accountID
 
 		if accountPayload.OnlyReturnExisting {
-			_, err := a.store.GetACMEAccount(accountURI)
+			_, err := a.database.GetACMEAccount(accountURI)
 			if err != nil {
 				return nil, http.StatusNotFound, jsonHeader, errors.New("account does not exist")
 			}
 			return toJSON(map[string]any{
-					"status":  "valid",
-					"contact": accountPayload.Contact,
-					"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-				}), http.StatusOK, map[string]string{
-					"Location":     accountURI,
-					"Content-Type": "application/json",
-					"Replay-Nonce": generateNonce(),
-				}, nil
+				"status":  "valid",
+				"contact": accountPayload.Contact,
+				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+			}), http.StatusOK, map[string]string{
+				"Location":     accountURI,
+				"Content-Type": "application/json",
+				"Replay-Nonce": generateNonce(),
+			}, nil
 		}
 
 		if os.Getenv(envTSMustBeAgreed) == "true" && !accountPayload.TermsOfServiceAgreed {
@@ -388,20 +142,20 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				errors.New("termsOfServiceAgreed must be true")
 		}
 
-		if err := a.store.InsertACMEAccount(accountURI, publicKey); err != nil {
+		if err := a.database.InsertACMEAccount(accountURI, publicKey); err != nil {
 			return nil, http.StatusInternalServerError, jsonHeader,
 				fmt.Errorf("failed to store account: %v", err)
 		}
 
 		return toJSON(map[string]any{
-				"status":  "valid",
-				"contact": accountPayload.Contact,
-				"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
-			}), http.StatusCreated, map[string]string{
-				"Location":     accountURI,
-				"Content-Type": "application/json",
-				"Replay-Nonce": generateNonce(),
-			}, nil
+			"status":  "valid",
+			"contact": accountPayload.Contact,
+			"orders":  a.baseURL + "/v1/signers/" + name + "/acme/orders",
+		}), http.StatusCreated, map[string]string{
+			"Location":     accountURI,
+			"Content-Type": "application/json",
+			"Replay-Nonce": generateNonce(),
+		}, nil
 
 	case "/acct":
 		return toJSON(map[string]any{
@@ -467,7 +221,9 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		}
 
 		authorizations := []string{}
-		challengeStore.Lock()
+		a.challengeStore.Lock()
+		defer a.challengeStore.Unlock()
+
 		for _, domain := range dnsNames {
 			token, err := randomID()
 			if err != nil {
@@ -481,44 +237,43 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				Domain:           domain,
 				ExpiresAt:        time.Now().Add(10 * time.Minute),
 			}
-			challengeStore.challenges[token] = challenge
+			a.challengeStore.challenges[token] = challenge
 			order.Tokens = append(order.Tokens, token)
 			authorizations = append(authorizations,
 				a.baseURL+"/v1/signers/"+name+"/acme/authz?token="+token)
 		}
-		challengeStore.Unlock()
 
-		orderStore.Lock()
-		orderStore.orders[id] = order
-		orderStore.Unlock()
+		a.orderStore.Lock()
+		defer a.orderStore.Unlock()
+		a.orderStore.orders[id] = order
 
 		return toJSON(map[string]any{
-				"status":         "pending",
-				"authorizations": authorizations,
-				"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
-			}), http.StatusCreated, map[string]string{
-				"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
-				"Content-Type": "application/json",
-			}, nil
+			"status":         "pending",
+			"authorizations": authorizations,
+			"finalize":       a.baseURL + "/v1/signers/" + name + "/acme/finalize?id=" + id,
+		}), http.StatusCreated, map[string]string{
+			"Location":     a.baseURL + "/v1/signers/" + name + "/acme/order?id=" + id,
+			"Content-Type": "application/json",
+		}, nil
 
 	case "/orders":
 		orders := []string{}
-		orderStore.Lock()
-		for id := range orderStore.orders {
+		a.orderStore.Lock()
+		for id := range a.orderStore.orders {
 			orders = append(orders, a.baseURL+"/v1/signers/"+name+"/acme/order?id="+id)
 		}
-		orderStore.Unlock()
+		a.orderStore.Unlock()
 		return toJSON(map[string][]string{
 			"orders": orders,
 		}), http.StatusOK, jsonHeader, nil
 
 	case "/order":
 		id := r.URL.Query().Get("id")
-		order := getOrder(id)
+		order := a.getOrder(id)
 		if order == nil {
 			return nil, http.StatusNotFound, jsonHeader, fmt.Errorf("no order found for id: %s", id)
 		}
-		updateOrderStatus(order)
+		a.updateOrderStatus(order)
 
 		authorizations := []string{}
 		for _, token := range order.Tokens {
@@ -534,7 +289,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 
 	case "/authz":
 		token := r.URL.Query().Get("token")
-		challenge := getChallenge(token)
+		challenge := a.getChallenge(token)
 		if challenge == nil {
 			return nil, http.StatusNotFound, jsonHeader,
 				fmt.Errorf("no challenge found for token: %s", token)
@@ -557,7 +312,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 
 	case "/challenge":
 		token := r.URL.Query().Get("token")
-		challenge := getChallenge(token)
+		challenge := a.getChallenge(token)
 		if challenge == nil {
 			return nil, http.StatusNotFound, jsonHeader,
 				fmt.Errorf("no challenge found for token: %s", token)
@@ -580,7 +335,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 					}
 				}
 			}
-			updateChallenge(challenge, func(c *Challenge) {
+			a.updateChallenge(challenge, func(c *Challenge) {
 				c.Status = status
 			})
 		}
@@ -598,7 +353,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		}
 
 		id := r.URL.Query().Get("id")
-		order := getOrder(id)
+		order := a.getOrder(id)
 		if order == nil {
 			return nil, http.StatusNotFound, jsonHeader,
 				fmt.Errorf("order not found for id: %s", id)
@@ -634,7 +389,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 			ttl := time.Until(order.NotAfter)
 
 			// we do not want to issue CA certs via ACME
-			signerCfg, err := a.store.GetSignerConfig(r.Context(), name)
+			signerCfg, err := a.database.GetSignerConfig(r.Context(), name)
 			if err != nil {
 				return nil, http.StatusInternalServerError, jsonHeader,
 					fmt.Errorf("couldn't get signer config: %v", err)
@@ -646,7 +401,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 			}
 
 			// load the signer to sign the CSR
-			signer, err := a.store.LoadSigner(r.Context(), name)
+			signer, err := a.database.LoadSigner(r.Context(), name)
 			if err != nil {
 				return nil, http.StatusBadRequest, jsonHeader, fmt.Errorf("couldn't load signer: %v", err)
 			}
@@ -654,10 +409,11 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 			// sign the CSR
 			cert, fullChain, err := signer.Sign(cr, ttl)
 			if err != nil {
-				return nil, http.StatusInternalServerError, jsonHeader, fmt.Errorf("failed to sign certificate: %v", err)
+				return nil, http.StatusInternalServerError, jsonHeader,
+					fmt.Errorf("failed to sign certificate: %v", err)
 			}
 
-			a.onCertificateSigned(r, cert, "ACME")
+			eventspkg.OnCertificateSigned(r, a.log, a.database, cert, "ACME")
 
 			var parsed []*x509.Certificate
 			for _, certPEM := range fullChain {
@@ -672,7 +428,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 				parsed = append(parsed, cert)
 			}
 
-			updateOrder(order, func(o *Order) {
+			a.updateOrder(order, func(o *Order) {
 				o.Status = "valid"
 				o.Cert = parsed
 			})
@@ -685,7 +441,7 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 
 	case "/cert":
 		id := r.URL.Query().Get("id")
-		order := getOrder(id)
+		order := a.getOrder(id)
 		if order == nil || order.Status != "valid" || len(order.Cert) == 0 {
 			return nil, http.StatusNotFound, jsonHeader, errors.New("certificate not ready")
 		}
@@ -701,6 +457,106 @@ func (a *ACMEResponder) BuildResponse(r *http.Request) ([]byte, int, map[string]
 		return nil, http.StatusNotFound, jsonHeader,
 			errors.New("ACME endpoint not found")
 	}
+}
+
+func keyID(key *jose.JSONWebKey) string {
+	// Generate a consistent key ID from the public key
+	keyBytes, _ := key.MarshalJSON()
+	hash := sha256.Sum256(keyBytes)
+	return base64.RawURLEncoding.EncodeToString(hash[:16])
+}
+
+func jwkThumbprint(key *jose.JSONWebKey) (string, error) {
+	thumbprint, err := key.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(thumbprint), nil
+}
+
+// validateJWS reads and validates a JWS-protected request
+func (a *Service) validateJWS(r *http.Request, bodyBytes []byte, requireKeyID bool) (*jose.JSONWebKey, []byte, error) {
+	// Parse as JWS object directly - v4 API requires signature algorithms
+	jws, err := jose.ParseSigned(string(bodyBytes),
+		[]jose.SignatureAlgorithm{
+			jose.RS256, jose.RS384, jose.RS512,
+			jose.ES256, jose.ES384, jose.ES512,
+			jose.EdDSA,
+		})
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid JWS: %v", err)
+	}
+
+	// Get the protected header - v4 API uses Signatures slice
+	if len(jws.Signatures) == 0 {
+		return nil, nil, fmt.Errorf("no JWS signatures")
+	}
+
+	header := jws.Signatures[0].Header
+
+	// Validate nonce from extra headers
+	if nonce, ok := header.ExtraHeaders["nonce"].(string); ok && nonce != "" {
+		if !validateNonce(nonce) {
+			return nil, nil, fmt.Errorf("invalid or expired nonce")
+		}
+	}
+
+	// Validate URL from extra headers
+	if url, ok := header.ExtraHeaders["url"].(string); ok && url != "" {
+		expectedURL := a.baseURL + r.URL.String()
+		if url != expectedURL {
+			return nil, nil, fmt.Errorf("URL mismatch, expected %s but got %s", expectedURL, url)
+		}
+	}
+
+	// Get the verification key
+	var publicKey *jose.JSONWebKey
+
+	if header.JSONWebKey != nil {
+		if requireKeyID {
+			return nil, nil, fmt.Errorf("embedded JWK not allowed for this endpoint")
+		}
+		publicKey = header.JSONWebKey
+
+	} else if header.KeyID != "" {
+		publicKey, err = a.database.GetACMEAccount(header.KeyID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unknown key ID: %s", header.KeyID)
+		}
+
+	} else {
+		return nil, nil, fmt.Errorf("missing both JWK and kid")
+	}
+
+	// Verify signature using go-jose v4 API
+	payload, err := jws.Verify(publicKey.Key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("signature verification failed: %v", err)
+	}
+
+	return publicKey, payload, nil
+}
+
+// validateRequest reads and validates a JWS-protected request,
+// unmarshals the payload into structuredPayload if provided and returns the public key
+func (a *Service) validateRequest(r *http.Request, structuredPayload any, requiredKeyID bool) (*jose.JSONWebKey, error) {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate JWS (new account, so no keyID required)
+	publicKey, payload, err := a.validateJWS(r, bodyBytes, requiredKeyID)
+	if err != nil {
+		return nil, fmt.Errorf("JWS validation failed: %v", err)
+	}
+
+	if len(payload) > 0 && structuredPayload != nil {
+		if err := json.Unmarshal(payload, structuredPayload); err != nil {
+			return nil, fmt.Errorf("invalid payload JSON: %v", err)
+		}
+	}
+	return publicKey, nil
 }
 
 func httpGetWithRetry(ctx context.Context, url string,

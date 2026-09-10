@@ -10,7 +10,6 @@ FROM golang:${GO_VERSION} AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION
-ARG ENTERPRISE
 
 WORKDIR /workspace
 
@@ -28,7 +27,7 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/main.go cmd/main.go
+COPY cmd/ cmd/
 COPY internal/ internal/
 COPY migrations/ migrations/
 COPY swagger/ swagger/
@@ -38,38 +37,9 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
       export CC=aarch64-linux-gnu-gcc; \
     fi && \
     CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o server \
-    -ldflags "-X main.version=${VERSION} -X main.enterprise=${ENTERPRISE}" cmd/main.go
+    -ldflags "-X main.version=${VERSION}" cmd/server/main.go
 
-# Stage 2: Prepare Primus files
-FROM debian:${DEBIAN_VERSION} AS primus
-ARG TARGETOS
-ARG TARGETARCH
-ARG PRIMUS_VERSION
-ARG ENTERPRISE
-
-WORKDIR /primus
-# Only copy and extract if ENTERPRISE=true
-RUN if [ "${ENTERPRISE}" = "true" ]; then \
-      apt-get update && apt-get install -y unzip tar; \
-    fi
-COPY ./primus/PrimusAPI_PKCS11-v${PRIMUS_VERSION}.zip* ./
-RUN if [ "${ENTERPRISE}" = "true" ] && [ -f "PrimusAPI_PKCS11-v${PRIMUS_VERSION}.zip" ]; then \
-      unzip -q PrimusAPI_PKCS11-v${PRIMUS_VERSION}.zip && \
-      case "${TARGETOS:-linux}/${TARGETARCH}" in \
-        "linux/amd64") \
-          tar -xzf ./PrimusAPI_PKCS11-X-${PRIMUS_VERSION}-rhel8-x86_64.tar.gz -C /usr/local ;; \
-        "linux/arm64") \
-          tar -xzf ./PrimusAPI_PKCS11-X-${PRIMUS_VERSION}-rhel8-aarch64.tar.gz -C /usr/local ;; \
-        *) \
-          echo "Primus not available for ${TARGETOS:-linux}/${TARGETARCH}" ;; \
-      esac && \
-      rm PrimusAPI_PKCS11-v${PRIMUS_VERSION}.zip; \
-    else \
-      # create an empty /usr/local/primus directory to avoid errors in the final stage \
-      mkdir -p /usr/local/primus; \
-    fi
-
-# Stage 3: Install pkcs11-tool and softhsm2-util
+# Stage 2: Install pkcs11-tool and softhsm2-util
 FROM fedora AS tools
 RUN dnf install -y opensc softhsm which findutils && \
     dnf clean all
@@ -109,16 +79,8 @@ RUN for b in pkcs11-tool softhsm2-util; do \
       echo "Some libraries are missing for $b!" && exit 1 || echo "All libraries found for $b."; \
     done
 
-# Primus files
-COPY --from=primus /usr/local/primus /usr/local/primus
-RUN chgrp -R ${RUNTIME_GID} /usr/local/primus && \
-    chmod -R g+rwX /usr/local/primus
-
 # Go server binary
 COPY --from=builder /workspace/server /usr/bin/server
-
-ENV PATH="/usr/local/primus/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/usr/local/primus/lib"
 
 EXPOSE 8081 8443 9000
 USER 1001

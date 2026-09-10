@@ -1,8 +1,5 @@
 IMG_REGISTRY ?= docker.io/keyauthoritydh
-ENTERPRISE ?= false
-# if ENTERPRISE is false then use IMG_REPOSITORY=backend
-# otherwise use IMG_REPOSITORY=backend-enterprise
-IMG_REPOSITORY ?= backend$(if $(filter true,$(ENTERPRISE)),-enterprise)
+IMG_REPOSITORY ?= backend
 VERSION ?= $(shell cat ./VERSION)
 
 # if BETA_VERSION is empty then use IMG_TAG=VERSION, 
@@ -98,7 +95,7 @@ build: fmt vet ## Build manager binary.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) -t $(IMG) .
+	$(CONTAINER_TOOL) build --build-arg VERSION=$(IMG_TAG) -t $(IMG) .
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -106,8 +103,7 @@ docker-build: ## Build docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-# PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-PLATFORMS ?= linux/amd64
+PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 BUILDER ?=
 .PHONY: docker-buildx
 docker-buildx: check-image-exists ## Build and push docker image for the manager for cross-platform support
@@ -116,10 +112,10 @@ docker-buildx: check-image-exists ## Build and push docker image for the manager
 	@if [ -z "$(BUILDER)" ]; then \
 		$(CONTAINER_TOOL) buildx create --name keyauthority-builder; \
 		$(CONTAINER_TOOL) buildx use keyauthority-builder; \
-		$(CONTAINER_TOOL) buildx build --push --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
+		$(CONTAINER_TOOL) buildx build --push --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
 		$(CONTAINER_TOOL) buildx rm keyauthority-builder; \
 	else \
-		$(CONTAINER_TOOL) buildx build --push --builder $(BUILDER) --build-arg ENTERPRISE=${ENTERPRISE} --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
+		$(CONTAINER_TOOL) buildx build --push --builder $(BUILDER) --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
 	fi
 	rm Dockerfile.cross
 
@@ -198,7 +194,6 @@ docker-run: load-shared-env
 	docker run -d --rm -p $(BACKEND_PORT):8081 \
 		--name backend \
 		--user 65535:4001 \
-		-v "$(PWD)/ignore/primus/etc/primus:/etc/primus" \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
 		-e METRICS_PORT=$(METRICS_PORT) \
@@ -219,8 +214,6 @@ docker-run: load-shared-env
 		-e POSTGRESQL_DATABASE=$(POSTGRES_DB) \
 		-e POSTGRESQL_PORT_NUMBER=$(POSTGRES_PORT) \
 		-e SOFTHSM2_CONF=/etc/softhsm/softhsm.conf \
-		-e SOFTHSM_SO_PIN=1234 \
-		-e SOFTHSM_PIN=5678 \
 		$(IMG)
 
 .PHONY: run
@@ -244,9 +237,7 @@ run: load-shared-env
 	POSTGRESQL_DATABASE=$(POSTGRES_DB) \
 	POSTGRESQL_PORT_NUMBER=$(POSTGRES_PORT) \
 	SOFTHSM2_CONF=./ignore/softhsm/etc/softhsm/softhsm.conf \
-	SOFTHSM_SO_PIN=1234 \
-	SOFTHSM_PIN=5678 \
-	go run cmd/main.go
+	go run cmd/server/main.go
 
 ##@ Stop and remove local docker container
 .PHONY: docker-stop
@@ -272,21 +263,3 @@ scan-code:
 	govulncheck ./...
 	staticcheck ./... || true
 	semgrep scan --config=./.semgrep .
-
-##@ Test JWT exchange
-.PHONY: test-jwt-exchange
-test-jwt-exchange:
-	@token1=$$(step crypto jwt sign \
-			--key test-jwks-key.json \
-			--password-file /dev/null \
-			--iss "https://local.keyauthority.net" \
-			--aud "keyauthority://secrets" \
-			--sub "local:keyauthority" \
-			--exp "$$(date -v+87600H +%s)"); \
-	token2=$$(curl -s -X POST \
-			-H "Content-Type: application/json" \
-			-d "{ \"jwt\": \"$$token1\" }" \
-			http://localhost:$(BACKEND_PORT)/v1/token | jq -r '.auth.client_token'); \
-	curl -s \
-			-H "Authorization: Bearer $$token2" \
-			http://localhost:$(BACKEND_PORT)/v1/token/claims | jq

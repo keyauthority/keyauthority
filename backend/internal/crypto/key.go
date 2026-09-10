@@ -40,7 +40,6 @@ import (
 )
 
 var (
-	Enterprise  bool
 	p11CtxCache = cachepkg.NewCache()
 )
 
@@ -618,10 +617,6 @@ func CloseCachedP11Contexts() error {
 }
 
 func getP11Ctx(uriStr string) (*crypto11.Context, error) {
-	if !Enterprise {
-		return nil, fmt.Errorf("HSM keys are only supported in the Enterprise edition")
-	}
-
 	value, err := p11CtxCache.GetOrSetFunc(uriStr, func() (any, error) {
 		u, err := stepuri.ParseWithScheme("pkcs11", uriStr)
 		if err != nil {

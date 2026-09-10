@@ -1,9 +1,9 @@
-import { useCallback, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Alert, Table } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import Filters from "./Filters";
 import Paginator from "./Paginator";
-import { prettyTime, prettyEnv, buildURLParams } from "../utils/utils";
+import { prettyTime, prettyEnv } from "../utils/utils";
 
 import SecretModal from "./SecretModal";
 
