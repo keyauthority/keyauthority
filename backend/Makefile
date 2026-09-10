@@ -194,7 +194,6 @@ docker-run: load-shared-env
 	docker run -d --rm -p $(BACKEND_PORT):8081 \
 		--name backend \
 		--user 65535:4001 \
-		-v "$(PWD)/ignore/primus/etc/primus:/etc/primus" \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
 		-e METRICS_PORT=$(METRICS_PORT) \
