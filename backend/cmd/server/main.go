@@ -27,11 +27,13 @@ import (
 	httppkg "github.com/keyauthority/keyauthority/internal/http"
 )
 
+var version string
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	server := httppkg.NewServer()
+	server := httppkg.NewServer(version)
 	defer server.Close()
 
 	server.ConnectDatabase(ctx)
@@ -50,6 +52,6 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		fmt.Fprintf(os.Stderr, "server shutdown failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "server shutdown failed: %v", err)
 	}
 }

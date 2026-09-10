@@ -36,7 +36,6 @@ import (
 )
 
 const (
-	envVersion    = "VERSION"
 	envTruststore = "TRUSTSTORE"
 	envTLSCert    = "TLS_CERT"
 	envTLSKey     = "TLS_KEY"
@@ -58,7 +57,7 @@ type Server struct {
 	metricsServer *http.Server
 }
 
-func NewServer() *Server {
+func NewServer(version string) *Server {
 	handler := mux.NewRouter()
 	nonTLSHandler := handler
 	if os.Getenv(envTLSKey) != "" && os.Getenv(envTLSCert) != "" {
@@ -66,7 +65,7 @@ func NewServer() *Server {
 	}
 
 	return &Server{
-		version:        os.Getenv(envVersion),
+		version:        version,
 		envCache:       cachepkg.NewCache(),
 		handler:        handler,
 		nonTLSHandler:  nonTLSHandler,
