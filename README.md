@@ -1,18 +1,18 @@
 # KeyAuthority
 
-KeyAuthority is a platform for managing Public Key Infrastructure (PKI) and application secrets across your Kubernetes environments. It simplifies certificate lifecycle management and secure secret distribution for applications and microservices.
+This repository contains the source code for KeyAuthority, which is a platform for managing private Certificate Authorities, X.509 certificates, and application secrets across your Kubernetes environments. The tool simplifies certificate lifecycle management and secure secret distribution for applications and microservices.
 
-Visit [keyauthority.net](https://keyauthority.net/) for further information.
+To learn how to deploy KeyAuthority to your Kubernetes cluster using Helm, visit our [Artifact Hub page](https://artifacthub.io/packages/helm/keyauthority/keyauthority).
 
-## Layout
+## Folder Layout
 
-This repository contains KeyAuthority source code, with its four main components:
-- PostgreSQL database (in `./postgres`)
-- Keycloak identity and access management (in `./keycloak`)
-- Backend service (in `./backend`)
-- Frontend web application (in `./frontend`)
+- PostgreSQL database in `./postgres`
+- Keycloak identity and access management in `./keycloak`
+- Backend service in `./backend`
+- Frontend web application in `./frontend`
+- Init tooling in `./tools`
 
-## Deploy it locally on Docker
+## Dev deployment on local Docker
 
 To deploy KeyAuthority locally using Docker, follow these steps:
 
@@ -47,4 +47,4 @@ make docker-run
 
 Use the `BETA_VERSION` env var for beta images. For example, `BETA_VERSION=$(git rev-parse --short HEAD) make docker-run` will run the beta version of the component (assuming the image was built following the last git commit).
 
-After running all components, you can access the KeyAuthority frontend at [http://localhost:3000](http://localhost:3000).
+After running all components, you can access the frontend at [http://localhost:3000](http://localhost:3000).

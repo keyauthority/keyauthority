@@ -103,8 +103,7 @@ docker-build: ## Build docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-# PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-PLATFORMS ?= linux/amd64
+PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 BUILDER ?=
 .PHONY: docker-buildx
 docker-buildx: check-image-exists ## Build and push docker image for the manager for cross-platform support
@@ -195,6 +194,7 @@ docker-run: load-shared-env
 	docker run -d --rm -p $(BACKEND_PORT):8081 \
 		--name backend \
 		--user 65535:4001 \
+		-v "$(PWD)/ignore/primus/etc/primus:/etc/primus" \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
 		-e METRICS_PORT=$(METRICS_PORT) \

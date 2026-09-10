@@ -98,5 +98,4 @@ jobs:
           echo "    Image: $(make print-img)"
           echo "    Platforms: ${{ inputs.platforms }}"
           echo "    Build Mode: ${{ inputs.builder_mode }}"
-          echo "    Beta: ${{ github.ref != 'refs/heads/main' && 'Yes' || 'No' }}"
           make docker-buildx PLATFORMS=${{ inputs.platforms }}

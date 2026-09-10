@@ -82,9 +82,6 @@ RUN for b in pkcs11-tool softhsm2-util; do \
 # Go server binary
 COPY --from=builder /workspace/server /usr/bin/server
 
-ENV PATH="/usr/local/primus/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/usr/local/primus/lib"
-
 EXPOSE 8081 8443 9000
 USER 1001
 CMD ["server"]
