@@ -4,6 +4,12 @@ This repository contains the source code for KeyAuthority, which is a platform f
 
 To learn how to deploy KeyAuthority to your Kubernetes cluster using Helm, visit our [Artifact Hub page](https://artifacthub.io/packages/helm/keyauthority/keyauthority).
 
+## Architecture Overview
+
+The following diagram illustrates the architecture of KeyAuthority, showing its components and their interactions. KeyAuthority components are the frontend, the backend, the identity provider (Keycloak), and the database. The diagram also shows the interactions with humans, machines, and the HSM. Dashed lines indicate KeyAuthority's internal interactions, whereas solid lines represent interactions with external actors.
+
+![KeyAuthority Architecture](arch.png)
+
 ## Folder Layout
 
 - PostgreSQL database in `./postgres`
