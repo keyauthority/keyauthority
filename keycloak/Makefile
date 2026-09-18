@@ -1,15 +1,5 @@
-IMG_REGISTRY ?= docker.io/keyauthoritydh
 IMG_REPOSITORY ?= keycloak
-VERSION ?= $(shell cat ./VERSION)
-
-# if BETA_VERSION is empty then use IMG_TAG=VERSION, 
-# otherwise use IMG_TAG=VERSION-betaBETA_VERSION
-BETA_VERSION ?=
-IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-$(BETA_VERSION),)
-
-# if BETA_VERSION is empty then use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY):$(IMG_TAG)
-# otherwise use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)-beta:$(IMG_TAG)
-IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)$(if $(BETA_VERSION),-beta):$(IMG_TAG)
+CONTAINER_NAME ?= keycloak
 
 # further build arguments
 KC_VERSION=$(shell echo $(VERSION) | cut -d'-' -f1)
@@ -22,39 +12,12 @@ AGENT_JAR ?= $(AGENT_DIR)/target/multiaudience-agent.jar
 SPI_DIR ?= providers/custom-jwt-ag
 SPI_JAR ?= $(SPI_DIR)/target/custom-jwt-ag.jar
 
-# CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
-
-# Setting SHELL to bash allows bash commands to be executed by recipes.
-# Options are set to exit when a recipe line exits non-zero or a piped command fails.
-SHELL = /usr/bin/env bash -o pipefail
-.SHELLFLAGS = -ec
+include ../common.mk
 
 .PHONY: all
 all: docker-buildx
 
-# Helper target to load shared environment variables
-.PHONY: load-shared-env
-load-shared-env:
-	$(eval include ../shared.env)
-	$(eval export)
-
-# Helper target to print the image name and tag
-.PHONY: print-img
-print-img: ## Print the image name and tag that will be used for building and pushing.
-	@echo $(IMG)
-
 ##@ Build
-
-.PHONY: check-image-exists
-check-image-exists: ## Check if image already exists in registry
-	@if $(CONTAINER_TOOL) manifest inspect $(IMG) >/dev/null 2>&1; then \
-		echo "Error: Image $(IMG) already exists in registry."; \
-		exit 1; \
-	fi
 
 .PHONY: agent-build
 agent-build: ## Build Java agent jar used by Dockerfile
@@ -72,38 +35,17 @@ spi-build: ## Build Java SPI jar used by Dockerfile
 spi-clean: ## Clean Java SPI build artifacts
 	cd $(SPI_DIR) && mvn -q clean
 
-# If you wish to build the manager image targeting other platforms you can use the --platform flag.
-# (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
-# More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: agent-build spi-build keycloakify-prep keycloakify-build-theme ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build --build-arg KC_VERSION=$(KC_VERSION) -t $(IMG) .
 
-# PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
-# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
-# - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
-# - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
-# To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-BUILDER ?=
-.PHONY: docker-buildx
-docker-buildx: check-image-exists keycloakify-prep keycloakify-build-theme ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	@if [ -z "$(BUILDER)" ]; then \
-		$(CONTAINER_TOOL) buildx create --name keyauthority-builder; \
-		$(CONTAINER_TOOL) buildx use keyauthority-builder; \
-		$(CONTAINER_TOOL) buildx build --push --build-arg KC_VERSION=$(KC_VERSION) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
-		$(CONTAINER_TOOL) buildx rm keyauthority-builder; \
-	else \
-		$(CONTAINER_TOOL) buildx build --push --build-arg KC_VERSION=$(KC_VERSION) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
-	fi
-	rm Dockerfile.cross
+# Extend the generic docker-buildx from common.mk with extra prerequisites
+# and the custom build-arg, without redefining its recipe.
+docker-buildx: BUILD_ARGS = --build-arg KC_VERSION=$(KC_VERSION)
+docker-buildx: keycloakify-prep keycloakify-build-theme
 
 ##@ Create database
 POSTGRES_DB ?= keycloak
-POSTGRES_CONTAINER_NAME ?= postgres
 .PHONY: docker-create-db
 docker-create-db: load-shared-env
 	docker exec -it \
@@ -124,11 +66,6 @@ docker-run: load-shared-env
 		-e KC_DB_PASSWORD=$(POSTGRES_PASSWORD) \
 		-e KC_DB_URL=jdbc:postgresql://host.docker.internal:$(POSTGRES_PORT)/$(POSTGRES_DB) \
 		$(IMG)
-
-##@ Stop and remove local docker container
-.PHONY: docker-stop
-docker-stop:
-	docker rm -f keycloak || true
 
 ##@ First time preparation
 docker-remove-ssl-requirement: load-shared-env
@@ -170,7 +107,7 @@ keycloakify-run-theme:
 	cd theming/keyauthority-theme && npm run storybook
 
 .PHONY: keycloakify-build-theme
-keycloakify-build-theme: 
+keycloakify-build-theme:
 	cd theming/keyauthority-theme && npm run build-keycloak-theme
 
 ##@ Prettify
@@ -179,8 +116,3 @@ pretty:
 	npx prettier --write "theming"
 	# npx prettier --write "agent/pom.xml" --plugin @prettier/plugin-xml
 	# npx prettier --write "agent/src/**/*.java" --plugin prettier-plugin-java
-
-##@ Scan
-.PHONY: scan
-scan:
-	trivy image $(IMG)

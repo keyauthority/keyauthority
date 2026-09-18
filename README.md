@@ -23,31 +23,32 @@ The following diagram illustrates the architecture of KeyAuthority, showing its 
 To deploy KeyAuthority locally using Docker, follow these steps:
 
 ```shell
-#@ PostgreSQL
-# open a terminal at ./postgres
+# 1. Deploy PostgreSQL
+## open a terminal at ./postgres and run:
 make docker-run
 
-#@ Keycloak
-# open a terminal at ./keycloak
+# 2. Deploy Keycloak
+## open a terminal at ./keycloak and run:
 make docker-create-db
 make docker-run
-# ...wait for Keycloak to be ready
-# ...create realm.json using KeyAuthority Helm chart and make sure that:
-#    'sslRequired' is 'none'
-#    'keyauthority-discovery' client secret matches one in shared.env
-#    'keyauthority-frontend' rootUrl, adminUrl, redirectUris, and webOrigins point to http://localhost:3000
+## ...wait for Keycloak to be ready
+## ...create realm.json using KeyAuthority Helm chart and make sure that:
+##    'sslRequired' is 'none'
+##    'keyauthority-discovery' client secret matches one in shared.env
+##    'keyauthority-frontend' rootUrl, adminUrl, redirectUris, and webOrigins point to http://localhost:3000
+## then run:
 make docker-remove-ssl-requirement
 make docker-stop
 make docker-run
 make docker-run-provisioner
 
-#@ Backend
-# open a terminal at ./backend
+# 3. Deploy Backend
+## open a terminal at ./backend and run:
 make docker-create-db
 make docker-run ENTERPRISE=true
 
-#@ Frontend
-# open a terminal at ./frontend
+# 4. Deploy Frontend
+## open a terminal at ./frontend and run:
 make docker-run
 ```
 

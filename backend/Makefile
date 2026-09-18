@@ -1,15 +1,5 @@
-IMG_REGISTRY ?= docker.io/keyauthoritydh
 IMG_REPOSITORY ?= backend
-VERSION ?= $(shell cat ./VERSION)
-
-# if BETA_VERSION is empty then use IMG_TAG=VERSION, 
-# otherwise use IMG_TAG=VERSION-betaBETA_VERSION
-BETA_VERSION ?=
-IMG_TAG=$(VERSION)$(if $(BETA_VERSION),-$(BETA_VERSION),)
-
-# if BETA_VERSION is empty then use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY):$(IMG_TAG)
-# otherwise use IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)-beta:$(IMG_TAG)
-IMG=$(IMG_REGISTRY)/$(IMG_REPOSITORY)$(if $(BETA_VERSION),-beta):$(IMG_TAG)
+CONTAINER_NAME ?= backend
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -18,30 +8,10 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-# CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
-
-# Setting SHELL to bash allows bash commands to be executed by recipes.
-# Options are set to exit when a recipe line exits non-zero or a piped command fails.
-SHELL = /usr/bin/env bash -o pipefail
-.SHELLFLAGS = -ec
+include ../common.mk
 
 .PHONY: all
 all: build
-
-# Helper target to load shared environment variables
-.PHONY: load-shared-env
-load-shared-env:
-	$(eval include ../shared.env)
-	$(eval export)
-
-# Helper target to print the image name and tag
-.PHONY: print-img
-print-img: ## Print the image name and tag that will be used for building and pushing.
-	@echo $(IMG)
 
 ##@ Development
 
@@ -79,45 +49,16 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
-.PHONY: check-image-exists
-check-image-exists: ## Check if image already exists in registry
-	@if $(CONTAINER_TOOL) manifest inspect $(IMG) >/dev/null 2>&1; then \
-		echo "Error: Image $(IMG) already exists in registry."; \
-		exit 1; \
-	fi
-
 .PHONY: build
 build: fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
-# If you wish to build the manager image targeting other platforms you can use the --platform flag.
-# (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
-# More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build --build-arg VERSION=$(IMG_TAG) -t $(IMG) .
 
-# PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
-# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
-# - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
-# - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
-# To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-BUILDER ?=
 .PHONY: docker-buildx
-docker-buildx: check-image-exists ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	@if [ -z "$(BUILDER)" ]; then \
-		$(CONTAINER_TOOL) buildx create --name keyauthority-builder; \
-		$(CONTAINER_TOOL) buildx use keyauthority-builder; \
-		$(CONTAINER_TOOL) buildx build --push --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
-		$(CONTAINER_TOOL) buildx rm keyauthority-builder; \
-	else \
-		$(CONTAINER_TOOL) buildx build --push --builder $(BUILDER) --build-arg VERSION=$(IMG_TAG) --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross .; \
-	fi
-	rm Dockerfile.cross
+docker-buildx: BUILD_ARGS = --build-arg VERSION=$(IMG_TAG)
 
 ##@ Dependencies
 
@@ -172,7 +113,6 @@ serve-swagger:
 
 ##@ Create database
 POSTGRES_DB ?= backend
-POSTGRES_CONTAINER_NAME ?= postgres
 .PHONY: docker-create-db
 docker-create-db: load-shared-env
 	docker exec -it \
@@ -186,13 +126,12 @@ METRICS_PORT ?= 9000
 INVENTORY_REFRESH_INTERVAL ?= 1m
 LOG_LEVEL ?= debug
 SOFTWARE_KEY_PASSPHRASE ?= passphrase
-# KC_URL ?= http://localhost:$(KC_PORT)
 KC_URL = http://host.docker.internal:$(KC_PORT)
 
 .PHONY: docker-run
 docker-run: load-shared-env
 	docker run -d --rm -p $(BACKEND_PORT):8081 \
-		--name backend \
+		--name $(CONTAINER_NAME) \
 		--user 65535:4001 \
 		-v "$(PWD)/ignore/softhsm/etc/softhsm:/etc/softhsm" \
 		-e HTTP_PORT=8081 \
@@ -239,22 +178,14 @@ run: load-shared-env
 	SOFTHSM2_CONF=./ignore/softhsm/etc/softhsm/softhsm.conf \
 	go run cmd/server/main.go
 
-##@ Stop and remove local docker container
-.PHONY: docker-stop
-docker-stop:
-	docker rm -f backend || true
-
 ##@ Pretty
 .PHONY: pretty
 pretty: fmt
 	npx prettier --write "**/*.yaml"
 
 ##@ Scan
-scan: scan-image scan-code
-
-.PHONY: scan-image
-scan-image:
-	trivy image $(IMG)
+.PHONY: scan-all
+scan-all: scan scan-code
 
 .PHONY: scan-code
 scan-code:
