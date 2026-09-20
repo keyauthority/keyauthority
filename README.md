@@ -6,12 +6,12 @@ KeyAuthority is a platform for managing private Certificate Authorities, X.509 c
 
 KeyAuthority consists of:
 
-- Frontend
-- Backend
-- Keycloak identity provider
-- PostgreSQL database
+- Frontend: ReactJS application
+- Backend: Go application
+- Keycloak: Identity provider
+- PostgreSQL: Relational database
 
-It also integrates with humans, machines, and HSMs. Dashed lines represent internal interactions; solid lines represent external interactions.
+KeyAuthority flows integrate with humans, machines, and HSMs. Below is an overview of the architecture where dashed lines represent internal interactions; solid lines represent external interactions.
 
 ![KeyAuthority architecture](arch.png)
 
@@ -27,7 +27,6 @@ The local development setup allows you to run KeyAuthority components in Docker 
 
 - Docker
 - GNU Make
-- Git
 
 ### Steps
 
@@ -50,9 +49,9 @@ make docker-run
 
 Wait for Keycloak to become ready. Then create `realm.json` using the KeyAuthority Helm chart and configure it as follows:
 
-- Set `sslRequired` to `none`.
-- Set the `keyauthority-discovery` client secret to match the value in `.config/shared.env`.
-- Set the `keyauthority-frontend` `rootUrl`, `adminUrl`, `redirectUris`, and `webOrigins` to `http://localhost:3000`.
+- Set `sslRequired` to `none` in the realm settings.
+- Set the client secret to the value in `.config/shared.env` for the `keyauthority-exchange` client settings.
+- Set the `rootUrl`, `adminUrl`, `redirectUris`, and `webOrigins` to `http://localhost:3000` in the `keyauthority-frontend` client settings.
 
 Then run:
 
@@ -60,6 +59,11 @@ Then run:
 make docker-remove-ssl-requirement
 make docker-stop
 make docker-run
+```
+
+Wait for Keycloak to become ready, then run the provisioner:
+
+```shell
 make docker-run-provisioner
 ```
 
@@ -86,7 +90,7 @@ The frontend will be available at [http://localhost:3000](http://localhost:3000)
 
 For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin).
 
-This documentation is part of our live demo, so registration is required to access it.
+The documentation is part of our live demo, so registration is required to access it.
 
 ## Security and vulnerability scanning
 
