@@ -27,6 +27,7 @@ The local development setup allows you to run KeyAuthority components in Docker 
 
 - Docker
 - GNU Make
+- yq
 
 ### Steps
 
@@ -47,13 +48,7 @@ make docker-create-db
 make docker-run
 ```
 
-Wait for Keycloak to become ready. Then create `realm.json` using the KeyAuthority Helm chart and configure it as follows:
-
-- Set `sslRequired` to `none` in the realm settings.
-- Set the client secret to the value in `.config/shared.env` in the `keyauthority-exchange` client settings.
-- Set the `rootUrl`, `adminUrl`, `redirectUris`, and `webOrigins` to `http://localhost:3000` in the `keyauthority-frontend` client settings.
-
-Then run:
+Wait for Keycloak to become ready. Then run:
 
 ```shell
 make docker-remove-ssl-requirement
@@ -61,11 +56,23 @@ make docker-stop
 make docker-run
 ```
 
-Wait for Keycloak to become ready, then run the provisioner:
+Wait for Keycloak to become ready. Then provision the realm:
 
 ```shell
+# Generate the Keycloak realm provisioning file
+helm template keyauthority \
+    oci://registry-1.docker.io/keyauthoritydh/keyauthority \
+    --version <LATEST_VERSION> \
+    --set keycloak.provisionJob.enabled=true \
+    --set keycloak.provisionJob.frontendURL=http://localhost:3000 \
+    | yq -r 'select(.kind == "Secret" and .metadata.name == "keyauthority-keycloak-provision") | stringData."realm.json"' \
+    > realm.json
+
+# Run the Keycloak realm provisioner
 make docker-run-provisioner
 ```
+
+Log in to the Keycloak admin console and navigate to the `keyauthority-exchange` client settings. Set the client secret to the value in `.config/shared.env`.
 
 #### 3. Start the backend
 
