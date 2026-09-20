@@ -21,6 +21,8 @@ Deploy KeyAuthority to Kubernetes using Helm. See the [Artifact Hub package](htt
 
 ## Local development
 
+The local development setup allows you to run KeyAuthority components in Docker containers for testing and development purposes.
+
 ### Prerequisites
 
 - Docker
@@ -65,7 +67,7 @@ From `./backend`:
 
 ```shell
 make docker-create-db
-make docker-run ENTERPRISE=true
+make docker-run
 ```
 
 ### Start the frontend
@@ -80,15 +82,13 @@ The frontend will be available at [http://localhost:3000](http://localhost:3000)
 
 ## Administration
 
-For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin).
+For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin) on our live demo.
 
 Registration is required to access the documentation.
 
 ## Security and vulnerability scanning
 
-KeyAuthority images are hosted on [Docker Hub](https://hub.docker.com/u/keyauthoritydh) and regularly scanned with [`trivy`](https://github.com/aquasecurity/trivy).
-
-The latest results are available in the [Artifact Hub security report](https://artifacthub.io/packages/helm/keyauthority/keyauthority?modal=security-report).
+KeyAuthority images are hosted on [Docker Hub](https://hub.docker.com/u/keyauthoritydh) and regularly scanned with [`trivy`](https://github.com/aquasecurity/trivy). The latest results are available in the [Artifact Hub security report](https://artifacthub.io/packages/helm/keyauthority/keyauthority?modal=security-report).
 
 PostgreSQL and Keycloak are repackaged with Red Hat Universal Base Image (UBI) minimal images to reduce their attack surface. You can use the official images instead by overriding the image repository and tag in `values.yaml`.
 
