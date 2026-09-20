@@ -50,7 +50,7 @@ make docker-run
 Wait for Keycloak to become ready. Then create `realm.json` using the KeyAuthority Helm chart and configure it as follows:
 
 - Set `sslRequired` to `none` in the realm settings.
-- Set the client secret to the value in `.config/shared.env` for the `keyauthority-exchange` client settings.
+- Set the client secret to the value in `.config/shared.env` in the `keyauthority-exchange` client settings.
 - Set the `rootUrl`, `adminUrl`, `redirectUris`, and `webOrigins` to `http://localhost:3000` in the `keyauthority-frontend` client settings.
 
 Then run:
@@ -107,13 +107,11 @@ See the vendor documentation for details:
 
 To use HSM keys, repackage the backend image with the required PKCS#11 libraries. Configuration files and credentials can be mounted as volumes or provided through environment variables.
 
-Example:
+Example Dockerfile:
 
 ```dockerfile
 FROM keyauthoritydh/backend:1.4.8
-
 COPY ./pkcs11.so /usr/lib/pkcs11/pkcs11.so
-
 ENV LD_LIBRARY_PATH="/usr/lib/pkcs11:${LD_LIBRARY_PATH}"
 ```
 
