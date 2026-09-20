@@ -29,7 +29,9 @@ The local development setup allows you to run KeyAuthority components in Docker 
 - GNU Make
 - Git
 
-### Start PostgreSQL
+### Steps
+
+#### 1. Start PostgreSQL
 
 From `./postgres`:
 
@@ -37,7 +39,7 @@ From `./postgres`:
 make docker-run
 ```
 
-### Start Keycloak
+#### 2. Start Keycloak
 
 From `./keycloak`:
 
@@ -49,7 +51,7 @@ make docker-run
 Wait for Keycloak to become ready. Then create `realm.json` using the KeyAuthority Helm chart and configure it as follows:
 
 - Set `sslRequired` to `none`.
-- Set the `keyauthority-discovery` client secret to match the value in `shared.env`.
+- Set the `keyauthority-discovery` client secret to match the value in `.config/shared.env`.
 - Set the `keyauthority-frontend` `rootUrl`, `adminUrl`, `redirectUris`, and `webOrigins` to `http://localhost:3000`.
 
 Then run:
@@ -61,7 +63,7 @@ make docker-run
 make docker-run-provisioner
 ```
 
-### Start the backend
+#### 3. Start the backend
 
 From `./backend`:
 
@@ -70,7 +72,7 @@ make docker-create-db
 make docker-run
 ```
 
-### Start the frontend
+#### 4. Start the frontend
 
 From `./frontend`:
 
@@ -82,9 +84,9 @@ The frontend will be available at [http://localhost:3000](http://localhost:3000)
 
 ## Administration
 
-For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin) on our live demo.
+For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin).
 
-Registration is required to access the documentation.
+This documentation is part of our live demo, so registration is required to access it.
 
 ## Security and vulnerability scanning
 
