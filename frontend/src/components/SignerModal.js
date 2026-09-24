@@ -55,7 +55,6 @@ export default function SignerModal({
   // Policy
   const [allowedDomains, setAllowedDomains] = useState("");
   const [maxTTL, setMaxTTL] = useState(720);
-  const [approvalRequired, setApprovalRequired] = useState(false);
   const [allowedKeyUsages, setAllowedKeyUsages] = useState([
     "digital signature",
     "key encipherment",
@@ -154,7 +153,6 @@ export default function SignerModal({
       setAllowedDomains(signerConfig.allowedDomains?.join(", ") || "");
       setAllowedKeyUsages(signerConfig.allowedKeyUsages || []);
       setMaxTTL(toHours(signerConfig.maxTTL) || 720);
-      setApprovalRequired(signerConfig.approvalRequired || false);
     }
   }, [signerConfig]);
 
@@ -186,7 +184,6 @@ export default function SignerModal({
 
       setAllowedDomains("");
       setMaxTTL(720);
-      setApprovalRequired(false);
       setAllowedKeyUsages([
         "digital signature",
         "key encipherment",
@@ -254,7 +251,6 @@ export default function SignerModal({
         .map((s) => s.trim())
         .filter(Boolean),
       allowedKeyUsages,
-      approvalRequired,
     };
 
     if (!editMode) {
@@ -681,18 +677,6 @@ export default function SignerModal({
               <Form.Text className="text-muted">
                 Maximum allowed Time-to-Live (TTL) for certificates issued by
                 this signer
-              </Form.Text>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Approval Required"
-                checked={approvalRequired}
-                onChange={(e) => setApprovalRequired(e.target.checked)}
-              />
-              <Form.Text className="text-muted">
-                If set, non-trivial requests such as signing, revocation, etc...
-                will require approval from an additional user
               </Form.Text>
             </Form.Group>
           </Card.Body>

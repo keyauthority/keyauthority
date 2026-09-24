@@ -32,8 +32,8 @@ load-shared-env:
 		echo "## Keycloak" >> $(ENV_FILE); \
 		echo "KC_PORT=8080" >> $(ENV_FILE); \
 		echo "KC_ADMIN_USER=admin" >> $(ENV_FILE); \
-		echo "KC_ADMIN_PASSWORD=admin" >> $(ENV_FILE); \
-		echo "KC_REALM=local" >> $(ENV_FILE); \
+		echo "KC_ADMIN_PASSWORD=$$(openssl rand -hex 16)" >> $(ENV_FILE); \
+		echo "KC_REALM=keyauthority" >> $(ENV_FILE); \
 		echo "KC_EXCHANGE_CLIENT_ID=keyauthority-exchange" >> $(ENV_FILE); \
 		echo "KC_EXCHANGE_CLIENT_SECRET=$$(openssl rand -hex 16)" >> $(ENV_FILE); \
 		echo "## Backend" >> $(ENV_FILE); \

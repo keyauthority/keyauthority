@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Row,
@@ -8,11 +8,10 @@ import {
   DropdownButton,
   Dropdown,
   Alert,
-  Button,
 } from "react-bootstrap";
 import { ToastContainer } from "react-toastify";
 import Sidebar from "./Sidebar";
-import { Dashboard, Certificates, Logs, PendingRequests } from "./Activity";
+import { Dashboard, Certificates, Logs } from "./Activity";
 import {
   Administration,
   UseSigners,
@@ -28,12 +27,6 @@ import SecretDetails from "./SecretDetails";
 import Footer from "./Footer";
 
 import { getApi } from "../axios";
-import { errorToString } from "../utils/error";
-import {
-  showToast,
-  copyToClipboard,
-  showImportResultToast,
-} from "../utils/utils";
 
 export default function Main() {
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +42,6 @@ export default function Main() {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const location = useLocation();
-  const navigate = useNavigate();
   const api = getApi();
 
   const sidebarSections = [
@@ -75,12 +67,6 @@ export default function Main() {
           subtitle: "View certificates issued by your CAs",
           to: "/activity/certs",
           icon: "bi-award-fill",
-        },
-        {
-          title: "Pending Requests",
-          subtitle: "Approve or reject requests that are pending approval",
-          to: "/activity/pending-requests",
-          icon: "bi-clock-fill",
         },
       ],
     },

@@ -1,25 +1,7 @@
 import { Link } from "react-router-dom";
-import { copyToClipboard } from "../utils/utils";
 
 export function errorToString(err, fallback = "An unexpected error occurred.") {
   if (!err) return fallback;
-
-  // handle 428 for approval required
-  if (err.response && err.response.status === 428) {
-    return (
-      <span>
-        Approval required for request:{" "}
-        <Link
-          as="button"
-          onClick={() =>
-            copyToClipboard(err.response.data, "Request ID copied!")
-          }
-        >
-          {err.response.data}
-        </Link>
-      </span>
-    );
-  }
 
   // handle forbidden error
   if (err.response && err.response.status === 403) {

@@ -19,14 +19,11 @@ package http
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	authpkg "github.com/keyauthority/keyauthority/internal/auth"
-	databasepkg "github.com/keyauthority/keyauthority/internal/database"
 	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 )
 
@@ -130,40 +127,6 @@ func (server *Server) withAuth(requiredRoles map[string]authpkg.Role, next http.
 		ctx = r.Context()
 		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB{}, true)
 		r = r.WithContext(ctx)
-
-		// Prevent requester and approver from being the same user
-		approverToken, ok := ctx.Value(loggingpkg.CtxKeyApproverToken{}).(*oidc.IDToken)
-		if ok && approverToken.Subject == token.Subject && approverToken.Issuer == token.Issuer {
-			server.logErrorAndWriteHTTP(w, r, http.StatusForbidden,
-				"cannot guarantee that requester and approver are different users")
-			return
-		}
-
-		// If request requires additional approval, save as pending
-		if server.requiresApproval(r) {
-			body, _ := io.ReadAll(r.Body)
-			ctx = r.Context()
-			requestID, err := server.db.InsertPendingRequest(ctx,
-				&databasepkg.PendingRequestPrivate{
-					Method: r.Method,
-					Header: r.Header.Clone(),
-					URL:    r.URL,
-					Body:   body,
-				}, token)
-			if err != nil {
-				server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-					"couldn't store pending request", err)
-				return
-			}
-
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyRequestID{}, requestID)
-			r = r.WithContext(ctx)
-
-			server.log.Info(r, "pending request created", "id", requestID)
-			writeHTTPWithHeaders(w, http.StatusPreconditionRequired, []byte(requestID.String()),
-				map[string]string{"Content-Type": "text/plain"})
-			return
-		}
 
 		next.ServeHTTP(w, r)
 	})

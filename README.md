@@ -48,27 +48,22 @@ make docker-create-db
 make docker-run
 ```
 
-Wait for Keycloak to become ready. Then run:
+Wait for Keycloak to become ready. Then create the `realm.json` file to provision the realm:
 
 ```shell
-make docker-remove-ssl-requirement
-make docker-stop
-make docker-run
-```
-
-Wait for Keycloak to become ready. Then provision the realm:
-
-```shell
-# Generate the Keycloak realm provisioning file
+# Generate the application manifest
+version=<LATEST_VERSION>
 helm template keyauthority \
     oci://registry-1.docker.io/keyauthoritydh/keyauthority \
-    --version <LATEST_VERSION> \
+    --version ${version} \
     --set keycloak.provisionJob.enabled=true \
     --set keycloak.provisionJob.frontendURL=http://localhost:3000 \
-    | yq -r 'select(.kind == "Secret" and .metadata.name == "keyauthority-keycloak-provision") | stringData."realm.json"' \
-    > realm.json
+    > manifest.yaml
+```
 
-# Run the Keycloak realm provisioner
+Extract the string data from the secret named `keyauthority-keycloak-provision` in the manifest and create a `realm.json` file with it. Then run the provisioning job:
+
+```shell
 make docker-run-provisioner
 ```
 
