@@ -27,7 +27,7 @@ The local development setup allows you to run KeyAuthority components in Docker 
 
 - Docker
 - GNU Make
-- yq
+- Helm
 
 ### Steps
 

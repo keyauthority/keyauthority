@@ -19,8 +19,7 @@ docker-build: ## Build docker image with the manager.
 docker-buildx: BUILD_ARGS = --build-arg PG_MAJOR=$(PG_MAJOR)
 
 ##@ Run locally on docker
-DATA_VOLUME ?= postgres-data-new
-
+DATA_VOLUME ?= postgres-data
 .PHONY: docker-run
 docker-run: load-shared-env
 	$(CONTAINER_TOOL) volume create $(DATA_VOLUME) || true
