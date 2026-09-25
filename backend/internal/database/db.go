@@ -25,14 +25,12 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -45,7 +43,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	cachepkg "github.com/keyauthority/keyauthority/internal/cache"
 	cryptopkg "github.com/keyauthority/keyauthority/internal/crypto"
-	loggingpkg "github.com/keyauthority/keyauthority/internal/logging"
 	metricspkg "github.com/keyauthority/keyauthority/internal/metrics"
 	signerpkg "github.com/keyauthority/keyauthority/internal/signer"
 )
@@ -69,23 +66,6 @@ var (
 	crlCache    = cachepkg.NewCache()
 	caCertCache = cachepkg.NewCache()
 )
-
-// actual data used for replaying pending requests upon approval
-type PendingRequestPrivate struct {
-	Method string
-	URL    *url.URL
-	Header http.Header
-	Body   []byte
-}
-
-type PendingRequestPublic struct {
-	ID          uuid.UUID      `json:"id"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	PrivateBody bool           `json:"privateBody"`
-	Method      string         `json:"method"`
-	URL         string         `json:"url"`
-	TokenInfo   map[string]any `json:"token"`
-}
 
 type Database struct {
 	DB              *sql.DB
@@ -1512,245 +1492,6 @@ func (s *Database) GetACMEAccount(uri string) (*jose.JSONWebKey, error) {
 	return &jwk, err
 }
 
-/*****************************************************/
-/*           Pending Request Functions              */
-/*****************************************************/
-func applyPendingRequestFilters(query string, args []any, idx int, filters url.Values) (string, []any, int) {
-	if id := filters.Get("id"); id != "" {
-		query += fmt.Sprintf(" AND id::text ILIKE $%d", idx)
-		args = append(args, "%"+id+"%")
-		idx++
-	}
-	if user := filters.Get("user"); user != "" {
-		query += fmt.Sprintf(" AND (token_info->'user')::text ILIKE $%d", idx)
-		args = append(args, "%"+user+"%")
-		idx++
-	}
-	if from := parseTime(filters, "from"); from != nil {
-		query += fmt.Sprintf(" AND created_at >= $%d", idx)
-		args = append(args, *from)
-		idx++
-	}
-	if to := parseTime(filters, "to"); to != nil {
-		query += fmt.Sprintf(" AND created_at <= $%d", idx)
-		args = append(args, *to)
-		idx++
-	}
-	return query, args, idx
-}
-
-func (s *Database) GetPendingRequestsWithCursor(ctx context.Context, filters url.Values) (*CursorPaginationResult, error) {
-	query := `SELECT id, created_at, token_info, private_body, method, url FROM pending_requests WHERE 1=1`
-	args := []any{}
-	idx := 1
-
-	query, args, idx = applyPendingRequestFilters(query, args, idx, filters)
-	query, args, idx, pageSize := applyCursorPagination(query, args, idx, filters, "created_at", "id", "DESC")
-
-	rows, err := s.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query pending requests: %w", err)
-	}
-	defer rows.Close()
-
-	requests := []map[string]any{}
-	var lastID uuid.UUID
-	var lastCreatedAt time.Time
-	for rows.Next() {
-		var id uuid.UUID
-		var createdAt time.Time
-		var tokenInfoBytes []byte
-		var privateBody bool
-		var method string
-		var url sql.NullString
-
-		if err := rows.Scan(&id, &createdAt, &tokenInfoBytes, &privateBody, &method, &url); err != nil {
-			return nil, fmt.Errorf("scan pending request: %w", err)
-		}
-		var tokenInfo map[string]any
-		if err := json.Unmarshal(tokenInfoBytes, &tokenInfo); err != nil {
-			return nil, fmt.Errorf("unmarshal token info: %w", err)
-		}
-
-		requests = append(requests, map[string]any{
-			"id":          id,
-			"createdAt":   createdAt,
-			"token":       tokenInfo,
-			"privateBody": privateBody,
-			"method":      method,
-			"url":         url.String,
-		})
-
-		lastID = id
-		lastCreatedAt = createdAt
-	}
-
-	hasMore := len(requests) > pageSize
-	if hasMore {
-		requests = requests[:pageSize]
-	}
-
-	nextCursor := ""
-	if len(requests) > 0 && hasMore {
-		nextCursor = lastCreatedAt.Format(time.RFC3339Nano) + "|" + lastID.String()
-	}
-
-	return &CursorPaginationResult{
-		Items:      requests,
-		NextCursor: nextCursor,
-		HasMore:    hasMore,
-		PageSize:   pageSize,
-	}, nil
-}
-
-func (s *Database) InsertPendingRequest(ctx context.Context, p *PendingRequestPrivate, token *oidc.IDToken) (uuid.UUID, error) {
-	// Database a pending HTTP request in the database
-	// Encrypt the Authorization header and body using the software key password before storing
-
-	var urlStr string
-	if p.URL != nil {
-		urlStr = p.URL.String()
-	}
-	isPrivateBody := true
-	if strings.HasPrefix(p.URL.Path, "/v1/signers") {
-		isPrivateBody = false
-	}
-
-	tokenInfo, ok := ctx.Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
-	if !ok {
-		return uuid.Nil, fmt.Errorf("missing token info in context")
-	}
-	tiMap := tokenInfo.ToMap()
-	tokenInfoBytes, err := json.Marshal(tiMap)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("marshal token info: %w", err)
-	}
-
-	// encrypt token
-	var encryptedToken []byte
-	if authTokens, ok := p.Header["Authorization"]; ok && len(authTokens) > 0 {
-		var err error
-		encryptedToken, err = cryptopkg.EncryptWithPwd([]byte(strings.TrimPrefix(authTokens[0], "Bearer ")), s.SoftwareKeyPass)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("encrypt Authorization header: %w", err)
-		}
-	}
-	// encrypt body
-	var encryptedBody []byte
-	if len(p.Body) > 0 {
-		var err error
-		encryptedBody, err = cryptopkg.EncryptWithPwd(p.Body, s.SoftwareKeyPass)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("encrypt body: %w", err)
-		}
-	}
-
-	var id uuid.UUID
-	if err = s.DB.QueryRowContext(ctx, `
-		INSERT INTO pending_requests (token_info, private_body, method, url, encrypted_token, encrypted_body)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, tokenInfoBytes, isPrivateBody, p.Method, urlStr, encryptedToken, encryptedBody).Scan(&id); err != nil {
-		return uuid.Nil, fmt.Errorf("insert pending request: %w", err)
-	}
-
-	return id, nil
-}
-
-func (s *Database) GetPendingRequestBody(ctx context.Context, id uuid.UUID) ([]byte, error) {
-	var isPrivateBody bool
-	var encryptedBody []byte
-	if err := s.DB.QueryRowContext(ctx, `
-		SELECT private_body, encrypted_body
-		FROM pending_requests
-		WHERE id = $1
-	`, id).Scan(&isPrivateBody, &encryptedBody); err != nil {
-		return nil, fmt.Errorf("get pending request body: %w", err)
-	}
-
-	if len(encryptedBody) == 0 {
-		return nil, nil
-	}
-
-	if isPrivateBody {
-		return nil, fmt.Errorf("body is private")
-	}
-
-	return cryptopkg.DecryptWithPwd(encryptedBody, s.SoftwareKeyPass)
-}
-
-func (s *Database) GetPendingRequest(ctx context.Context, id uuid.UUID) (*PendingRequestPrivate, error) {
-	var method string
-	var urlStr sql.NullString
-	var encryptedToken []byte
-	var encryptedBody []byte
-	if err := s.DB.QueryRowContext(ctx, `
-		SELECT method, url, encrypted_token, encrypted_body
-		FROM pending_requests
-		WHERE id = $1
-	`, id).Scan(&method, &urlStr, &encryptedToken, &encryptedBody); err != nil {
-		return nil, fmt.Errorf("get pending request: %w", err)
-	}
-
-	var urlObj *url.URL
-	if urlStr.Valid && urlStr.String != "" {
-		parsedURL, err := url.Parse(urlStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("parse URL: %w", err)
-		}
-		urlObj = parsedURL
-	}
-
-	// decrypt token
-	header := http.Header{}
-	var token []byte
-	if len(encryptedToken) > 0 {
-		var err error
-		token, err = cryptopkg.DecryptWithPwd(encryptedToken, s.SoftwareKeyPass)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt Authorization header: %w", err)
-		}
-		header.Set("Authorization", "Bearer "+string(token))
-	}
-
-	// decrypt body
-	var body []byte
-	if len(encryptedBody) > 0 {
-		var err error
-		body, err = cryptopkg.DecryptWithPwd(encryptedBody, s.SoftwareKeyPass)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt body: %w", err)
-		}
-	}
-
-	return &PendingRequestPrivate{
-		Method: method,
-		URL:    urlObj,
-		Header: header,
-		Body:   body,
-	}, nil
-}
-
-func (s *Database) GetPendingRequestUser(ctx context.Context, id uuid.UUID) (string, error) {
-	var user string
-	if err := s.DB.QueryRowContext(ctx, `
-		SELECT (token_info->>'user') AS user
-		FROM pending_requests
-		WHERE id = $1
-	`, id).Scan(&user); err != nil {
-		return "", fmt.Errorf("get pending request user: %w", err)
-	}
-	return user, nil
-}
-
-func (s *Database) DeletePendingRequest(ctx context.Context, id uuid.UUID) error {
-	_, err := s.DB.ExecContext(ctx, `
-		DELETE FROM pending_requests
-		WHERE id = $1
-	`, id)
-	return err
-}
-
 /**********************************************************************/
 /*   One-Time & Periodic Tasks (Cleanup, Inventory, Metrics, etc...)  */
 /**********************************************************************/
@@ -1762,14 +1503,6 @@ func (s *Database) RunCleanupTasks(ctx context.Context) error {
 		WHERE not_after < now() - INTERVAL '30 days'
 	`); err != nil {
 		return fmt.Errorf("cleanup expired certs: %w", err)
-	}
-
-	// clean up pending requests older than 7 days
-	if _, err := s.DB.ExecContext(ctx, `
-		DELETE FROM pending_requests
-		WHERE created_at < now() - INTERVAL '7 days'
-	`); err != nil {
-		return fmt.Errorf("cleanup old pending requests: %w", err)
 	}
 
 	// delete unused software keys

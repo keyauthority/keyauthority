@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -51,10 +50,6 @@ type Server struct {
 	handler        *mux.Router
 	metricsHandler *mux.Router
 	nonTLSHandler  *mux.Router
-
-	httpServer    *http.Server
-	httpsServer   *http.Server
-	metricsServer *http.Server
 }
 
 func NewServer(version string) *Server {
@@ -135,26 +130,6 @@ func (server *Server) CreateAuthenticator(ctx context.Context) {
 func (server *Server) CreateACMEService(ctx context.Context) {
 	server.acme = acmepkg.NewService(server.log, server.db)
 	server.log.InfoWithContext(ctx, "ACME service ready")
-}
-
-func (server *Server) Shutdown(ctx context.Context) error {
-	var shutdownErrors []error
-
-	for _, s := range []*http.Server{
-		server.httpsServer,
-		server.httpServer,
-		server.metricsServer,
-	} {
-		if s == nil {
-			continue
-		}
-
-		if err := s.Shutdown(ctx); err != nil {
-			shutdownErrors = append(shutdownErrors, err)
-		}
-	}
-
-	return errors.Join(shutdownErrors...)
 }
 
 // Close releases dependencies after all HTTP servers have been shut down.

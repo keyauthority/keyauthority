@@ -29,7 +29,6 @@ func (server *Server) SetHandlers() {
 	server.registerSignerRoutes()
 	server.registerSecretRoutes()
 	server.registerCertificateRoutes()
-	server.registerPendingRequestRoutes()
 	server.registerMiscRoutes()
 	server.registerVaultCompatibilityRoutes()
 	server.registerSwaggerRoutes()
@@ -160,28 +159,6 @@ func (server *Server) registerCertificateRoutes() {
 			http.MethodGet: authpkg.RoleAny, // get cert PEM
 		},
 		http.HandlerFunc(server.handleGetCertPEM)))
-}
-
-func (server *Server) registerPendingRequestRoutes() {
-	server.handler.Handle("/v1/pending-requests", server.withAuth(
-		map[string]authpkg.Role{
-			http.MethodGet: authpkg.RoleApprover, // get pending requests
-		},
-		http.HandlerFunc(server.handleGetPendingRequests)))
-
-	server.handler.Handle("/v1/pending-requests/{id}/body", server.withAuth(
-		map[string]authpkg.Role{
-			http.MethodGet: authpkg.RoleApprover, // get pending request body
-		},
-		http.HandlerFunc(server.handleGetPendingRequestBody)))
-
-	server.handler.Handle("/v1/pending-requests/{id}",
-		metricspkg.WithHttpMetrics("/v1/pending-requests/{id}", server.withAuth(
-			map[string]authpkg.Role{
-				http.MethodPost:   authpkg.RoleApprover, // approve pending request
-				http.MethodDelete: authpkg.RoleApprover, // reject pending request
-			},
-			http.HandlerFunc(server.handleApproveOrRejectPendingRequest))))
 }
 
 func (server *Server) registerMiscRoutes() {

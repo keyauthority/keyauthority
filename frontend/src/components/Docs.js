@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Alert, Button, Table } from "react-bootstrap";
+import { Alert, Table } from "react-bootstrap";
 import { getApi } from "../axios";
 import { getKeycloak } from "../keycloak";
-import { copyToClipboard, disclaimer, prettyCode } from "../utils/utils";
-import KeyValueTable from "./KeyValueTable";
+import { disclaimer, prettyCode } from "../utils/utils";
 
 export function UsefulLinks() {
   const api = getApi();
@@ -181,15 +180,6 @@ export function Administration() {
               <code>KEYAUTHORITY_AUDITOR</code>
             </td>
             <td>Read-only access to view logs</td>
-          </tr>
-          <tr>
-            <td>
-              <code>KEYAUTHORITY_APPROVER</code>
-            </td>
-            <td>
-              Permissions to approve requests that are pending review and
-              approval
-            </td>
           </tr>
         </tbody>
       </Table>
@@ -734,7 +724,6 @@ export function Architecture() {
                 <ul className="mb-0">
                   <li>Operators</li>
                   <li>Auditors</li>
-                  <li>Approvers</li>
                 </ul>,
               )}
             </div>

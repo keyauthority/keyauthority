@@ -502,14 +502,6 @@ function ConfigTab({
                         ? signerConfig.allowedDomains.join(", ")
                         : "-",
                     "Max TTL": signerConfig.maxTTL,
-                    "Approval Required": signerConfig.approvalRequired ? (
-                      <div className="d-flex gap-2 align-items-start">
-                        <i className="bi bi-exclamation-circle text-warning"></i>
-                        Yes, for non-trivial requests
-                      </div>
-                    ) : (
-                      <>No</>
-                    ),
                   }}
                   keysClass="fw-bold"
                 />

@@ -31,19 +31,21 @@ const (
 	envMetricsPort = "METRICS_PORT"
 )
 
-func (server *Server) ListenAndServe(ctx context.Context) {
+// ListenAndServe starts the HTTP, HTTPS, and metrics servers and returns them as a slice of *http.Server.
+// The servers are returned so that they can be properly shut down later.
+func (server *Server) ListenAndServe(ctx context.Context) []*http.Server {
 	metricspkg.SetupMetrics()
 	server.metricsHandler.Handle("/metrics", metricspkg.MetricsHandler())
 
 	metricsPort := os.Getenv(envMetricsPort)
-	server.metricsServer = &http.Server{
+	metricsServer := &http.Server{
 		Addr:    ":" + metricsPort,
 		Handler: server.metricsHandler,
 	}
 
 	go func() {
 		server.log.InfoWithContext(ctx, "metrics server starting", "port", metricsPort)
-		if err := server.metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			server.log.ErrorWithContext(ctx, "metrics server stopped unexpectedly",
 				"port", metricsPort,
 				"error", err)
@@ -51,14 +53,14 @@ func (server *Server) ListenAndServe(ctx context.Context) {
 	}()
 
 	httpPort := os.Getenv(envHTTPPort)
-	server.httpServer = &http.Server{
+	httpServer := &http.Server{
 		Addr:    ":" + httpPort,
 		Handler: server.withSecurityHeaders(server.withCORS(server.nonTLSHandler)),
 	}
 
 	go func() {
 		server.log.InfoWithContext(ctx, "HTTP server starting", "port", httpPort)
-		if err := server.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			server.log.ErrorWithContext(ctx, "HTTP server stopped unexpectedly",
 				"port", httpPort,
 				"error", err)
@@ -68,22 +70,24 @@ func (server *Server) ListenAndServe(ctx context.Context) {
 	tlsCert := os.Getenv(envTLSCert)
 	tlsKey := os.Getenv(envTLSKey)
 	if tlsCert == "" || tlsKey == "" {
-		return
+		return []*http.Server{httpServer, metricsServer}
 	}
 
 	httpsPort := os.Getenv(envHTTPSPort)
-	server.httpsServer = &http.Server{
+	httpsServer := &http.Server{
 		Addr:    ":" + httpsPort,
 		Handler: server.withSecurityHeaders(server.withCORS(server.handler)),
 	}
 
 	go func() {
 		server.log.InfoWithContext(ctx, "HTTPS server starting", "port", httpsPort)
-		if err := server.httpsServer.ListenAndServeTLS(tlsCert, tlsKey); err != nil &&
+		if err := httpsServer.ListenAndServeTLS(tlsCert, tlsKey); err != nil &&
 			!errors.Is(err, http.ErrServerClosed) {
 			server.log.ErrorWithContext(ctx, "HTTPS server stopped unexpectedly",
 				"port", httpsPort,
 				"error", err)
 		}
 	}()
+
+	return []*http.Server{httpServer, httpsServer, metricsServer}
 }

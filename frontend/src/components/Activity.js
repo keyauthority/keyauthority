@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Alert,
-  Button,
   Card,
   Table,
   Row,
@@ -13,7 +12,6 @@ import {
 } from "react-bootstrap";
 import {
   showToast,
-  downloadOrCopy,
   prettyTime,
   copyToClipboard,
   prettyEnv,
@@ -432,7 +430,7 @@ export function Certificates({ isLoading, setIsLoading }) {
               <td>
                 <Dropdown>
                   <Dropdown.Toggle
-                    as={Link}
+                    as="a"
                     className="no-caret"
                     id={`dropdown-${cert.serial}`}
                   >
@@ -449,7 +447,7 @@ export function Certificates({ isLoading, setIsLoading }) {
                       <i className="bi bi-eye me-1"></i> View as JSON
                     </Dropdown.Item>
                     {/*<Dropdown.Item
-                      as={Link}
+                      as="a"
                       to={`/signers/${encodeURIComponent(cert.signerName)}`}
                     >
                       <i className="bi bi-pen me-1"></i> Go to Signer
@@ -678,7 +676,7 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
               <td>
                 <Dropdown>
                   <Dropdown.Toggle
-                    as={Link}
+                    as="a"
                     className="no-caret"
                     id={`dropdown-${index}`}
                   >
@@ -712,225 +710,6 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
         apiPath="/logs"
         orderCol="time"
         idCol="logEntryID"
-      />
-    </>
-  );
-}
-
-export function PendingRequests({ isLoading, setIsLoading }) {
-  const [error, setError] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [files, setFiles] = useState({});
-  const [filters, setFilters] = useState({});
-
-  const [refreshTrigger, setRefreshTrigger] = useState(0); // used to trigger re-fetching requests after approving/rejecting
-
-  const [showModal, setShowModal] = useState(false);
-  const [modalTitle, setModalTitle] = useState(null);
-  const [modalData, setModalData] = useState(null);
-
-  const api = getApi();
-
-  const handleApproveRequest = async (requestID, useOwnToken) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to approve the request '${requestID}'?`,
-    );
-    if (!confirmed) return;
-
-    setIsLoading(true);
-    try {
-      const response = await api.post(
-        `/pending-requests/${requestID}?useOwnToken=${useOwnToken}`,
-      );
-      const contentTypeFromHeader = response.headers["content-type"];
-      setFiles((prev) => ({
-        ...prev,
-        [requestID]: { data: response.data, contentTypeFromHeader },
-      }));
-      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRejectRequest = async (requestID) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to reject the request '${requestID}'?`,
-    );
-    if (!confirmed) return;
-
-    setIsLoading(true);
-    try {
-      await api.delete(`/pending-requests/${requestID}`);
-      showToast("success", "Request rejected!");
-      setRefreshTrigger((prev) => prev + 1); // trigger re-fetching requests
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleViewJSON = async (req) => {
-    setIsLoading(true);
-    let modalData = req;
-    try {
-      const response = await api.get(`/pending-requests/${req.id}/body`);
-      if (response.data) {
-        modalData = { ...req, body: response.data };
-      }
-    } catch (err) {
-      // don't show error if body can't be fetched, just show the rest of the request data
-      // showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-      setModalTitle(`Request: ${req.id}`);
-      setModalData(modalData);
-      setShowModal(true);
-    }
-  };
-
-  const contentTypeToExtension = {
-    "application/json": "json",
-    "application/x-pem-file": "pem",
-    "application/pkix-cert": "crt",
-    "application/octet-stream": "bin",
-    "text/plain": "txt",
-  };
-
-  return (
-    <>
-      <JSONModal
-        show={showModal}
-        onHide={() => setShowModal(false)}
-        modalTitle={modalTitle}
-        modalData={modalData}
-        size="lg"
-      />
-
-      {error && <Alert variant="danger">{error}</Alert>}
-
-      <div>
-        {Object.keys(files).map((requestID) =>
-          downloadOrCopy(
-            `Request '${requestID}' approved!`,
-            files[requestID].data,
-            `response-${requestID}.${contentTypeToExtension[files[requestID].contentTypeFromHeader] || "txt"}`,
-          ),
-        )}
-      </div>
-
-      <Filters
-        filters={filters}
-        setFilters={setFilters}
-        filtersTemplate={[
-          {
-            key: "id",
-            type: "text",
-            label: "ID",
-            placeholder: "e.g. 3fa85f64-57...",
-            value: filters.id,
-          },
-          {
-            key: "user",
-            type: "text",
-            label: "Requester",
-            placeholder: "e.g. alice@keyauthority.net",
-            value: filters.user,
-          },
-          {
-            key: "from",
-            type: "date",
-            label: "From",
-            value: filters.from,
-          },
-          {
-            key: "to",
-            type: "date",
-            label: "To",
-            value: filters.to,
-          },
-        ]}
-      />
-
-      <Table hover responsive striped className="align-middle">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Requester</th>
-            <th>API Call</th>
-            <th>Created</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((req) => (
-            <tr key={req.id}>
-              <td style={{ maxWidth: "12rem" }} className="text-truncate">
-                {req.id}
-              </td>
-              <td>{req.token?.user || "-"}</td>
-              <td>
-                {req.method && req.url ? (
-                  <>
-                    {req.method} {req.url.split("?")[0]}
-                  </>
-                ) : (
-                  "-"
-                )}
-              </td>
-              <td>{prettyTime(req.createdAt)}</td>
-              <td>
-                <Dropdown>
-                  <Dropdown.Toggle
-                    as={Link}
-                    className="no-caret"
-                    id={`dropdown-${req.id}`}
-                  >
-                    <i className="bi-three-dots-vertical mx-1"></i>
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu>
-                    <Dropdown.Item onClick={() => handleViewJSON(req)}>
-                      <i className="bi bi-eye me-1"></i> View as JSON
-                    </Dropdown.Item>
-                    <Dropdown.Divider />
-                    <Dropdown.Item
-                      onClick={() => handleApproveRequest(req.id, false)}
-                    >
-                      <i className="bi bi-check-lg me-1"></i> Approve with
-                      Requester's Token
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      onClick={() => handleApproveRequest(req.id, true)}
-                    >
-                      <i className="bi bi-person-check-fill me-1"></i> Approve
-                      with My Own Token
-                    </Dropdown.Item>
-                    <Dropdown.Divider />
-                    <Dropdown.Item onClick={() => handleRejectRequest(req.id)}>
-                      <i className="bi bi-x-lg me-1"></i> Reject
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-
-      <Paginator
-        key={`pending-requests-paginator-${refreshTrigger}`}
-        setError={setError}
-        isLoading={isLoading}
-        setIsLoading={setIsLoading}
-        filters={filters}
-        items={requests}
-        setItems={setRequests}
-        apiPath="/pending-requests"
-        orderCol="createdAt"
-        idCol="id"
       />
     </>
   );

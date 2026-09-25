@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/google/uuid"
 )
 
 const (
@@ -40,18 +39,9 @@ type CtxKeyWriteLogToDB struct{}
 type CtxKeyToken struct{}
 type CtxKeyTokenInfo struct{}
 type CtxKeyEnvironment struct{}
-type CtxKeyApproverToken struct{}
-type CtxKeyRequestID struct{}
-type CtxKeyOriginalRequestID struct{}
 
 func (c *CtxKeyEnvironment) String() string {
 	return "environment"
-}
-func (c *CtxKeyRequestID) String() string {
-	return "requestID"
-}
-func (c *CtxKeyOriginalRequestID) String() string {
-	return "originalRequestID"
 }
 
 type Logger struct {
@@ -303,31 +293,11 @@ func attrsFromContext(ctx context.Context) []any {
 			}
 		}
 
-		// approver
-		if approverToken, ok := ctx.Value(CtxKeyApproverToken{}).(*oidc.IDToken); ok {
-			approverTokenInfo := GetTokenInfoFromClaims(approverToken, false)
-			approverTokenAttrs := approverTokenInfo.ToSlogAttrs()
-			attrs = append(attrs,
-				slog.Group("approver",
-					slog.Group("token",
-						approverTokenAttrs...,
-					),
-				),
-			)
-		}
-
 		// environment
 		if environment, ok := ctx.Value(CtxKeyEnvironment{}).(string); ok {
 			attrs = append(attrs, slog.String((&CtxKeyEnvironment{}).String(), environment))
 		}
 
-		// request IDs
-		if requestID, ok := ctx.Value(CtxKeyRequestID{}).(uuid.UUID); ok {
-			attrs = append(attrs, slog.String((&CtxKeyRequestID{}).String(), requestID.String()))
-		}
-		if originalReqID, ok := ctx.Value(CtxKeyOriginalRequestID{}).(uuid.UUID); ok {
-			attrs = append(attrs, slog.String((&CtxKeyOriginalRequestID{}).String(), originalReqID.String()))
-		}
 	}
 	return attrs
 }

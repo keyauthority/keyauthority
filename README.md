@@ -1,56 +1,124 @@
 # KeyAuthority
 
-This repository contains the source code for KeyAuthority, which is a platform for managing private Certificate Authorities, X.509 certificates, and application secrets across your Kubernetes environments. The tool simplifies certificate lifecycle management and secure secret distribution for applications and microservices.
+KeyAuthority is a platform for managing private Certificate Authorities, X.509 certificates, and application secrets across Kubernetes environments. The tool simplifies certificate lifecycle management and secure secret distribution for applications and microservices.
 
-To learn how to deploy KeyAuthority to your Kubernetes cluster using Helm, visit our [Artifact Hub page](https://artifacthub.io/packages/helm/keyauthority/keyauthority).
+## Architecture
 
-## Architecture Overview
+KeyAuthority consists of:
 
-The following diagram illustrates the architecture of KeyAuthority, showing its components and their interactions. KeyAuthority components are the frontend, the backend, the identity provider (Keycloak), and the database. The diagram also shows the interactions with humans, machines, and the HSM. Dashed lines indicate KeyAuthority's internal interactions, whereas solid lines represent interactions with external actors.
+- Frontend: ReactJS application
+- Backend: Go application
+- Keycloak: Identity provider
+- PostgreSQL: Relational database
 
-![KeyAuthority Architecture](arch.png)
+KeyAuthority flows integrate with humans, machines, and HSMs. Below is an overview of the architecture where dashed lines represent internal interactions; solid lines represent external interactions.
 
-## Folder Layout
+![KeyAuthority architecture](arch.png)
 
-- PostgreSQL database in `./postgres`
-- Keycloak identity and access management in `./keycloak`
-- Backend service in `./backend`
-- Frontend web application in `./frontend`
-- Init tooling in `./tools`
+## Installation
 
-## Dev deployment on local Docker
+Deploy KeyAuthority to Kubernetes using Helm. See the [Artifact Hub package](https://artifacthub.io/packages/helm/keyauthority/keyauthority) for installation instructions and configuration options.
 
-To deploy KeyAuthority locally using Docker, follow these steps:
+## Local development
+
+The local development setup allows you to run KeyAuthority components in Docker containers for testing and development purposes.
+
+### Prerequisites
+
+- Docker
+- GNU Make
+- Helm
+
+### Steps
+
+#### 1. Start PostgreSQL
+
+From `./postgres`:
 
 ```shell
-#@ PostgreSQL
-# open a terminal at ./postgres
-make docker-run
-
-#@ Keycloak
-# open a terminal at ./keycloak
-make docker-create-db
-make docker-run
-# ...wait for Keycloak to be ready
-# ...create realm.json using KeyAuthority Helm chart and make sure that:
-#    'sslRequired' is 'none'
-#    'keyauthority-discovery' client secret matches one in shared.env
-#    'keyauthority-frontend' rootUrl, adminUrl, redirectUris, and webOrigins point to http://localhost:3000
-make docker-remove-ssl-requirement
-make docker-stop
-make docker-run
-make docker-run-provisioner
-
-#@ Backend
-# open a terminal at ./backend
-make docker-create-db
-make docker-run ENTERPRISE=true
-
-#@ Frontend
-# open a terminal at ./frontend
 make docker-run
 ```
 
-Use the `BETA_VERSION` env var for beta images. For example, `BETA_VERSION=$(git rev-parse --short HEAD) make docker-run` will run the beta version of the component (assuming the image was built following the last git commit).
+#### 2. Start Keycloak
 
-After running all components, you can access the frontend at [http://localhost:3000](http://localhost:3000).
+From `./keycloak`:
+
+```shell
+make docker-create-db
+make docker-run
+```
+
+Wait for Keycloak to become ready. Then create the `realm.json` file to provision the realm:
+
+```shell
+# Generate the application manifest
+version=<LATEST_VERSION>
+helm template keyauthority \
+    oci://registry-1.docker.io/keyauthoritydh/keyauthority \
+    --version ${version} \
+    --set keycloak.provisionJob.enabled=true \
+    --set keycloak.provisionJob.frontendURL=http://localhost:3000 \
+    > manifest.yaml
+```
+
+Extract the string data from the secret named `keyauthority-keycloak-provision` in the manifest and create a `realm.json` file with it. Then run the provisioning job:
+
+```shell
+make docker-run-provisioner
+```
+
+Log in to the Keycloak admin console and navigate to the `keyauthority-exchange` client settings. Set the client secret to the value in `.config/shared.env`.
+
+#### 3. Start the backend
+
+From `./backend`:
+
+```shell
+make docker-create-db
+make docker-run
+```
+
+#### 4. Start the frontend
+
+From `./frontend`:
+
+```shell
+make docker-run
+```
+
+The frontend will be available at [http://localhost:3000](http://localhost:3000).
+
+## Administration
+
+For access-control configuration and other administrative tasks, see the [KeyAuthority Administration documentation](https://staging.keyauthority.net/docs/admin).
+
+The documentation is part of our live demo, so registration is required to access it.
+
+## Security and vulnerability scanning
+
+KeyAuthority images are hosted on [Docker Hub](https://hub.docker.com/u/keyauthoritydh) and regularly scanned with [`trivy`](https://github.com/aquasecurity/trivy). The latest results are available in the [Artifact Hub security report](https://artifacthub.io/packages/helm/keyauthority/keyauthority?modal=security-report).
+
+PostgreSQL and Keycloak are repackaged with Red Hat Universal Base Image (UBI) minimal images to reduce their attack surface. You can use the official images instead by overriding the image repository and tag in `values.yaml`.
+
+See the vendor documentation for details:
+
+- [PostgreSQL Docker Hub image](https://hub.docker.com/_/postgres)
+- [Keycloak Quay image](https://quay.io/repository/keycloak/keycloak)
+
+## HSM support
+
+To use HSM keys, repackage the backend image with the required PKCS#11 libraries. Configuration files and credentials can be mounted as volumes or provided through environment variables.
+
+Example Dockerfile:
+
+```dockerfile
+FROM keyauthoritydh/backend:1.4.8
+COPY ./pkcs11.so /usr/lib/pkcs11/pkcs11.so
+ENV LD_LIBRARY_PATH="/usr/lib/pkcs11:${LD_LIBRARY_PATH}"
+```
+
+After deploying and configuring the backend, HSM keys can be referenced with a PKCS#11 URI such as:
+
+```text
+pkcs11:module-path=/usr/lib/pkcs11.so;token=MyToken;object=MyKey;
+```

@@ -1,5 +1,5 @@
-import { useCallback, useState, useEffect } from "react";
-import { Alert, Button, Table, Dropdown } from "react-bootstrap";
+import { useState } from "react";
+import { Alert, Table, Dropdown } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { getApi } from "../axios";
 import Paginator from "./Paginator";
@@ -117,7 +117,7 @@ export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
               <td>
                 <Dropdown>
                   <Dropdown.Toggle
-                    as={Link}
+                    as="a"
                     className="no-caret"
                     id={`dropdown-${idx}`}
                   >

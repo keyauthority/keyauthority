@@ -50,17 +50,6 @@ CREATE TABLE IF NOT EXISTS logs (
   entry JSONB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS pending_requests (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  token_info JSONB NOT NULL,
-  private_body BOOLEAN DEFAULT TRUE, -- whether the body can be viewed by approvers
-  method TEXT NOT NULL,
-  url TEXT NOT NULL,
-  encrypted_token BYTEA,
-  encrypted_body BYTEA
-);
-
 CREATE TABLE IF NOT EXISTS acme_accounts (
   uri TEXT PRIMARY KEY,
   public_key_jwk JSONB NOT NULL,

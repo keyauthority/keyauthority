@@ -52,6 +52,13 @@ td {
   --bs-btn-border-color: rgb(var(--bs-link-color-rgb));
 }
 
+.no-caret {
+  cursor: pointer;
+  &:hover {
+    cursor: pointer;
+  }
+}
+
 .no-caret::after {
   display: none !important;
 }

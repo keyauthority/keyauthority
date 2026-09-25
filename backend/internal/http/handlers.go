@@ -17,7 +17,6 @@ limitations under the License.
 package http
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -25,14 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	authpkg "github.com/keyauthority/keyauthority/internal/auth"
@@ -589,134 +585,6 @@ func (server *Server) handleGetCertPEM(w http.ResponseWriter, r *http.Request) {
 			"Content-Type":        "application/x-pem-file",
 			"Content-Disposition": fmt.Sprintf(`attachment; filename="%s.pem"`, serial),
 		})
-}
-
-/******************************/
-/*  Pending Requests handlers */
-/******************************/
-func (server *Server) handleGetPendingRequests(w http.ResponseWriter, r *http.Request) {
-	server.getPaginatedListWithCursor(r, w, server.db.GetPendingRequestsWithCursor)
-}
-
-func (server *Server) handleGetPendingRequestBody(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		server.logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't parse request ID", err)
-		return
-	}
-
-	prBody, err := server.db.GetPendingRequestBody(r.Context(), id)
-	if err != nil {
-		server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get pending request body", err)
-		return
-	}
-	writeHTTPWithHeaders(w, http.StatusOK, prBody, map[string]string{
-		"Content-Type":        "application/octet-stream",
-		"Content-Disposition": fmt.Sprintf("attachment; filename=body-%s", idStr),
-	})
-}
-
-func (server *Server) handleApproveOrRejectPendingRequest(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		server.logErrorAndWriteHTTP(w, r, http.StatusBadRequest, "couldn't parse request ID", err)
-		return
-	}
-
-	switch r.Method {
-	case http.MethodPost: // approve and execute
-		pendingReq, err := server.db.GetPendingRequest(r.Context(), id)
-		if err != nil {
-			server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get pending request", err)
-			return
-		}
-
-		tokenInfo, ok := r.Context().Value(loggingpkg.CtxKeyTokenInfo{}).(*loggingpkg.TokenInfo)
-		if !ok || tokenInfo == nil {
-			server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get token info from context")
-			return
-		}
-		user := tokenInfo.GetHumanReadableUsername()
-
-		// Recreate the original request and process it through the router
-		reqBody := bytes.NewReader(pendingReq.Body)
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyOriginalRequestID{}, id)
-
-		// Remove the writeToDB flag from context to prevent double logging
-		ctx = context.WithValue(ctx, loggingpkg.CtxKeyWriteLogToDB{}, false)
-
-		// Execute the pending request using the approver's token
-		if r.URL.Query().Get("useOwnToken") == "true" {
-			requesterUser, err := server.db.GetPendingRequestUser(r.Context(), id)
-			if err != nil {
-				server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't get pending request user", err)
-				return
-			}
-			if requesterUser == user {
-				server.logErrorAndWriteHTTP(w, r, http.StatusBadRequest,
-					"cannot guarantee that requester and approver are different users")
-				return
-			}
-
-			server.log.Debug(r, "using approver's own token to execute pending request")
-			pendingReq.Header.Set("Authorization", r.Header.Get("Authorization"))
-
-		} else {
-			token, ok := r.Context().Value(loggingpkg.CtxKeyToken{}).(*oidc.IDToken)
-			if !ok {
-				server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "missing token in context")
-				return
-			}
-
-			ctx = context.WithValue(ctx, loggingpkg.CtxKeyApproverToken{}, token)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, pendingReq.Method, pendingReq.URL.String(), reqBody)
-		if err != nil {
-			server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't create new request", err)
-			return
-		}
-		req.Header = pendingReq.Header.Clone()
-
-		rr := httptest.NewRecorder()
-		server.handler.ServeHTTP(rr, req)
-
-		if !(rr.Code >= 200 && rr.Code < 300) {
-			server.logErrorAndWriteHTTP(w, r.WithContext(ctx), http.StatusInternalServerError,
-				"pending request approved but execution failed",
-				fmt.Errorf("execution failed with status code: %d", rr.Code))
-			return
-		}
-
-		maps.Copy(w.Header(), rr.Header())
-		w.WriteHeader(rr.Code)
-		if _, err := w.Write(rr.Body.Bytes()); err != nil {
-			server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError,
-				"pending request approved but execution failed",
-				fmt.Errorf("couldn't write response body: %w", err))
-			return
-		}
-
-		if err := server.db.DeletePendingRequest(r.Context(), id); err != nil {
-			server.logErrorAndWriteHTTP(w, r.WithContext(ctx), http.StatusInternalServerError,
-				"pending request approved but execution failed",
-				fmt.Errorf("couldn't delete pending request: %w", err))
-			return
-		}
-
-		server.log.Info(r, "pending request approved and processed")
-
-	case http.MethodDelete: // reject
-		if err := server.db.DeletePendingRequest(r.Context(), id); err != nil {
-			server.logErrorAndWriteHTTP(w, r, http.StatusInternalServerError, "couldn't delete pending request", err)
-			return
-		}
-		server.log.Info(r, "pending request rejected")
-		writeJSONOk(w, nil)
-	}
 }
 
 /******************************/

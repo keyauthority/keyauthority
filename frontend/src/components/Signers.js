@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Alert, Table } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import Paginator from "./Paginator";

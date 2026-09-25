@@ -1,5 +1,5 @@
 {
   "url": "http://localhost:8080",
-  "realm": "local",
+  "realm": "keyauthority",
   "clientId": "keyauthority-frontend"
 }

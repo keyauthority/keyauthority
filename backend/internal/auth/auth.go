@@ -43,7 +43,6 @@ const (
 	RoleAny      Role = 0       // No roles
 	RoleOperator Role = 1 << 0  // bit 0 set
 	RoleAuditor  Role = 1 << 15 // bit 15 set
-	RoleApprover Role = 1 << 30 // bit 30 set
 	//RoleAdmin      uint64 = (1 << 60) - 1 // 1...1111 (60 bits set to 1)
 )
 
@@ -57,10 +56,8 @@ var (
 	skipIssuerCheck        bool = false
 
 	roleMap map[string]Role = map[string]Role{
-		"KEYAUTHORITY_OPERATOR":   RoleOperator,
-		"KEYAUTHORITY_AUDITOR":    RoleAuditor,
-		"KEYAUTHORITY_APPROVER":   RoleApprover,
-		"KEYAUTHORITY_AUTHORIZER": RoleApprover, // for backward compatibility
+		"KEYAUTHORITY_OPERATOR": RoleOperator,
+		"KEYAUTHORITY_AUDITOR":  RoleAuditor,
 	}
 )
 

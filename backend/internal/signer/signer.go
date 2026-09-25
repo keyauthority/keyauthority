@@ -71,9 +71,6 @@ type SignerConfig struct {
 	MaxTTL           string          `json:"maxTTL,omitempty"`
 	AllowedKeyUsages []capi.KeyUsage `json:"allowedKeyUsages,omitempty"`
 	AllowedDomains   []string        `json:"allowedDomains,omitempty"`
-
-	// Approval required for non-trivial requests
-	ApprovalRequired bool `json:"approvalRequired,omitempty"`
 }
 
 type Signer struct {

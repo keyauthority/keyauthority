@@ -43,7 +43,7 @@ func main() {
 	server.CreateACMEService(ctx)
 
 	server.SetHandlers()
-	server.ListenAndServe(ctx)
+	httpServers := server.ListenAndServe(ctx)
 	server.RunPeriodicTasks(ctx)
 
 	<-ctx.Done()
@@ -51,7 +51,9 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		fmt.Fprintf(os.Stderr, "server shutdown failed: %v", err)
+	for _, s := range httpServers {
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "server shutdown failed: %v\n", err)
+		}
 	}
 }

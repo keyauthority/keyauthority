@@ -2,7 +2,7 @@
 openapi: 3.1.1
 info:
   title: KeyAuthority
-  version: 1.4.35
+  version: 1.4.36
   description: |
     Welcome to the **KeyAuthority REST API** documentation.
 
@@ -11,7 +11,7 @@ info:
     This documentation provides a complete reference for most endpoints, 
     including PKI operations, secret management, and health checks.
 
-    We document here only the status error code 400 for simplicity. In practice, the API may return other status codes such as 428 for actions requiring approval, 401 for unauthorized access, 403 for forbidden actions, and 500 for internal server errors. The error response will include a JSON body with an "errors" field describing the error messages.
+    We document here only the status error code 400 for simplicity. In practice, the API may return other status codes such as 401 for unauthorized access, 403 for forbidden actions, and 500 for internal server errors. The error response will include a JSON body with an "errors" field describing the error messages.
 
     **Features:**
     - Full support for X.509 CA operations
@@ -31,8 +31,6 @@ tags:
     description: Store and retrieve secrets.
   - name: Certificates
     description: Retrieve certificates and their information.
-  - name: Pending Requests
-    description: Manage pending requests.
   - name: Miscellaneous
     description: Miscellaneous operations.
 paths:
@@ -947,157 +945,6 @@ paths:
       security:
         - bearerAuth: []
 
-  ### Pending Requests ###
-  /v1/pending-requests:
-    get:
-      summary: Get pending requests
-      description: |
-        Get the pending requests with optional filtering and pagination.
-      tags:
-        - Pending Requests
-      parameters:
-        - name: id
-          in: query
-          schema:
-            type: string
-            format: uuid
-        - name: user
-          in: query
-          schema:
-            type: string
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: cursor
-          in: query
-          schema:
-            type: string
-        - name: pageSize
-          in: query
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/PendingRequest"
-                  nextCursor:
-                    type: string
-                  pageSize:
-                    type: integer
-                  hasMore:
-                    type: boolean
-        "400":
-          description: Failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-      security:
-        - bearerAuth: []
-
-  /v1/pending-requests/{id}:
-    post:
-      summary: Approve and execute pending request
-      description: |
-        Approve and execute the pending request with the specified ID. 
-        The approver can choose to use their own token or the requester's token when executing the pending request.
-      tags:
-        - Pending Requests
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-            format: uuid
-        - name: useOwnToken
-          in: query
-          schema:
-            type: boolean
-          description: Whether to use the approver's own token when executing the pending request.
-      responses:
-        "200":
-          description: Success
-        "400":
-          description: Failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-      security:
-        - bearerAuth: []
-    delete:
-      summary: Reject pending request
-      description: Reject the pending request with the specified ID.
-      tags:
-        - Pending Requests
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-        "400":
-          description: Failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-      security:
-        - bearerAuth: []
-
-  /v1/pending-requests/{id}/body:
-    get:
-      summary: Get pending request body
-      description: |
-        Get the body of a pending request.
-        For example, a pending request for signing a certificate will have a body to review, hence its body is not private and can be disclosed for review.
-        On the other hand, updating a secret will not have a body to review, as it is considered private.
-      tags:
-        - Pending Requests
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: Failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-      security:
-        - bearerAuth: []
-
   ### Miscellaneous ###
   /v1/dashboard:
     get:
@@ -1485,30 +1332,6 @@ components:
         revoked:
           type: boolean
           description: Whether the certificate has been revoked
-
-    PendingRequest:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        method:
-          type: string
-          enum: [GET, POST, PUT, DELETE]
-        url:
-          type: string
-          format: uri
-        createdAt:
-          type: string
-          format: date-time
-        tokenInfo:
-          type: object
-          properties:
-            user:
-              type: string
-            issuer:
-              type: string
-              format: uri
 
     LogEntry:
       type: object
