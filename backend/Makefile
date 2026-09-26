@@ -116,7 +116,7 @@ POSTGRES_DB ?= backend
 .PHONY: docker-create-db
 docker-create-db: load-shared-env
 	docker exec -it \
-		$(POSTGRES_CONTAINER_NAME) /bin/bash -c "PGPASSWORD=$(POSTGRES_PASSWORD) psql -h host.docker.internal -U $(POSTGRES_USER) -p $(POSTGRES_PORT) -d postgres -c \"CREATE DATABASE $(POSTGRES_DB);\""
+		$(POSTGRES_CONTAINER_NAME) /bin/bash -c "PGPASSWORD=$(POSTGRES_PASSWORD) psql -h host.docker.internal -U $(POSTGRES_USER) -p $(POSTGRES_PORT) -c \"CREATE DATABASE $(POSTGRES_DB);\""
 
 ##@ Run locally on docker
 PWD = $(shell pwd)

@@ -49,7 +49,7 @@ POSTGRES_DB ?= keycloak
 .PHONY: docker-create-db
 docker-create-db: load-shared-env
 	docker exec -it \
-		$(POSTGRES_CONTAINER_NAME) /bin/bash -c "PGPASSWORD=$(POSTGRES_PASSWORD) psql -h host.docker.internal -U $(POSTGRES_USER) -p $(POSTGRES_PORT) -d postgres -c \"CREATE DATABASE $(POSTGRES_DB);\""
+		$(POSTGRES_CONTAINER_NAME) /bin/bash -c "PGPASSWORD=$(POSTGRES_PASSWORD) psql -h host.docker.internal -U $(POSTGRES_USER) -p $(POSTGRES_PORT) -c \"CREATE DATABASE $(POSTGRES_DB);\""
 
 ##@ Run locally on docker
 .PHONY: docker-run
@@ -66,15 +66,6 @@ docker-run: load-shared-env
 		-e KC_DB_PASSWORD=$(POSTGRES_PASSWORD) \
 		-e KC_DB_URL=jdbc:postgresql://host.docker.internal:$(POSTGRES_PORT)/$(POSTGRES_DB) \
 		$(IMG)
-
-##@ First time preparation
-docker-remove-ssl-requirement: load-shared-env
-	@echo "Removing SSL requirement for 'master' realm..."
-	docker exec -it $(POSTGRES_CONTAINER_NAME) /bin/bash \
-		-c "export PGPASSWORD=$(POSTGRES_PASSWORD) && psql \
-			-U $(POSTGRES_USER) \
-			-d $(POSTGRES_DB) \
-			-c \"UPDATE realm SET ssl_required = 'NONE' WHERE name = 'master';\""
 
 .PHONY: docker-run-provisioner
 docker-run-provisioner: load-shared-env
