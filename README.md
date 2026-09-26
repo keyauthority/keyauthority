@@ -122,3 +122,12 @@ After deploying and configuring the backend, HSM keys can be referenced with a P
 ```text
 pkcs11:module-path=/usr/lib/pkcs11.so;token=MyToken;object=MyKey;
 ```
+
+## License
+
+Original KeyAuthority project code is licensed under the Apache License 2.0; see
+[LICENSE](LICENSE). Components with their own license files or notices remain
+under those terms. For example, the Keycloak theme in
+`keycloak/theming/keyauthority-theme` is MIT-licensed under its included
+`LICENSE` file. Third-party dependencies are licensed under their respective
+terms.
