@@ -195,8 +195,8 @@ export default function SecretModal({
                 placeholder="e.g. db-credentials"
                 value={secretName}
                 onChange={(e) => {
-                  // check that only contains alphanumeric, dash, underscore, and slash
-                  const regex = /^[a-zA-Z0-9-_\/]*$/;
+                  // check that only contains alphanumeric, dash, and underscore
+                  const regex = /^[a-zA-Z0-9-_]*$/;
                   if (regex.test(e.target.value)) {
                     setSecretName(e.target.value);
                   }

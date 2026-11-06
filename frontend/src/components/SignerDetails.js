@@ -9,7 +9,6 @@ import {
   Tab,
   Row,
   Col,
-  Tooltip,
 } from "react-bootstrap";
 import {
   showToast,
@@ -17,11 +16,7 @@ import {
   downloadOrCopy,
   prettyTime,
   copyToClipboard,
-  prettyCode,
-  boxedContent,
-  withTooltipDescription,
 } from "../utils/utils";
-import { Link } from "react-router-dom";
 import { errorToString } from "../utils/error";
 import { getApi } from "../axios";
 import { signerUsageExample } from "./Docs";
@@ -205,6 +200,8 @@ function ConfigTab({
   setIsLoading,
   setError,
 }) {
+  const navigate = useNavigate();
+
   const [privateKeyConfig, setPrivateKeyConfig] = useState(null);
 
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -221,7 +218,7 @@ function ConfigTab({
     } catch (err) {
       //showToast("error", errorToString(err));
       setError(errorToString(err));
-      navigation.navigate("/signers");
+      navigate("/signers");
     } finally {
       setIsLoading(false);
     }
@@ -291,13 +288,13 @@ function ConfigTab({
                   striped={false}
                   body={{
                     ID: (
-                      <Link
-                        style={{ textDecoration: "none" }}
-                        className="text-body"
+                      <Button
+                        variant="link"
+                        className="p-0 border-0 text-body text-decoration-none"
                         onClick={() => handleShowKey(privateKeyConfig.id)}
                       >
                         {privateKeyConfig.id}
-                      </Link>
+                      </Button>
                     ),
                     Type: (
                       <div className="d-flex align-items-center gap-2">

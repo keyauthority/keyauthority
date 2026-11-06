@@ -16,7 +16,6 @@ export default function Secrets({
   const [secrets, setSecrets] = useState([]);
   const [filters, setFilters] = useState({});
   const [showSecretModal, setShowSecretModal] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const navigate = useNavigate();
 
@@ -77,12 +76,7 @@ export default function Secrets({
         ]}
       />
 
-      <Table
-        striped
-        hover
-        className="align-middle mb-3"
-        key={`secrets-${refreshTrigger}`}
-      >
+      <Table striped hover className="align-middle mb-3">
         <thead>
           <tr>
             <th>Name</th>

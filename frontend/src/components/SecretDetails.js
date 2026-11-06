@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Alert, Tab, Tabs, Button } from "react-bootstrap";
-import { Link } from "react-router-dom";
 import KeyValueTable from "./KeyValueTable";
 import JSONModal from "./JSONModal";
 import SecretModal from "./SecretModal";
@@ -48,14 +47,14 @@ function SecretDetails({
     setSubtitle(
       //secretMetadata ? `Updated ${prettyTime(secretMetadata.updatedAt)}` : null,
       secretMetadata ? (
-        <Link
-          style={{ textDecoration: "none" }}
-          className="text-muted"
+        <Button
+          variant="link"
+          className="p-0 border-0 text-muted text-decoration-none"
           onClick={() => handleShowKey(secretMetadata.encryptionKeyID)}
         >
           <i className="bi bi-key me-1"></i>
           {secretMetadata.encryptionKeyID}
-        </Link>
+        </Button>
       ) : null,
     );
   }, [secretMetadata, setSubtitle]);

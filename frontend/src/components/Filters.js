@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Form,
-  Row,
-  CloseButton,
-} from "react-bootstrap";
+import { Alert, Button, Col, Form, Row, CloseButton } from "react-bootstrap";
 
 /*
 
@@ -108,11 +100,6 @@ export default function Filters({ filters, setFilters, filtersTemplate }) {
       delete next[key];
       return next;
     });
-  };
-
-  const clearAll = () => {
-    setFilters({});
-    setDraftValue("");
   };
 
   const getFilterByKey = (key) => filtersTemplate.find((f) => f.key === key);

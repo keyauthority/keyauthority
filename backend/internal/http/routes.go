@@ -114,14 +114,14 @@ func (server *Server) registerSecretRoutes() {
 		},
 		http.HandlerFunc(server.handleGetSecrets)))
 
-	server.handler.Handle("/v1/secrets/data/{name:.+}",
+	server.handler.Handle("/v1/secrets/data/{name}",
 		metricspkg.WithHttpMetrics("/v1/secrets/data/{name}", server.withAuth(
 			map[string]authpkg.Role{
 				http.MethodGet: authpkg.RoleOperator, // get secret (Hashicorp Vault compatible)
 			},
 			http.HandlerFunc(server.handleGetOrUpdateOrDeleteSecret))))
 
-	server.handler.Handle("/v1/secrets/{name:.+}",
+	server.handler.Handle("/v1/secrets/{name}",
 		metricspkg.WithHttpMetrics("/v1/secrets/{name}", server.withAuth(
 			map[string]authpkg.Role{
 				http.MethodGet:    authpkg.RoleOperator, // get secret

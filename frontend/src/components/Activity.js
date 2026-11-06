@@ -1,5 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Card,
@@ -487,57 +486,12 @@ export function Logs({ isLoading, setIsLoading, setDropdownActions }) {
   const [modalTitle, setModalTitle] = useState(null);
   const [modalData, setModalData] = useState(null);
 
-  const api = getApi();
-
   const levelVariant = {
     ERROR: "danger",
     WARN: "warning",
     INFO: "info",
     DEBUG: "secondary",
   };
-
-  const handleExportLogs = useCallback(async () => {
-    showToast("warning", "Sorry, feature not implemented yet.");
-    return;
-
-    /*setIsLoading(true);
-
-    const flattenLogItem = (item) => {
-      // convert logs JSONs to .log format
-      // for example: [2024-01-01T00:00:00.000Z] INFO key created {...}
-      const { time, level, msg, ...rest } = item;
-      return `[${new Date(time).toISOString()}] ${level.toUpperCase()} ${msg} ${Object.keys(rest).length > 0 ? JSON.stringify(rest) : ""}`;
-    };
-
-    try {
-      const logContent = logs.map(flattenLogItem).join("\n");
-      const blob = new Blob([logContent], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `keyauthority-logs-${Date.now()}.log`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      showToast("error", errorToString(err));
-    } finally {
-      setIsLoading(false);
-    }*/
-  }, [api, filters, setIsLoading]);
-
-  /*useEffect(() => {
-    setDropdownActions?.([
-      {
-        key: "export-logs",
-        label: "Export",
-        iconClass: "bi bi-download",
-        onClick: () => handleExportLogs(),
-      },
-    ]);
-    return () => setDropdownActions?.([]);
-  }, [setDropdownActions, handleExportLogs]);*/
 
   return (
     <>

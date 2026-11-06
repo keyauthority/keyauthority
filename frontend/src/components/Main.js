@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import {
   Row,
   Container,
@@ -12,13 +12,7 @@ import {
 import { ToastContainer } from "react-toastify";
 import Sidebar from "./Sidebar";
 import { Dashboard, Certificates, Logs } from "./Activity";
-import {
-  Administration,
-  UseSigners,
-  UseSecrets,
-  Architecture,
-  UsefulLinks,
-} from "./Docs";
+import { Administration, UseSigners, UseSecrets, UsefulLinks } from "./Docs";
 import Keys from "./Keys";
 import Signers from "./Signers";
 import Secrets from "./Secrets";
@@ -26,11 +20,8 @@ import SignerDetails from "./SignerDetails";
 import SecretDetails from "./SecretDetails";
 import Footer from "./Footer";
 
-import { getApi } from "../axios";
-
 export default function Main() {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   const [dropdownActions, setDropdownActions] = useState([]);
 
@@ -42,7 +33,6 @@ export default function Main() {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const location = useLocation();
-  const api = getApi();
 
   const sidebarSections = [
     {
@@ -92,7 +82,7 @@ export default function Main() {
           title: "Secrets",
           subtitle: "Manage your secrets",
           to: "/secrets",
-          icon: "bi-lock-fill",
+          icon: "bi-three-dots",
         },
       ],
     },
@@ -101,13 +91,6 @@ export default function Main() {
       title: "Documentation",
       //icon: "bi-file-earmark-text",
       items: [
-        {
-          title: "Architecture",
-          subtitle:
-            "Get an overview of components and actors in KeyAuthority workflows",
-          to: "/docs/architecture",
-          icon: "bi-diagram-3-fill",
-        },
         {
           title: "Administration",
           subtitle: "Learn how to manage access for your KeyAuthority users",
@@ -126,7 +109,7 @@ export default function Main() {
           subtitle:
             "Learn how your applications can access KeyAuthority-managed secrets",
           to: "/docs/secrets",
-          icon: "bi-lock-fill",
+          icon: "bi-three-dots",
         },
         {
           title: "Useful Links",
@@ -182,8 +165,6 @@ export default function Main() {
 
           {/* Main content */}
           <Col md={9} lg={10} className="pt-4 px-md-5">
-            {error && <Alert variant="danger">{error}</Alert>}
-
             {(() => {
               if (!isValidPath(location.pathname)) {
                 return <Alert variant="danger">404 Not Found</Alert>;
@@ -249,15 +230,6 @@ export default function Main() {
                         setIsLoading={setIsLoading}
                       />
                     );
-                  case "/activity/pending-requests":
-                    return (
-                      <PendingRequests
-                        isLoading={isLoading}
-                        setIsLoading={setIsLoading}
-                      />
-                    );
-                  case "/docs/architecture":
-                    return <Architecture />;
                   case "/docs/admin":
                     return <Administration />;
                   case "/docs/signers":
