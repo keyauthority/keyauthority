@@ -319,9 +319,8 @@ export default function SignerModal({
               onChange={(e) => {
                 // check that only contains alphanumeric, dash, and underscore
                 const regex = /^[a-zA-Z0-9-_]*$/;
-                const value = e.target.value;
-                if (regex.test(value)) {
-                  setSignerName(value);
+                if (regex.test(e.target.value)) {
+                  setSignerName(e.target.value);
                 }
               }}
             />

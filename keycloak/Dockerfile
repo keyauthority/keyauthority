@@ -1,10 +1,10 @@
 ARG KC_VERSION=26.5.0
 ARG UBI_MAJOR_VERSION=10
-ARG UBI_VERSION=10.2-1785778687
+ARG UBI_VERSION=10.2-1793863917
 ARG RUNTIME_GID=4001
 
 # Stage 1: Prepare Keyauthority theme
-FROM alpine:3.22 AS theme
+FROM alpine:3.24 AS theme
 RUN apk add --no-cache unzip
 COPY theming/keyauthority-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar /tmp/keycloak-themes.jar
 RUN unzip /tmp/keycloak-themes.jar -d /tmp/keycloak-themes

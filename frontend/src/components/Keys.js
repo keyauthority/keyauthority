@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { Alert, Table, Dropdown } from "react-bootstrap";
-import { Link } from "react-router-dom";
 import { getApi } from "../axios";
 import Paginator from "./Paginator";
 import Filters from "./Filters";
 import JSONModal from "./JSONModal";
 
 import { prettyTime, prettyEnv, showToast } from "../utils/utils";
-
-import { errorToString } from "../utils/error";
 
 export default function Keys({ isLoading, setIsLoading, setDropdownActions }) {
   const [error, setError] = useState(null);

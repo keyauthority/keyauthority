@@ -37,7 +37,7 @@ export default function Paginator({
         }
 
         const res = await api.get(`${apiPath}?${params.toString()}`);
-        const { data, nextCursor, hasMore } = res.data;
+        const { data, hasMore } = res.data;
 
         setItems(data);
         setHasMore(hasMore);

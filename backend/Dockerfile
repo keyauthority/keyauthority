@@ -2,7 +2,7 @@ ARG DEBIAN_VERSION=trixie
 ARG GO_VERSION=1.27
 ARG PRIMUS_VERSION=2.7.0
 ARG UBI_MAJOR_VERSION=10
-ARG UBI_VERSION=10.2-1785778687
+ARG UBI_VERSION=10.2-1793863917
 ARG RUNTIME_GID=4001
 
 # Stage 1: Build the Go server binary
@@ -40,7 +40,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     -ldflags "-X main.version=${VERSION}" cmd/server/main.go
 
 # Stage 2: Install pkcs11-tool and softhsm2-util
-FROM fedora AS tools
+FROM fedora:42 AS tools
 RUN dnf install -y opensc softhsm which findutils && \
     dnf clean all
 
