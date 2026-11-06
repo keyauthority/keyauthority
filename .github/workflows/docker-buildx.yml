@@ -33,12 +33,6 @@ jobs:
     name: Build and Push (${{ inputs.directory }})
 
     steps:
-      - name: Ensure running on main
-        if: ${{ github.ref != 'refs/heads/main' }}
-        run: |
-          echo "::error::Images are only built and pushed from the main branch (got ${{ github.ref }})."
-          exit 1
-
       - name: Checkout source code
         uses: actions/checkout@v4
 
@@ -72,7 +66,7 @@ jobs:
         if: ${{ inputs.builder_mode == 'docker-cloud' }}
         uses: docker/login-action@v3
         with:
-          username: keyauthoritydh
+          username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_CLOUD_ACCESS_TOKEN }}
 
       - name: Set up Docker Buildx (Build Cloud mode)
@@ -86,7 +80,7 @@ jobs:
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          username: keyauthoritydh
+          username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
       - name: Build and push
